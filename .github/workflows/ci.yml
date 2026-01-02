@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bodhi-js-sdk/**'
+      - 'setup-modal/**'
+      - 'bodhi-browser-ext/**'
+      - '.github/workflows/ci.yml'
+      - 'Makefile'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'bodhi-js-sdk/**'
+      - 'setup-modal/**'
+      - 'bodhi-browser-ext/**'
+      - '.github/workflows/ci.yml'
+      - 'Makefile'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CI: true
+
+jobs:
+  ci:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            bodhi-js-sdk/package-lock.json
+            setup-modal/package-lock.json
+            bodhi-browser-ext/package-lock.json
+
+      - name: Install dependencies
+        run: make setup
+
+      - name: Lint
+        run: make lint
+
+      - name: Build
+        run: make build
+
+      - name: Type check
+        run: |
+          make typecheck
+
+      - name: Test
+        run: make test
+
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-${{ github.run_id }}
+          path: |
+            bodhi-js-sdk/*/dist/
+            setup-modal/dist/
+          retention-days: 7

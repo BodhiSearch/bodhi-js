@@ -1,0 +1,9 @@
+{
+  "name": "bodhi-browser",
+  "version": "0.0.1-dev",
+  "private": true,
+  "description": "Type definitions only - for bodhi-js-sdk type resolution",
+  "dependencies": {
+    "@bodhiapp/ts-client": "^0.1.9"
+  }
+}
