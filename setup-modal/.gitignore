@@ -1,5 +1,8 @@
 setup-modal-test-app/src/modal.html
 
+# TypeScript cache
+*.tsbuildinfo
+
 # Logs
 logs
 *.log

@@ -17,12 +17,13 @@
     "ci:build": "npm run ci:build --workspaces",
     "dev:build": "npm run dev:build --workspaces",
     "build:prod": "npm run build:prod --workspaces",
-    "clean": "npm run clean --workspaces --if-present",
-    "lint": "npm run lint --workspaces",
+    "clean": "npm run clean --workspaces",
+    "lint": "prettier --check . && npm run lint --workspaces",
     "lint:fix": "prettier --write . && npm run lint:fix --workspaces",
     "typecheck": "npm run typecheck --workspaces"
   },
   "devDependencies": {
+    "@bodhiapp/ts-client": "^0.1.9",
     "prettier": "^3.4.2",
     "typescript": "^5.8.3"
   },

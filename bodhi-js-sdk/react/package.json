@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-react",
-  "version": "0.0.9",
+  "version": "0.0.10-dev",
   "description": "React bindings for Bodhi Browser SDK with WebUIClient preset",
   "type": "module",
   "main": "dist/bodhi-react.cjs.js",
@@ -44,7 +44,7 @@
   "dependencies": {
     "@bodhiapp/bodhi-js-react-core": "file:../react-core",
     "@bodhiapp/bodhi-js": "file:../web",
-    "@bodhiapp/bodhi-js-core": "0.0.9"
+    "@bodhiapp/bodhi-js-core": "file:../core"
   },
   "peerDependencies": {
     "react": "^18.3.0 || ^19.0.0"

@@ -9,35 +9,32 @@ install:
 	npm install
 
 build:
-	npm run build --workspaces
+	npm run build
 
 dev.build: ## Dev: Build with caching
-	npm run dev:build --workspaces --if-present
+	npm run dev:build
 
 ci.build: ## CI: Build only (no dep rebuild)
-	npm run ci:build --workspaces --if-present
+	npm run ci:build
 
 clean:
-	npm run clean --workspaces --if-present
-	rm -rf node_modules
+	npm run clean
 
 lint:
-	npm run lint --workspaces
+	npm run lint
 
 typecheck: ## Type check all
-	npm run typecheck --workspaces
+	npm run typecheck
 
 lint-fix:
 	npm run lint:fix
 	npm run typecheck
 
 dependencies:
-	$(MAKE) -C ../bodhi-browser-ext build
 	$(MAKE) -C ../setup-modal build
 	npm install
 
 dev.dependencies: ## Dev: Build dependencies with caching
-	$(MAKE) -C ../bodhi-browser-ext dev.build
 	$(MAKE) -C ../setup-modal dev.build
 	npm install
 
