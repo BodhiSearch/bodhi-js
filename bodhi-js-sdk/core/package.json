@@ -1,0 +1,79 @@
+{
+  "name": "@bodhiapp/bodhi-js-core",
+  "version": "0.0.9",
+  "description": "Core types and interfaces for Bodhi Browser SDK",
+  "type": "module",
+  "main": "dist/bodhi-core.cjs.js",
+  "module": "dist/bodhi-core.esm.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "bodhi-js-core": "./dist/cli/setup-modal.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/bodhi-core.esm.js",
+      "require": "./dist/bodhi-core.cjs.js"
+    },
+    "./types": {
+      "types": "./src/types/index.ts",
+      "import": "./src/types/index.ts",
+      "default": "./src/types/index.ts"
+    },
+    "./api": {
+      "types": "./src/api/index.ts",
+      "import": "./src/api/index.ts",
+      "default": "./src/api/index.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BodhiSearch/bodhi-browser.git",
+    "directory": "bodhi-js-sdk/core"
+  },
+  "license": "MIT",
+  "author": "BodhiSearch",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "rimraf dist",
+    "copy-deps": "node scripts/copy-deps.js",
+    "build-cli": "vite build --config vite.config.cli.ts",
+    "prebuild": "make dependencies",
+    "build": "npm run copy-deps && npm run build-cli && vite build --mode development",
+    "ci:build": "npm run copy-deps && npm run build-cli && vite build --mode development",
+    "dev:prebuild": "cd .. && make dev.dependencies",
+    "dev:build-direct": "npm run copy-deps && npm run build-cli && vite build --mode development",
+    "dev:build": "npm run dev:prebuild && node ../../scripts/build-fast.mjs bodhi-js-sdk/core 'npm run dev:build-direct' src scripts package.json vite.config.ts vite.config.cli.ts",
+    "build:prod": "npm run copy-deps && npm run build-cli && vite build --mode production",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx && prettier --check .",
+    "lint:fix": "prettier --write . && eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bodhiapp/ts-client": "0.1.9",
+    "ua-parser-js": "^1.0.40"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.23.0",
+    "@types/node": "^20.19.10",
+    "@types/ua-parser-js": "^0.7.39",
+    "@typescript-eslint/eslint-plugin": "8.28.0",
+    "@typescript-eslint/parser": "8.28.0",
+    "cross-env": "^7.0.3",
+    "eslint": "9.32.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "^16.0.0",
+    "prettier": "3.6.2",
+    "rimraf": "^6.0.1",
+    "tslib": "^2.6.2",
+    "typescript": "^5.8.3",
+    "vite": "^7.1.12",
+    "vite-plugin-dts": "^4.5.4"
+  }
+}

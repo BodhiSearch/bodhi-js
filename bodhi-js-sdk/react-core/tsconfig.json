@@ -1,0 +1,21 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "jsx": "react-jsx",
+    "declaration": true,
+    "declarationDir": "dist",
+    "types": ["vite/client", "chrome"],
+    "paths": {
+      "@bodhiapp/bodhi-js-core": ["../core/src/index.ts"],
+      "@bodhiapp/bodhi-browser/types": ["../../bodhi-browser-ext/src/types"],
+      "@bodhiapp/setup-modal/types": ["../../setup-modal/src/types"]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "../../bodhi-browser-ext/src/types/**/*",
+    "../../setup-modal/src/types/**/*"
+  ],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+}

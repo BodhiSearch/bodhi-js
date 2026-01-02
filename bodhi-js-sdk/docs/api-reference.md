@@ -1,0 +1,844 @@
+# API Reference
+
+Complete reference documentation for all Bodhi JS SDK packages.
+
+## Table of Contents
+
+- [WebUIClient](#webuiclient)
+- [ExtUIClient](#extuiclient)
+- [BodhiProvider](#bodhiprovider)
+- [useBodhi Hook](#usebodhi-hook)
+- [Types](#types)
+- [Type Guards](#type-guards)
+- [Error Factories](#error-factories)
+- [OAuth Utilities](#oauth-utilities)
+- [Constants](#constants)
+
+---
+
+## WebUIClient
+
+Web application client from `@bodhiapp/bodhi-js`.
+
+### Constructor
+
+```typescript
+new WebUIClient(
+  authClientId: string,
+  config?: WebClientConfig,
+  onStateChange?: StateChangeCallback
+)
+```
+
+**Parameters**:
+
+| Parameter       | Type                   | Description                         |
+| --------------- | ---------------------- | ----------------------------------- |
+| `authClientId`  | `string`               | OAuth client ID                     |
+| `config`        | `WebClientConfig?`     | Client configuration (all optional) |
+| `onStateChange` | `StateChangeCallback?` | State change callback               |
+
+**WebClientConfig**:
+
+```typescript
+interface WebClientConfig {
+  redirectUri?: string; // OAuth redirect URI (auto-computed from basePath if omitted)
+  authServerUrl?: string; // OAuth server URL (default: 'https://id.getbodhi.app/realms/bodhi')
+  userScope?: UserScope; // User scope (default: 'scope_user_user')
+  basePath?: string; // App base path (default: '/')
+  logLevel?: LogLevel; // Logging level (default: 'warn')
+  initParams?: {
+    extension?: {
+      timeoutMs?: number; // Extension detection timeout
+      intervalMs?: number; // Poll interval
+    };
+  };
+}
+```
+
+### Methods
+
+#### init()
+
+```typescript
+async init(params?: InitParams): Promise<ClientState>
+```
+
+Initialize the client and detect connection mode.
+
+**Parameters**:
+
+- `params.savedState?: SerializedClientState` - Restore from saved state
+- `params.selectedConnection?: ConnectionMode` - Force specific mode
+- `params.testConnection?: boolean` - Test server connectivity
+- `params.serverUrl?: string` - Custom server URL
+- `params.timeoutMs?: number` - Timeout for init
+- `params.intervalMs?: number` - Poll interval
+
+**Returns**: `Promise<ClientState>`
+
+#### sendApiRequest()
+
+```typescript
+async sendApiRequest<TReq, TRes>(
+  method: string,
+  endpoint: string,
+  body?: TReq,
+  headers?: Record<string, string>,
+  authenticated?: boolean
+): Promise<ApiResponseResult<TRes>>
+```
+
+Make API request to local LLM server.
+
+**Returns**: `Promise<ApiResponseResult<TRes>>`
+
+#### stream()
+
+```typescript
+stream<TReq, TRes>(
+  method: string,
+  endpoint: string,
+  body?: TReq,
+  headers?: Record<string, string>,
+  authenticated?: boolean
+): AsyncGenerator<TRes>
+```
+
+Stream API response.
+
+**Returns**: `AsyncGenerator<TRes>`
+
+---
+
+## OpenAI-Compatible Resources
+
+The SDK provides OpenAI SDK-style namespaced API for common operations.
+
+### client.chat.completions
+
+#### create()
+
+```typescript
+// Non-streaming
+create(
+  body: CreateChatCompletionRequest & { stream?: false }
+): Promise<CreateChatCompletionResponse>
+
+// Streaming
+create(
+  body: CreateChatCompletionRequest & { stream: true }
+): AsyncGenerator<CreateChatCompletionStreamResponse>
+```
+
+Create a chat completion. Returns `Promise` for non-streaming or `AsyncGenerator` for streaming based on `stream` parameter.
+
+**Parameters**:
+
+| Parameter  | Type                              | Description                             |
+| ---------- | --------------------------------- | --------------------------------------- |
+| `model`    | `string`                          | Model ID                                |
+| `messages` | `ChatCompletionRequestMessage[]`  | Conversation messages                   |
+| `stream`   | `boolean?`                        | Enable streaming (default: false)       |
+| `...`      | See `CreateChatCompletionRequest` | Additional OpenAI-compatible parameters |
+
+**Returns**: `Promise<CreateChatCompletionResponse>` or `AsyncGenerator<CreateChatCompletionStreamResponse>`
+
+**Example**:
+
+```typescript
+// Non-streaming
+const response = await client.chat.completions.create({
+  model: 'gemma-3n-e4b-it',
+  messages: [{ role: 'user', content: 'Hello!' }],
+});
+
+// Streaming
+for await (const chunk of client.chat.completions.create({
+  model: 'gemma-3n-e4b-it',
+  messages: [{ role: 'user', content: 'Hello!' }],
+  stream: true,
+})) {
+  console.log(chunk.choices[0]?.delta?.content);
+}
+```
+
+### client.models
+
+#### list()
+
+```typescript
+async *list(): AsyncGenerator<Model>
+```
+
+List available models. Returns AsyncGenerator for `for await...of` iteration.
+
+**Returns**: `AsyncGenerator<Model>`
+
+**Example**:
+
+```typescript
+for await (const model of client.models.list()) {
+  console.log(model.id);
+}
+```
+
+### client.embeddings
+
+#### create()
+
+```typescript
+async create(body: CreateEmbeddingRequest): Promise<CreateEmbeddingResponse>
+```
+
+Create embeddings for input text.
+
+**Parameters**:
+
+| Parameter | Type     | Description                   |
+| --------- | -------- | ----------------------------- |
+| `model`   | `string` | Embedding model ID            |
+| `input`   | `string` | Text to create embeddings for |
+
+**Returns**: `Promise<CreateEmbeddingResponse>`
+
+**Example**:
+
+```typescript
+const embedding = await client.embeddings.create({
+  model: 'text-embedding-model',
+  input: 'Hello world',
+});
+```
+
+---
+
+#### login()
+
+```typescript
+async login(): Promise<AuthState>
+```
+
+Initiate OAuth login flow.
+
+**Returns**: `Promise<AuthState>`
+
+#### logout()
+
+```typescript
+async logout(): Promise<AuthState>
+```
+
+Logout and revoke tokens.
+
+**Returns**: `Promise<AuthState>`
+
+#### getAuthState()
+
+```typescript
+async getAuthState(): Promise<AuthState>
+```
+
+Get current auth state.
+
+**Returns**: `Promise<AuthState>`
+
+#### handleOAuthCallback()
+
+```typescript
+async handleOAuthCallback(code: string, state: string): Promise<AuthState>
+```
+
+Handle OAuth redirect callback (web only).
+
+**Returns**: `Promise<AuthState>`
+
+#### setConnectionMode()
+
+```typescript
+async setConnectionMode(mode: ConnectionMode): Promise<ClientState>
+```
+
+Switch connection mode.
+
+**Parameters**: `mode: 'extension' | 'direct'`
+
+**Returns**: `Promise<ClientState>`
+
+#### getConnectionMode()
+
+```typescript
+getConnectionMode(): ConnectionMode | null
+```
+
+Get current connection mode.
+
+**Returns**: `'extension' | 'direct' | null`
+
+#### testExtensionConnectivity()
+
+```typescript
+async testExtensionConnectivity(timeoutMs?: number): Promise<ExtensionState>
+```
+
+Test extension connection.
+
+**Returns**: `Promise<ExtensionState>`
+
+#### testDirectConnectivity()
+
+```typescript
+async testDirectConnectivity(serverUrl?: string): Promise<DirectState>
+```
+
+Test direct HTTP connection.
+
+**Returns**: `Promise<DirectState>`
+
+#### getState()
+
+```typescript
+getState(): ClientState
+```
+
+Get current client state.
+
+**Returns**: `ClientState`
+
+---
+
+## ExtUIClient
+
+Extension client from `@bodhiapp/bodhi-js-ext`.
+
+### Constructor
+
+```typescript
+new ExtUIClient(
+  authClientId: string,
+  config?: ExtUIClientConfig,
+  onStateChange?: StateChangeCallback
+)
+```
+
+**ExtUIClientConfig**:
+
+```typescript
+interface ExtUIClientConfig {
+  authServerUrl?: string; // OAuth server URL (default: 'https://id.getbodhi.app/realms/bodhi')
+  userScope?: UserScope; // User scope (default: 'scope_user_user')
+  basePath?: string; // App base path (default: '/')
+  logLevel?: LogLevel; // Logging level (default: 'warn')
+  initParams?: {
+    extension?: {
+      timeoutMs?: number;
+      attempts?: number;
+      attemptWaitMs?: number;
+      attemptTimeout?: number;
+    };
+  };
+}
+```
+
+### Methods
+
+Inherits all methods from WebUIClient except `handleOAuthCallback()`.
+
+#### sendExtRequest()
+
+```typescript
+async sendExtRequest(action: string, params?: any): Promise<any>
+```
+
+Send extension-specific request.
+
+**Parameters**:
+
+- `action: string` - Action type (e.g., 'get_extension_id')
+- `params?: any` - Action parameters
+
+**Returns**: `Promise<any>`
+
+---
+
+## BodhiProvider
+
+React Context provider available in multiple packages with different levels of auto-configuration.
+
+### Preset Packages (Recommended)
+
+#### Web Preset: `@bodhiapp/bodhi-js-react`
+
+Auto-creates `WebUIClient` - just pass `authClientId`.
+
+**Props**:
+
+```typescript
+interface BodhiProviderProps {
+  authClientId: string; // Required: OAuth client ID
+  children: ReactNode; // Required: App components
+  clientConfig?: WebUIClientParams; // Optional: Custom client config
+  client?: UIClient; // Optional: Override auto-creation
+  modalHtmlPath?: string; // Optional: Setup modal HTML path
+  handleCallback?: boolean; // Optional: Auto-handle OAuth (default: true)
+  callbackPath?: string; // Optional: OAuth callback path (default: '/callback')
+  basePath?: string; // Optional: App base path (default: '/')
+  logLevel?: LogLevel; // Optional: Logging level (default: 'warn')
+}
+```
+
+**Usage**:
+
+```typescript
+import { BodhiProvider } from '@bodhiapp/bodhi-js-react';
+
+// Simple usage
+<BodhiProvider authClientId="your-client-id">
+  <App />
+</BodhiProvider>
+
+// With custom config
+<BodhiProvider
+  authClientId="your-client-id"
+  clientConfig={{ redirectUri: 'https://myapp.com/callback', logLevel: 'debug' }}
+>
+  <App />
+</BodhiProvider>
+```
+
+#### Extension Preset: `@bodhiapp/bodhi-js-react-ext`
+
+Auto-creates `ExtUIClient` - just pass `authClientId`.
+
+**Props**: Same as web preset, but `clientConfig` is `ExtUIClientParams`.
+
+**Usage**:
+
+```typescript
+import { BodhiProvider } from '@bodhiapp/bodhi-js-react-ext';
+
+<BodhiProvider authClientId="your-extension-id">
+  <ExtensionUI />
+</BodhiProvider>
+```
+
+### Core Package (Advanced): `@bodhiapp/bodhi-js-react-core`
+
+Uses dependency injection - requires manual client creation.
+
+**Props**:
+
+```typescript
+interface BodhiProviderProps {
+  children: ReactNode; // Required: App components
+  client: UIClient; // Required: Client instance
+  modalHtmlPath?: string; // Optional: Setup modal HTML path
+  handleCallback?: boolean; // Optional: Auto-handle OAuth (default: true)
+  callbackPath?: string; // Optional: OAuth callback path (default: '/callback')
+  basePath?: string; // Optional: App base path (default: '/')
+  logLevel?: LogLevel; // Optional: Logging level (default: 'warn')
+}
+```
+
+**Usage**:
+
+```typescript
+import { BodhiProvider } from '@bodhiapp/bodhi-js-react-core';
+import { WebUIClient } from '@bodhiapp/bodhi-js';
+
+const client = new WebUIClient('client-id', { basePath: '/tenant-123' });
+
+<BodhiProvider client={client}>
+  <App />
+</BodhiProvider>
+```
+
+See [Client Injection](./advanced/client-injection.md) for when to use this pattern.
+
+---
+
+## useBodhi Hook
+
+Access SDK from React components.
+
+### Return Type
+
+```typescript
+interface BodhiContext {
+  // Core
+  client: UIClient;
+  clientState: ClientContextState;
+  auth: AuthState;
+
+  // Functions
+  login: () => Promise<void>;
+  logout: () => Promise<void>;
+  showSetup: () => Promise<void>;
+  hideSetup: () => void;
+
+  // Auth properties
+  isAuthLoading: boolean;
+  isAuthenticated: boolean;
+  canLogin: boolean;
+
+  // Connection properties
+  isReady: boolean;
+  isServerReady: boolean;
+  isOverallReady: boolean;
+  isInitializing: boolean;
+  isExtension: boolean;
+  isDirect: boolean;
+
+  // Setup
+  setupState: SetupState;
+}
+```
+
+### Usage
+
+```typescript
+import { useBodhi } from '@bodhiapp/bodhi-js-react';
+
+function MyComponent() {
+  const { client, isOverallReady, isAuthenticated } = useBodhi();
+  // ...
+}
+```
+
+---
+
+## Types
+
+### Importing API Types
+
+Types for OpenAI-compatible API are available via subpath export:
+
+```typescript
+import type {
+  CreateChatCompletionRequest,
+  CreateChatCompletionResponse,
+  CreateChatCompletionStreamResponse,
+  Model,
+  CreateEmbeddingRequest,
+  CreateEmbeddingResponse,
+} from '@bodhiapp/bodhi-js-react/api';
+
+// Or from other packages
+import type { Model } from '@bodhiapp/bodhi-js-react-ext/api';
+import type { Model } from '@bodhiapp/bodhi-js-core/api';
+```
+
+### ClientState
+
+```typescript
+type ClientState = ExtensionState | DirectState;
+
+interface ExtensionState {
+  type: 'extension';
+  extension: 'not-initialized' | 'not-found' | 'ready';
+  extensionId: string | null;
+  server: BackendServerState;
+}
+
+interface DirectState {
+  type: 'direct';
+  url: string | null;
+  server: BackendServerState;
+}
+```
+
+### ClientContextState
+
+```typescript
+interface ClientContextState {
+  status: ClientContextStatus;
+  mode: 'extension' | 'direct' | null;
+  extensionId: string | null;
+  url: string | null;
+  server: BackendServerState;
+  error: OperationErrorResponse | null;
+}
+
+type ClientContextStatus = 'not-initialized' | 'initializing' | 'extension-not-found' | 'direct-not-connected' | 'ready';
+```
+
+### BackendServerState
+
+```typescript
+interface BackendServerState {
+  status: ServerStatus;
+  version: string | null;
+  error: OperationErrorResponse | null;
+}
+
+type ServerStatus = 'not-connected' | 'pending-extension-ready' | 'ready' | 'setup' | 'resource-admin' | 'error' | 'not-reachable';
+```
+
+### AuthState
+
+```typescript
+interface AuthState {
+  status: AuthStatus;
+  user: UserInfo | null;
+  accessToken: string | null;
+  error: AuthError | null;
+}
+
+type AuthStatus = 'idle' | 'loading' | 'authenticated' | 'unauthenticated' | 'error';
+```
+
+### UserInfo
+
+```typescript
+interface UserInfo {
+  sub: string;
+  email: string;
+  name: string;
+  given_name: string;
+  family_name: string;
+  preferred_username: string;
+}
+```
+
+### ApiResponseResult
+
+```typescript
+type ApiResponseResult<T> = ApiResponse<T> | { error: OperationErrorResponse };
+
+interface ApiResponse<T> {
+  body: T;
+  status: number;
+  headers?: Record<string, string>;
+}
+
+interface OperationErrorResponse {
+  message: string;
+  type: string;
+}
+```
+
+### ApiError & OperationError
+
+```typescript
+interface ApiError extends Error {
+  response: {
+    status: number;
+    body: OpenAiApiError;
+    headers?: Record<string, string>;
+  };
+}
+
+interface OperationError extends Error {
+  error: {
+    message: string;
+    type: string;
+  };
+}
+```
+
+### StateChange
+
+```typescript
+type StateChange = { type: 'client-state'; state: ClientState } | { type: 'auth-state'; state: AuthState };
+
+type StateChangeCallback = (change: StateChange) => void;
+```
+
+### ConnectionMode
+
+```typescript
+type ConnectionMode = 'direct' | 'extension';
+```
+
+### UserScope
+
+```typescript
+type UserScope = 'scope_user_user' | 'scope_user_power_user';
+```
+
+### LogLevel
+
+```typescript
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+```
+
+---
+
+## Type Guards
+
+From `@bodhiapp/bodhi-js-react`:
+
+### API Result Type Guards
+
+```typescript
+function isApiResultSuccess<T>(result: ApiResponseResult<T>): result is ApiResponse<T>;
+
+function isApiResultError<T>(result: ApiResponseResult<T>): result is ApiResponse<T>;
+
+function isApiResultOperationError<T>(result: ApiResponseResult<T>): result is { error: OperationErrorResponse };
+```
+
+### Client State Type Guards
+
+```typescript
+function isExtensionState(state: ClientState): state is ExtensionState;
+
+function isDirectState(state: ClientState): state is DirectState;
+
+function isClientReady(state: ClientState): boolean;
+
+function isServerReady(server: BackendServerState): boolean;
+
+function isExtensionClientReady(state: ExtensionState): boolean;
+
+function isExtensionServerReady(state: ExtensionState): boolean;
+
+function isDirectClientReady(state: DirectState): boolean;
+
+function isDirectServerReady(state: DirectState): boolean;
+```
+
+### Auth Type Guards
+
+```typescript
+function isAuthenticated(auth: AuthState): boolean;
+
+function isAuthLoading(auth: AuthState): boolean;
+
+function isAuthError(auth: AuthState): boolean;
+```
+
+### Client Type Guards
+
+```typescript
+function isWebUIClient(client: UIClient): client is IWebUIClient;
+```
+
+### Error Type Guards
+
+```typescript
+function isOperationError(err: Error): err is OperationError;
+```
+
+---
+
+## Error Factories
+
+From `@bodhiapp/bodhi-js-core`:
+
+### createApiError
+
+```typescript
+function createApiError(message: string, status: number, body: OpenAiApiError, headers?: Record<string, string>): ApiError;
+```
+
+Create HTTP error.
+
+### createOperationError
+
+```typescript
+function createOperationError(message: string, type: string): OperationError;
+```
+
+Create operation error.
+
+---
+
+## Example Usage
+
+### Complete TypeScript Example
+
+```typescript
+import { WebUIClient } from '@bodhiapp/bodhi-js';
+import { BodhiProvider, useBodhi } from '@bodhiapp/bodhi-js-react';
+import {
+  isApiResultSuccess,
+  isApiResultOperationError,
+  type CreateChatCompletionRequest,
+  type CreateChatCompletionResponse,
+} from '@bodhiapp/bodhi-js-react';
+
+// Create client (minimal - uses defaults)
+const client = new WebUIClient('client-id');
+
+// Provider setup
+function App() {
+  return (
+    <BodhiProvider client={client}>
+      <ChatApp />
+    </BodhiProvider>
+  );
+}
+
+// Component usage
+function ChatApp() {
+  const { client, isOverallReady, isAuthenticated, login } = useBodhi();
+
+  if (!isOverallReady) {
+    return <div>Not connected</div>;
+  }
+
+  if (!isAuthenticated) {
+    return <button onClick={login}>Login</button>;
+  }
+
+  return <ChatInterface client={client} />;
+}
+
+// API call
+async function sendMessage(client: UIClient, prompt: string) {
+  const result = await client.sendApiRequest<
+    CreateChatCompletionRequest,
+    CreateChatCompletionResponse
+  >(
+    'POST',
+    '/v1/chat/completions',
+    {
+      model: 'gemma-3n-e4b-it',
+      messages: [{ role: 'user', content: prompt }],
+    },
+    undefined,
+    true  // authenticated
+  );
+
+  if (isApiResultOperationError(result)) {
+    throw new Error(result.error.message);
+  }
+
+  if (isApiResultSuccess(result)) {
+    return result.body.choices[0].message.content;
+  }
+}
+```
+
+---
+
+## Advanced Topics
+
+For advanced customization and power user scenarios:
+
+- **[Advanced Token Management](./advanced/token-management.md)** - Manual token refresh, PKCE utilities, JWT parsing
+- **[Advanced Streaming Patterns](./advanced/streaming-internals.md)** - Custom streaming, debouncing, cancellation, token counting
+- **[Advanced Connection Modes](./advanced/connection-modes.md)** - Detailed state transitions, debugging techniques
+- **[Core Utilities](./advanced/core-utilities.md)** - Error factories for custom error creation
+
+## SDK Contributor Documentation
+
+For SDK contributors or custom SDK integrations:
+
+- **[State Management Internals](./internals/state-management.md)** - State factories, storage keys, serialization
+- **[Message Protocols](./internals/message-protocols.md)** - Extension-to-extension communication protocol
+- **[Modal Protocol](./internals/modal-protocol.md)** - Setup modal iframe message protocol
+
+---
+
+## Additional Resources
+
+- [GitHub Repository](https://github.com/BodhiSearch/bodhi-js)
+- [NPM Packages](https://www.npmjs.com/org/bodhiapp)
+- [Issue Tracker](https://github.com/BodhiSearch/bodhi-js/issues)
+- [Developer Portal](https://developer.getbodhi.app) - Register your app/extension
+
+---
+
+← Back to [Extension SDK](./extension-sdk.md) | Return to [Overview](./index.md)

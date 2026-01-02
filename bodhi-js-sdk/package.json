@@ -1,0 +1,38 @@
+{
+  "name": "bodhi-js-sdk",
+  "version": "0.0.1-dev",
+  "private": true,
+  "description": "Bodhi Browser SDK - TypeScript libraries for integrating with Bodhi Backend",
+  "type": "module",
+  "workspaces": [
+    "core",
+    "web",
+    "ext",
+    "react-core",
+    "react",
+    "react-ext"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "ci:build": "npm run ci:build --workspaces",
+    "dev:build": "npm run dev:build --workspaces",
+    "build:prod": "npm run build:prod --workspaces",
+    "clean": "npm run clean --workspaces --if-present",
+    "lint": "npm run lint --workspaces",
+    "lint:fix": "prettier --write . && npm run lint:fix --workspaces",
+    "typecheck": "npm run typecheck --workspaces"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "typescript": "^5.8.3"
+  },
+  "keywords": [
+    "bodhi",
+    "llm",
+    "browser",
+    "sdk",
+    "typescript"
+  ],
+  "author": "Bodhi Search",
+  "license": "MIT"
+}

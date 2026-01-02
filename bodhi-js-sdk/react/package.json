@@ -1,0 +1,68 @@
+{
+  "name": "@bodhiapp/bodhi-js-react",
+  "version": "0.0.9",
+  "description": "React bindings for Bodhi Browser SDK with WebUIClient preset",
+  "type": "module",
+  "main": "dist/bodhi-react.cjs.js",
+  "module": "dist/bodhi-react.esm.js",
+  "exports": {
+    ".": {
+      "types": "./dist/bodhi-react.esm.d.ts",
+      "import": "./dist/bodhi-react.esm.js",
+      "require": "./dist/bodhi-react.cjs.js"
+    },
+    "./api": {
+      "types": "./src/api/index.ts",
+      "import": "./src/api/index.ts",
+      "default": "./src/api/index.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BodhiSearch/bodhi-browser.git",
+    "directory": "bodhi-js-sdk/react"
+  },
+  "license": "MIT",
+  "author": "BodhiSearch",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "rimraf dist",
+    "build": "vite build --mode development",
+    "ci:build": "vite build --mode development",
+    "dev:build": "node ../../scripts/build-fast.mjs bodhi-js-sdk/react 'npm run build' src package.json vite.config.ts",
+    "build:prod": "vite build --mode production",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx && prettier --check .",
+    "lint:fix": "prettier --write . && eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bodhiapp/bodhi-js-react-core": "file:../react-core",
+    "@bodhiapp/bodhi-js": "file:../web",
+    "@bodhiapp/bodhi-js-core": "0.0.9"
+  },
+  "peerDependencies": {
+    "react": "^18.3.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.23.0",
+    "@types/node": "^20.19.10",
+    "@types/react": "^19.0.0",
+    "@typescript-eslint/eslint-plugin": "8.28.0",
+    "@typescript-eslint/parser": "8.28.0",
+    "eslint": "9.32.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "^16.0.0",
+    "prettier": "3.6.2",
+    "rimraf": "^6.0.1",
+    "tslib": "^2.6.2",
+    "typescript": "^5.8.3",
+    "vite": "^7.1.12",
+    "vite-plugin-dts": "^4.5.4"
+  }
+}
