@@ -145,11 +145,17 @@ function Chat() {
   return (
     <div>
       <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)}>
-        {models.map(model => <option key={model} value={model}>{model}</option>)}
+        {models.map(model => (
+          <option key={model} value={model}>
+            {model}
+          </option>
+        ))}
       </select>
       <form onSubmit={handleSubmit}>
         <input value={prompt} onChange={e => setPrompt(e.target.value)} />
-        <button type="submit" disabled={loading}>{loading ? 'Generating...' : 'Send'}</button>
+        <button type="submit" disabled={loading}>
+          {loading ? 'Generating...' : 'Send'}
+        </button>
       </form>
       {response && <div>{response}</div>}
     </div>
@@ -165,21 +171,21 @@ export default Chat;
 
 ```tsx
 const {
-  client,           // SDK client instance (OpenAI-compatible API)
-  isOverallReady,   // Both client AND server ready (most common check)
-  isAuthenticated,  // User has valid OAuth token
-  login,            // Initiate OAuth login flow
-  logout,           // Logout and clear tokens
-  showSetup,        // Open setup wizard modal
+  client, // SDK client instance (OpenAI-compatible API)
+  isOverallReady, // Both client AND server ready (most common check)
+  isAuthenticated, // User has valid OAuth token
+  login, // Initiate OAuth login flow
+  logout, // Logout and clear tokens
+  showSetup, // Open setup wizard modal
 
   // Additional properties
-  isReady,          // Client initialized (extension or direct URL)
-  isServerReady,    // Server status is 'ready'
-  isInitializing,   // client.init() in progress
-  isExtension,      // Using extension mode
-  isDirect,         // Using direct HTTP mode
-  canLogin,         // isReady && !isAuthLoading
-  isAuthLoading,    // Auth operation in progress
+  isReady, // Client initialized (extension or direct URL)
+  isServerReady, // Server status is 'ready'
+  isInitializing, // client.init() in progress
+  isExtension, // Using extension mode
+  isDirect, // Using direct HTTP mode
+  canLogin, // isReady && !isAuthLoading
+  isAuthLoading, // Auth operation in progress
 } = useBodhi();
 ```
 
@@ -239,13 +245,9 @@ export default defineConfig({
 });
 
 // BodhiProvider
-<BodhiProvider
-  authClientId={CLIENT_ID}
-  basePath="/repo-name"
-  callbackPath="/repo-name/callback"
->
+<BodhiProvider authClientId={CLIENT_ID} basePath="/repo-name" callbackPath="/repo-name/callback">
   <App />
-</BodhiProvider>
+</BodhiProvider>;
 ```
 
 ## Common Patterns
@@ -287,10 +289,13 @@ const loadModels = async () => {
   }
   setModels(modelList);
 
-  localStorage.setItem('bodhi_models', JSON.stringify({
-    models: modelList,
-    expiry: Date.now() + 3600000, // 1 hour
-  }));
+  localStorage.setItem(
+    'bodhi_models',
+    JSON.stringify({
+      models: modelList,
+      expiry: Date.now() + 3600000, // 1 hour
+    })
+  );
 };
 ```
 

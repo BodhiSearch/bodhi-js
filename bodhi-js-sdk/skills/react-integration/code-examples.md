@@ -94,11 +94,7 @@ function ConnectionStatus() {
     return <div className="status warning">Server not ready: {clientState.server.status}</div>;
   }
 
-  return (
-    <div className="status success">
-      Connected ({isExtension ? 'extension' : 'direct'} mode)
-    </div>
-  );
+  return <div className="status success">Connected ({isExtension ? 'extension' : 'direct'} mode)</div>;
 }
 
 export default ConnectionStatus;
@@ -213,20 +209,22 @@ function ModelSelector() {
 
   return (
     <div>
-      <select
-        value={selected}
-        onChange={e => setSelected(e.target.value)}
-        disabled={loading || models.length === 0}
-      >
+      <select value={selected} onChange={e => setSelected(e.target.value)} disabled={loading || models.length === 0}>
         {loading ? (
           <option>Loading models...</option>
         ) : models.length === 0 ? (
           <option>No models available</option>
         ) : (
-          models.map(model => <option key={model} value={model}>{model}</option>)
+          models.map(model => (
+            <option key={model} value={model}>
+              {model}
+            </option>
+          ))
         )}
       </select>
-      <button onClick={loadModels} disabled={loading}>Refresh</button>
+      <button onClick={loadModels} disabled={loading}>
+        Refresh
+      </button>
     </div>
   );
 }
@@ -347,13 +345,7 @@ function Chat({ model }: ChatProps) {
   return (
     <div>
       <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          value={prompt}
-          onChange={e => setPrompt(e.target.value)}
-          placeholder="Ask me anything..."
-          disabled={loading}
-        />
+        <input type="text" value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Ask me anything..." disabled={loading} />
         <button type="submit" disabled={loading || !model}>
           {loading ? 'Generating...' : 'Send'}
         </button>
@@ -443,13 +435,7 @@ function Conversation({ model }: { model: string }) {
       </div>
 
       <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          value={prompt}
-          onChange={e => setPrompt(e.target.value)}
-          placeholder="Continue the conversation..."
-          disabled={loading}
-        />
+        <input type="text" value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Continue the conversation..." disabled={loading} />
         <button type="submit" disabled={loading || !model}>
           {loading ? 'Generating...' : 'Send'}
         </button>
@@ -498,12 +484,7 @@ function SimpleChat({ model }: { model: string }) {
   return (
     <div>
       <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          value={prompt}
-          onChange={e => setPrompt(e.target.value)}
-          disabled={loading}
-        />
+        <input type="text" value={prompt} onChange={e => setPrompt(e.target.value)} disabled={loading} />
         <button type="submit" disabled={loading || !model}>
           {loading ? 'Loading...' : 'Send'}
         </button>
@@ -612,7 +593,11 @@ function ChatApp() {
       <header>
         <h1>Bodhi Chat</h1>
         <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)}>
-          {models.map(m => <option key={m} value={m}>{m}</option>)}
+          {models.map(m => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
         </select>
       </header>
 
@@ -626,13 +611,7 @@ function ChatApp() {
 
       <footer>
         <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            value={prompt}
-            onChange={e => setPrompt(e.target.value)}
-            placeholder="Ask me anything..."
-            disabled={loading}
-          />
+          <input type="text" value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Ask me anything..." disabled={loading} />
           <button type="submit" disabled={loading || !selectedModel}>
             {loading ? 'Generating...' : 'Send'}
           </button>
@@ -648,6 +627,7 @@ export default ChatApp;
 ## Environment Configuration
 
 **.env.development**:
+
 ```env
 VITE_BODHI_CLIENT_ID=app-dev-client-id-uuid
 VITE_BODHI_AUTH_SERVER=https://main-id.getbodhi.app/realms/bodhi
@@ -655,6 +635,7 @@ VITE_BODHI_REDIRECT_URI=http://localhost:5173/callback
 ```
 
 **.env.production**:
+
 ```env
 VITE_BODHI_CLIENT_ID=app-prod-client-id-uuid
 VITE_BODHI_AUTH_SERVER=https://id.getbodhi.app/realms/bodhi
@@ -662,6 +643,7 @@ VITE_BODHI_REDIRECT_URI=https://myapp.com/callback
 ```
 
 **vite-env.d.ts**:
+
 ```typescript
 interface ImportMetaEnv {
   readonly VITE_BODHI_CLIENT_ID: string;
@@ -677,20 +659,9 @@ interface ImportMeta {
 ## TypeScript Types
 
 ```typescript
-import type {
-  BodhiContext,
-  ClientContextState,
-  AuthState,
-  UIClient,
-} from '@bodhiapp/bodhi-js-react';
+import type { BodhiContext, ClientContextState, AuthState, UIClient } from '@bodhiapp/bodhi-js-react';
 
-import type {
-  CreateChatCompletionRequest,
-  CreateChatCompletionResponse,
-  CreateChatCompletionStreamResponse,
-  Model,
-  ChatCompletionMessage,
-} from '@bodhiapp/bodhi-js-core';
+import type { CreateChatCompletionRequest, CreateChatCompletionResponse, CreateChatCompletionStreamResponse, Model, ChatCompletionMessage } from '@bodhiapp/bodhi-js-core';
 
 // Example typed component
 interface ChatProps {
@@ -712,11 +683,7 @@ import { ReactNode } from 'react';
 import { BodhiProvider } from '@bodhiapp/bodhi-js-react';
 
 export function TestBodhiProvider({ children }: { children: ReactNode }) {
-  return (
-    <BodhiProvider authClientId="test-client-id">
-      {children}
-    </BodhiProvider>
-  );
+  return <BodhiProvider authClientId="test-client-id">{children}</BodhiProvider>;
 }
 
 // Usage in tests

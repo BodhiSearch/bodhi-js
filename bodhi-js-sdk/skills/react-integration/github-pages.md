@@ -21,7 +21,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  base: '/repo-name/',  // Replace with your repository name
+  base: '/repo-name/', // Replace with your repository name
 });
 ```
 
@@ -53,6 +53,7 @@ function App() {
 ```
 
 **Why basePath matters**:
+
 - OAuth callback path: `/repo-name/callback`
 - localStorage keys: Scoped to base path
 - Setup modal URLs: Correctly resolved
@@ -72,11 +73,12 @@ Use a 404.html redirect hack:
 ### Implementation
 
 **public/404.html**:
+
 ```html
 <!DOCTYPE html>
 <html>
   <head>
-    <meta charset="utf-8">
+    <meta charset="utf-8" />
     <title>Redirecting...</title>
     <script>
       // GitHub Pages 404 redirect hack
@@ -90,10 +92,11 @@ Use a 404.html redirect hack:
 ```
 
 **index.html** (add to `<head>` before other scripts):
+
 ```html
 <script>
   // Restore path from 404 redirect
-  (function() {
+  (function () {
     var redirectPath = sessionStorage.getItem('redirectPath');
     if (redirectPath) {
       sessionStorage.removeItem('redirectPath');
@@ -110,6 +113,7 @@ Use a 404.html redirect hack:
 Use GitHub Secrets for OAuth client ID:
 
 **.github/workflows/deploy.yml**:
+
 ```yaml
 - name: Build
   env:
@@ -118,6 +122,7 @@ Use GitHub Secrets for OAuth client ID:
 ```
 
 **Repository Settings → Secrets → Actions**:
+
 - Add secret: `VITE_BODHI_CLIENT_ID` = your production client ID
 
 ## OAuth Registration
@@ -139,12 +144,14 @@ Key steps for GitHub Pages deployment:
 5. **Deploy to Pages**: Use `actions/deploy-pages` action
 
 See GitHub Actions documentation for full workflow examples:
+
 - https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site
 - https://vitejs.dev/guide/static-deploy.html#github-pages
 
 ## Enable GitHub Pages
 
 **Repository Settings → Pages**:
+
 - **Source**: GitHub Actions (not "Deploy from branch")
 - Workflow will deploy automatically on push to main
 
@@ -161,28 +168,35 @@ After deployment:
 ## Common Issues
 
 ### Assets 404 (CSS/JS not loading)
+
 **Cause**: Incorrect base path.
 **Solution**: Verify `base: '/repo-name/'` in vite.config.ts matches repository name.
 
 ### OAuth callback 404
+
 **Cause**: Missing 404.html redirect or incorrect redirect URI.
 **Solution**:
+
 - Add 404.html to public/
 - Verify redirect URI in developer portal matches `https://username.github.io/repo-name/callback`
 
 ### "Client not ready" after OAuth
+
 **Cause**: localStorage keys using wrong base path.
 **Solution**: Verify `basePath="/repo-name"` in BodhiProvider matches vite config.
 
 ### Environment variable not working
+
 **Cause**: Secret not set or workflow not passing it.
 **Solution**:
+
 - Add secret in Repository Settings → Secrets
 - Pass secret in workflow: `env: VITE_BODHI_CLIENT_ID: ${{ secrets.VITE_BODHI_CLIENT_ID }}`
 
 ## Complete Example Config
 
 **vite.config.ts**:
+
 ```ts
 export default defineConfig({
   plugins: [react()],
@@ -191,6 +205,7 @@ export default defineConfig({
 ```
 
 **App.tsx**:
+
 ```tsx
 <BodhiProvider
   authClientId={import.meta.env.VITE_BODHI_CLIENT_ID}

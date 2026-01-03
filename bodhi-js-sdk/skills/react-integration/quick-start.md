@@ -135,16 +135,14 @@ function Chat() {
       <div>
         <label>
           Model:
-          <select
-            value={selectedModel}
-            onChange={e => setSelectedModel(e.target.value)}
-            disabled={loading || models.length === 0}
-          >
+          <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)} disabled={loading || models.length === 0}>
             {models.length === 0 ? (
               <option>Loading models...</option>
             ) : (
               models.map(model => (
-                <option key={model} value={model}>{model}</option>
+                <option key={model} value={model}>
+                  {model}
+                </option>
               ))
             )}
           </select>
@@ -152,13 +150,7 @@ function Chat() {
       </div>
 
       <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          value={prompt}
-          onChange={e => setPrompt(e.target.value)}
-          placeholder="Ask me anything..."
-          disabled={loading}
-        />
+        <input type="text" value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Ask me anything..." disabled={loading} />
         <button type="submit" disabled={loading || !selectedModel}>
           {loading ? 'Generating...' : 'Send'}
         </button>
@@ -192,30 +184,38 @@ Open http://localhost:5173 and:
 ## What Just Happened?
 
 ### Single Package Install
+
 `@bodhiapp/bodhi-js-react` includes everything - no need for multiple packages.
 
 ### Auto-Configured Provider
+
 ```tsx
 <BodhiProvider authClientId={CLIENT_ID}>
 ```
+
 Just pass your client ID - SDK handles:
+
 - Auto-client creation
 - Extension detection (or direct mode fallback)
 - OAuth configuration
 - Callback processing
 
 ### Powerful Hook
+
 ```tsx
 const { client, isOverallReady, isAuthenticated, login, showSetup } = useBodhi();
 ```
+
 Access client and state from any component.
 
 ### OpenAI-Style Streaming
+
 ```tsx
 for await (const chunk of client.chat.completions.create({ stream: true, ... })) {
   // Real-time chunks
 }
 ```
+
 Familiar AsyncGenerator pattern for streaming.
 
 ## Testing Checklist
@@ -238,6 +238,7 @@ Familiar AsyncGenerator pattern for streaming.
 ## Full Documentation
 
 For comprehensive details:
+
 - `bodhi-js-sdk/docs/quick-start.md` - Official quick start
 - `bodhi-js-sdk/docs/react-integration.md` - Deep dive
 - `bodhi-js-sdk/docs/` - Comprehensive guides and examples

@@ -6,10 +6,10 @@ Guide for configuring OAuth authentication with bodhi-js-sdk for development and
 
 Bodhi uses OAuth 2.0 + PKCE for authentication. Two auth servers are available:
 
-| Environment | Auth Server | Allowed Redirect URIs |
-|-------------|-------------|----------------------|
+| Environment     | Auth Server                                 | Allowed Redirect URIs                        |
+| --------------- | ------------------------------------------- | -------------------------------------------- |
 | **Development** | `https://main-id.getbodhi.app/realms/bodhi` | `localhost`, `127.0.0.1`, loopback addresses |
-| **Production** | `https://id.getbodhi.app/realms/bodhi` | Real domains only (no localhost) |
+| **Production**  | `https://id.getbodhi.app/realms/bodhi`      | Real domains only (no localhost)             |
 
 ## Development Setup
 
@@ -131,6 +131,7 @@ function App() {
 ```
 
 **.env.development**:
+
 ```
 VITE_BODHI_CLIENT_ID=app-dev-client-id
 VITE_BODHI_AUTH_SERVER=https://main-id.getbodhi.app/realms/bodhi
@@ -138,6 +139,7 @@ VITE_BODHI_REDIRECT_URI=http://localhost:5173/callback
 ```
 
 **.env.production**:
+
 ```
 VITE_BODHI_CLIENT_ID=app-prod-client-id
 VITE_BODHI_AUTH_SERVER=https://id.getbodhi.app/realms/bodhi
@@ -153,14 +155,15 @@ By default, BodhiProvider handles callbacks automatically:
 ```tsx
 <BodhiProvider
   authClientId={CLIENT_ID}
-  handleCallback={true}  // Default - can omit
-  callbackPath="/callback"  // Default - can omit
+  handleCallback={true} // Default - can omit
+  callbackPath="/callback" // Default - can omit
 >
   <App />
 </BodhiProvider>
 ```
 
 When OAuth redirects to `/callback?code=...&state=...`:
+
 1. Provider detects callback parameters
 2. Exchanges code for tokens automatically
 3. Stores tokens in localStorage
@@ -188,7 +191,8 @@ function CallbackPage() {
     const state = params.get('state');
 
     if (code && state) {
-      client.handleOAuthCallback(code, state)
+      client
+        .handleOAuthCallback(code, state)
         .then(() => {
           console.log('Auth successful');
           navigate('/dashboard');
@@ -205,6 +209,7 @@ function CallbackPage() {
 ```
 
 Disable automatic handling:
+
 ```tsx
 <BodhiProvider client={client} handleCallback={false}>
   <App />
@@ -214,11 +219,13 @@ Disable automatic handling:
 ## Redirect URI Patterns
 
 ### Single-Page Apps (No Router)
+
 ```
 redirectUri: `${window.location.origin}/callback`
 ```
 
 ### React Router
+
 ```tsx
 // App.tsx
 <Routes>
@@ -230,6 +237,7 @@ redirectUri: `${window.location.origin}/callback`
 With automatic callback handling, the callback route just needs to exist - no logic required.
 
 ### GitHub Pages (Sub-path)
+
 ```tsx
 // basePath: '/my-repo'
 <BodhiProvider
@@ -247,17 +255,21 @@ See [github-pages.md](./github-pages.md) for details.
 ## Common OAuth Configurations
 
 ### Minimal (Dev)
+
 ```tsx
 <BodhiProvider authClientId="dev-client-id">
   <App />
 </BodhiProvider>
 ```
+
 Defaults:
+
 - Auth server: Production (`https://id.getbodhi.app`)
 - Redirect URI: `${window.location.origin}/callback`
 - Callback handling: Automatic
 
 ### Explicit Dev
+
 ```tsx
 <BodhiProvider
   authClientId="dev-client-id"
@@ -271,6 +283,7 @@ Defaults:
 ```
 
 ### Production with basePath
+
 ```tsx
 <BodhiProvider
   authClientId="prod-client-id"
@@ -284,46 +297,55 @@ Defaults:
 ```
 
 ### Debug Mode
+
 ```tsx
-<BodhiProvider
-  authClientId={CLIENT_ID}
-  logLevel="debug"
->
+<BodhiProvider authClientId={CLIENT_ID} logLevel="debug">
   <App />
 </BodhiProvider>
 ```
+
 Logs all OAuth flow steps to console.
 
 ## Troubleshooting OAuth
 
 ### "Invalid redirect_uri"
+
 **Cause**: Redirect URI doesn't match registered URI exactly.
 **Solution**:
+
 - Check developer portal - ensure URI matches exactly (including protocol, port, path)
 - Common mismatch: `http://localhost:5173` vs `http://localhost:5173/`
 
 ### "Client not found"
+
 **Cause**: Wrong client_id or client not registered.
 **Solution**:
+
 - Verify client_id copied correctly from developer portal
 - Ensure using correct environment (dev vs prod)
 
 ### "redirect_uri not allowed for this client"
+
 **Cause**: Using localhost URI with production client, or vice versa.
 **Solution**:
+
 - Dev client → Use `https://main-id.getbodhi.app` auth server
 - Prod client → Use real domain, not localhost
 
 ### OAuth redirects but not authenticated
+
 **Cause**: Callback not handling code exchange.
 **Solution**:
+
 - Verify `handleCallback={true}` (default)
 - Check console for errors during callback
 - Verify `callbackPath` matches redirect URI path
 
 ### Tokens not persisting
+
 **Cause**: localStorage not accessible or cleared.
 **Solution**:
+
 - Check browser console for localStorage errors
 - Verify not in incognito/private mode
 - Check for localStorage quota issues

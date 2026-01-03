@@ -16,8 +16,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..');
 
-const packages = ['core', 'web', 'ext', 'react'];
-const dependentPackages = ['web', 'ext', 'react'];
+// All packages in monorepo
+const packages = ['core', 'web', 'ext', 'react-core', 'react', 'react-ext'];
+
+// Map directory name to npm package name
+const packageNameMap = {
+  core: '@bodhiapp/bodhi-js-core',
+  web: '@bodhiapp/bodhi-js',
+  ext: '@bodhiapp/bodhi-js-ext',
+  'react-core': '@bodhiapp/bodhi-js-react-core',
+  react: '@bodhiapp/bodhi-js-react',
+  'react-ext': '@bodhiapp/bodhi-js-react-ext',
+};
 
 async function updatePackage(packageName, version, mode) {
   const packagePath = join(rootDir, packageName, 'package.json');
@@ -27,14 +37,32 @@ async function updatePackage(packageName, version, mode) {
   // Update version
   pkg.version = version;
 
-  // Update dependencies for dependent packages
-  if (dependentPackages.includes(packageName)) {
-    if (mode === 'release') {
-      // Use exact version
-      pkg.dependencies['@bodhiapp/bodhi-js-core'] = version;
-    } else {
-      // Restore file: protocol
-      pkg.dependencies['@bodhiapp/bodhi-js-core'] = 'file:../core';
+  // Update dependencies - dynamically convert all file: references
+  if (pkg.dependencies) {
+    for (const [depName, depVersion] of Object.entries(pkg.dependencies)) {
+      // Check if this is a file: reference to a local package
+      if (depVersion.startsWith('file:../')) {
+        const targetDir = depVersion.replace('file:../', '');
+        const targetPackageName = packageNameMap[targetDir];
+
+        if (targetPackageName) {
+          if (mode === 'release') {
+            // Convert to exact version
+            pkg.dependencies[depName] = version;
+            console.log(`  ${depName}: ${depVersion} → ${version}`);
+          } else {
+            // Keep file: protocol (already in correct format)
+            console.log(`  ${depName}: ${depVersion} (unchanged)`);
+          }
+        }
+      } else if (mode === 'dev' && packageNameMap[Object.keys(packageNameMap).find(k => packageNameMap[k] === depName)]) {
+        // Restore to file: protocol in dev mode
+        const targetDir = Object.keys(packageNameMap).find(k => packageNameMap[k] === depName);
+        if (targetDir && packages.includes(targetDir)) {
+          pkg.dependencies[depName] = `file:../${targetDir}`;
+          console.log(`  ${depName}: ${depVersion} → file:../${targetDir}`);
+        }
+      }
     }
   }
 

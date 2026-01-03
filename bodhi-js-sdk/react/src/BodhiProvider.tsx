@@ -12,7 +12,7 @@ export interface BodhiProviderProps extends Omit<CoreBodhiProviderProps, 'client
   client?: UIClient;
 }
 
-export function BodhiProvider({ children, authClientId, clientConfig, client: providedClient, ...restProps }: BodhiProviderProps) {
+export function BodhiProvider({ children, authClientId, clientConfig, client: providedClient, basePath, ...restProps }: BodhiProviderProps) {
   if (!providedClient && !authClientId) {
     throw new Error('BodhiProvider requires either "client" or "authClientId" prop');
   }
@@ -26,13 +26,19 @@ export function BodhiProvider({ children, authClientId, clientConfig, client: pr
     // If client already created, reuse it
     if (clientRef.current) return clientRef.current;
 
+    // Merge basePath from props if not set in clientConfig
+    const mergedConfig: WebUIClientParams = {
+      ...clientConfig,
+      basePath: clientConfig?.basePath ?? basePath,
+    };
+
     // Create new WebUIClient
-    clientRef.current = new WebUIClient(authClientId!, clientConfig);
+    clientRef.current = new WebUIClient(authClientId!, mergedConfig);
     return clientRef.current;
-  }, [providedClient, authClientId, clientConfig]);
+  }, [providedClient, authClientId, clientConfig, basePath]);
 
   return (
-    <CoreBodhiProvider client={client} {...restProps}>
+    <CoreBodhiProvider client={client} basePath={basePath} {...restProps}>
       {children}
     </CoreBodhiProvider>
   );
