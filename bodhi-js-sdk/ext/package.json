@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-ext",
-  "version": "0.0.10-dev",
+  "version": "0.0.10",
   "description": "Extension SDK for Bodhi Browser - chrome.runtime communication",
   "type": "module",
   "main": "dist/bodhi-ext.cjs.js",
@@ -18,7 +18,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/BodhiSearch/bodhi-browser.git",
+    "url": "https://github.com/BodhiSearch/bodhi-js.git",
     "directory": "bodhi-js-sdk/ext"
   },
   "license": "MIT",
@@ -37,7 +37,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bodhiapp/bodhi-js-core": "file:../core",
+    "@bodhiapp/bodhi-js-core": "0.0.10",
     "@bodhiapp/ts-client": "0.1.9"
   },
   "devDependencies": {

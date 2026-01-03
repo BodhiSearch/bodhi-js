@@ -1,0 +1,10 @@
+{
+  "name": "bodhi-js-sdk",
+  "description": "Integration skills for bodhi-js-sdk - helps integrate React apps with Bodhi Browser ecosystem",
+  "version": "1.0.0",
+  "author": {
+    "name": "BodhiSearch"
+  },
+  "repository": "https://github.com/BodhiSearch/bodhi-js",
+  "keywords": ["bodhi", "sdk", "react", "llm", "browser-js"]
+}

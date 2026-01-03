@@ -1,0 +1,14 @@
+{
+  "name": "bodhi-js-plugins",
+  "description": "Official Claude Code plugins for bodhi-js-sdk - integration skills for React applications and local LLM development",
+  "owner": {
+    "name": "BodhiSearch"
+  },
+  "plugins": [
+    {
+      "name": "bodhi-js-sdk",
+      "source": "./bodhi-js-sdk",
+      "description": "Skills for integrating bodhi-js-sdk with React applications"
+    }
+  ]
+}
