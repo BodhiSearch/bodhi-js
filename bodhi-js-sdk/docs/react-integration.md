@@ -93,7 +93,7 @@ interface BodhiProviderProps {
   clientConfig?: ClientParams; // Optional custom configuration
   modalHtmlPath?: string; // Path to setup modal HTML
   handleCallback?: boolean; // Auto-handle OAuth callback (default: true)
-  callbackPath?: string; // OAuth callback path (default: '/callback')
+  callbackPath?: string; // OAuth callback path (auto-computed from basePath if not provided)
   basePath?: string; // App base path (default: '/')
   logLevel?: LogLevel; // Logging level (default: 'warn')
 }
@@ -101,15 +101,15 @@ interface BodhiProviderProps {
 
 **Prop Details**:
 
-| Prop             | Type            | Default     | Description                                    |
-| ---------------- | --------------- | ----------- | ---------------------------------------------- |
-| `authClientId`   | `string`        | Required    | Your OAuth client ID                           |
-| `children`       | `ReactNode`     | Required    | Your application components                    |
-| `clientConfig`   | `ClientParams?` | undefined   | Optional custom client configuration           |
-| `handleCallback` | `boolean?`      | `true`      | Automatically handle OAuth redirect callbacks  |
-| `callbackPath`   | `string?`       | `/callback` | URL path for OAuth redirect (without basePath) |
-| `basePath`       | `string?`       | `/`         | Application base path for routing              |
-| `logLevel`       | `LogLevel?`     | `warn`      | Logging verbosity                              |
+| Prop             | Type            | Default                                | Description                                                                                                              |
+| ---------------- | --------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `authClientId`   | `string`        | Required                               | Your OAuth client ID                                                                                                     |
+| `children`       | `ReactNode`     | Required                               | Your application components                                                                                              |
+| `clientConfig`   | `ClientParams?` | undefined                              | Optional custom client configuration                                                                                     |
+| `handleCallback` | `boolean?`      | `true`                                 | Automatically handle OAuth redirect callbacks                                                                            |
+| `callbackPath`   | `string?`       | Auto-computed (`${basePath}/callback`) | OAuth callback path. Auto-computed from basePath if not provided. When provided, used as-is (include basePath if needed) |
+| `basePath`       | `string?`       | `/`                                    | Application base path for routing                                                                                        |
+| `logLevel`       | `LogLevel?`     | `warn`                                 | Logging verbosity                                                                                                        |
 
 ### Advanced: Custom Client Configuration
 
@@ -345,7 +345,15 @@ By default, `BodhiProvider` automatically handles OAuth redirects:
 <BodhiProvider
   client={client}
   handleCallback={true}      // Default
-  callbackPath="/callback"   // Default
+  basePath="/"               // callbackPath auto-computed as "/callback"
+>
+  <App />
+</BodhiProvider>
+
+// With custom basePath
+<BodhiProvider
+  client={client}
+  basePath="/myapp"
 >
   <App />
 </BodhiProvider>
@@ -354,7 +362,7 @@ By default, `BodhiProvider` automatically handles OAuth redirects:
 **How it works**:
 
 1. User clicks login → Redirects to OAuth server
-2. OAuth server redirects back to `http://yourapp.com/callback?code=...&state=...`
+2. OAuth server redirects back to `http://yourapp.com${basePath}/callback?code=...&state=...`
 3. Provider detects callback URL parameters
 4. Calls `client.handleOAuthCallback(code, state)` automatically
 5. Redirects to `basePath` after success

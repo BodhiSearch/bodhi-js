@@ -596,34 +596,53 @@ export class WindowBodhiextClient implements IExtensionClient {
     this.logger.debug('Refreshing access token');
 
     try {
-      const tokens = await refreshAccessToken(
+      const result = await refreshAccessToken(
         this.authEndpoints.token,
         refreshToken,
         this.authClientId
       );
 
-      if (tokens) {
-        this._storeRefreshedTokens(tokens);
-        const userInfo = extractUserInfo(tokens.access_token);
+      if (result.success) {
+        this._storeRefreshedTokens(result.tokens);
+        const userInfo = extractUserInfo(result.tokens.access_token);
         this.setAuthState({
           status: 'authenticated',
           user: userInfo,
-          accessToken: tokens.access_token,
+          accessToken: result.tokens.access_token,
           error: null,
         });
         this.logger.info('Token refreshed successfully');
-        return tokens.access_token;
+        return result.tokens.access_token;
+      }
+
+      if (result.error === 'invalid_grant') {
+        this.logger.warn('Refresh token expired or revoked, clearing tokens and logging out');
+        this.clearAuthStorage();
+        this.setAuthState({
+          status: 'unauthenticated',
+          user: null,
+          accessToken: null,
+          error: null,
+        });
+        return null;
       }
     } catch (error) {
       this.logger.warn('Token refresh failed:', error);
     }
 
-    // Refresh failed - throw error (don't clear tokens, may be temp issue)
+    // Refresh failed (temp issue) - throw error (don't clear tokens)
     this.logger.warn('Token refresh failed, keeping tokens for manual retry');
     throw createOperationError(
       'Access token expired and unable to refresh. Try logging out and logging in again.',
       'token_refresh_failed'
     );
+  }
+
+  private clearAuthStorage() {
+    localStorage.removeItem(this.storageKeys.ACCESS_TOKEN);
+    localStorage.removeItem(this.storageKeys.REFRESH_TOKEN);
+    localStorage.removeItem(this.storageKeys.EXPIRES_AT);
+    localStorage.removeItem(this.storageKeys.RESOURCE_SCOPE);
   }
 
   /**

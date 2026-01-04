@@ -106,18 +106,22 @@ export interface RefreshTokenResponse {
   expires_in: number;
 }
 
+export type RefreshTokenResult =
+  | { success: true; tokens: RefreshTokenResponse }
+  | { success: false; error: 'invalid_grant' | 'network_error' | 'other_error' };
+
 /**
  * Refresh access token using refresh token
  * @param tokenEndpoint - OAuth token endpoint URL
  * @param refreshToken - Current refresh token
  * @param clientId - OAuth client ID
- * @returns New tokens or null if refresh failed
+ * @returns Result with tokens on success, or error type on failure
  */
 export async function refreshAccessToken(
   tokenEndpoint: string,
   refreshToken: string,
   clientId: string
-): Promise<RefreshTokenResponse | null> {
+): Promise<RefreshTokenResult> {
   try {
     const response = await fetch(tokenEndpoint, {
       method: 'POST',
@@ -130,17 +134,28 @@ export async function refreshAccessToken(
     });
 
     if (!response.ok) {
-      return null;
+      try {
+        const errorData = await response.json();
+        if (errorData.error === 'invalid_grant') {
+          return { success: false, error: 'invalid_grant' };
+        }
+        return { success: false, error: 'other_error' };
+      } catch {
+        return { success: false, error: 'other_error' };
+      }
     }
 
     const tokens = await response.json();
     return {
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      id_token: tokens.id_token,
-      expires_in: tokens.expires_in || 3600,
+      success: true,
+      tokens: {
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        id_token: tokens.id_token,
+        expires_in: tokens.expires_in || 3600,
+      },
     };
   } catch {
-    return null;
+    return { success: false, error: 'network_error' };
   }
 }

@@ -381,7 +381,7 @@ interface BodhiProviderProps {
   client?: UIClient; // Optional: Override auto-creation
   modalHtmlPath?: string; // Optional: Setup modal HTML path
   handleCallback?: boolean; // Optional: Auto-handle OAuth (default: true)
-  callbackPath?: string; // Optional: OAuth callback path (default: '/callback')
+  callbackPath?: string; // Optional: OAuth callback path (auto-computed from basePath)
   basePath?: string; // Optional: App base path (default: '/')
   logLevel?: LogLevel; // Optional: Logging level (default: 'warn')
 }
@@ -434,7 +434,7 @@ interface BodhiProviderProps {
   client: UIClient; // Required: Client instance
   modalHtmlPath?: string; // Optional: Setup modal HTML path
   handleCallback?: boolean; // Optional: Auto-handle OAuth (default: true)
-  callbackPath?: string; // Optional: OAuth callback path (default: '/callback')
+  callbackPath?: string; // Optional: OAuth callback path (auto-computed from basePath)
   basePath?: string; // Optional: App base path (default: '/')
   logLevel?: LogLevel; // Optional: Logging level (default: 'warn')
 }

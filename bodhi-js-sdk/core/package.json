@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-core",
-  "version": "0.0.12-dev",
+  "version": "0.0.13-dev",
   "description": "Core types and interfaces for Bodhi Browser SDK",
   "type": "module",
   "main": "dist/bodhi-core.cjs.js",

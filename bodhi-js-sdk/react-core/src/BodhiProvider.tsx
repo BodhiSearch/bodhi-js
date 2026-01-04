@@ -71,10 +71,12 @@ export function BodhiProvider({
   client,
   modalHtmlPath,
   handleCallback = true,
-  callbackPath = '/callback',
+  callbackPath: userCallbackPath,
   basePath = '/',
   logLevel = 'warn',
 }: BodhiProviderProps) {
+  const normalizedBasePath = basePath === '/' ? '' : basePath.replace(/\/$/, '');
+  const callbackPath = userCallbackPath ?? `${normalizedBasePath}/callback`;
   const logger = useMemo(() => new Logger('BodhiProvider', logLevel), [logLevel]);
   const callbackProcessedRef = useRef(false);
   const initAttemptedRef = useRef(false);

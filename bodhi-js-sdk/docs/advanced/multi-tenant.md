@@ -36,8 +36,7 @@ function MultiTenantApp() {
       <Route path="/tenant1/*">
         <BodhiProvider
           client={tenant1Client}
-          basePath="/tenant1"
-          callbackPath="/tenant1/callback"
+          basePath="/tenant1"  // callbackPath auto-computed
         >
           <Tenant1App />
         </BodhiProvider>
@@ -47,7 +46,6 @@ function MultiTenantApp() {
         <BodhiProvider
           client={tenant2Client}
           basePath="/tenant2"
-          callbackPath="/tenant2/callback"
         >
           <Tenant2App />
         </BodhiProvider>
@@ -163,8 +161,7 @@ function TenantRouter() {
   return (
     <BodhiProvider
       client={client}
-      basePath={`/tenant/${id}`}
-      callbackPath={`/tenant/${id}/callback`}
+      basePath={`/tenant/${id}`}  // callbackPath auto-computed
     >
       <TenantApp tenantId={id} />
     </BodhiProvider>
