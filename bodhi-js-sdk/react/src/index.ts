@@ -46,6 +46,10 @@ export {
   isOperationError,
   createApiError,
   createOperationError,
+  BodhiBadge,
+  type BodhiBadgeProps,
+  type BodhiBadgeSize,
+  type BodhiBadgeVariant,
 } from '@bodhiapp/bodhi-js-react-core';
 
 // Re-export build info
