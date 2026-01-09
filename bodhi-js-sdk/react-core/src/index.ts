@@ -14,6 +14,14 @@ export {
   type SetupState,
 } from './BodhiProvider';
 
+// Marketing Components
+export {
+  BodhiBadge,
+  type BodhiBadgeProps,
+  type BodhiBadgeSize,
+  type BodhiBadgeVariant,
+} from './BodhiBadge';
+
 // Types (only public-facing types)
 export type { ClientContextState, ClientContextStatus } from './client-ctx';
 

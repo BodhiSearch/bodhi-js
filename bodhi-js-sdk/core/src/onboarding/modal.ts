@@ -123,12 +123,12 @@ export class OnboardingModal {
     // In extension context, chrome.runtime is available
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getURL) {
       // Sandbox allows inline scripts which are blocked by extension CSP
-      this.iframeElement.sandbox.add('allow-scripts', 'allow-same-origin');
+      this.iframeElement.sandbox.add('allow-scripts', 'allow-same-origin', 'allow-popups');
       this.iframeElement.src = chrome.runtime.getURL(this.modalHtmlPath);
     } else {
       // Fallback for non-extension environments (e.g., web mode)
       // Only allow-scripts (no allow-same-origin to avoid sandbox escape warning)
-      this.iframeElement.sandbox.add('allow-scripts');
+      this.iframeElement.sandbox.add('allow-scripts', 'allow-popups');
       this.iframeElement.srcdoc = modalHtml;
     }
 

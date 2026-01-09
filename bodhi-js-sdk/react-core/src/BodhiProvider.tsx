@@ -45,7 +45,7 @@ export interface BodhiContext {
   setupState: SetupState;
   auth: AuthState;
   isAuthLoading: boolean;
-  login: () => Promise<void>;
+  login: () => Promise<AuthState | void>;
   logout: () => Promise<void>;
   showSetup: () => Promise<void>;
   hideSetup: () => void;
@@ -191,13 +191,13 @@ export function BodhiProvider({
     initAndHandleCallback();
   }, [init, client, handleCallback, callbackPath, basePath]);
 
-  const login = useCallback(async () => {
+  const login = useCallback(async (): Promise<AuthState | void> => {
     setIsAuthLoading(true);
     try {
       await client.login();
       // Auth state updated automatically via callback
     } catch (err) {
-      setAuth({
+      const errorState: AuthState = {
         status: 'error',
         user: null,
         accessToken: null,
@@ -205,8 +205,10 @@ export function BodhiProvider({
           message: err instanceof Error ? err.message : 'Login failed',
           code: 'LOGIN_FAILED',
         },
-      });
+      };
+      setAuth(errorState);
       setIsAuthLoading(false);
+      return errorState;
     }
   }, [client]);
 

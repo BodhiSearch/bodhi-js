@@ -13,13 +13,15 @@ export const BROWSER_CONFIGS: Browser[] = [
     id: 'chrome',
     status: 'supported',
     name: 'Google Chrome',
-    extension_url: 'https://chrome.google.com/webstore/detail/bodhi-browser/example-id',
+    extension_url:
+      'https://chromewebstore.google.com/detail/bodhi-browser-extension/bjdjhiombmfbcoeojijpfckljjghmjbf',
   },
   {
     id: 'edge',
     status: 'supported',
     name: 'Microsoft Edge',
-    extension_url: 'https://microsoftedge.microsoft.com/addons/detail/bodhi-browser/example-id',
+    extension_url:
+      'https://chromewebstore.google.com/detail/bodhi-browser-extension/bjdjhiombmfbcoeojijpfckljjghmjbf',
   },
   {
     id: 'firefox',
@@ -37,7 +39,7 @@ export const BROWSER_CONFIGS: Browser[] = [
     id: 'unknown',
     status: 'not-supported',
     name: 'Unknown Browser',
-    github_issue_url: 'https://github.com/BodhiSearch/bodhi-browser/issues/new',
+    github_issue_url: 'https://github.com/BodhiSearch/bodhi-js/issues/new',
   },
 ];
 

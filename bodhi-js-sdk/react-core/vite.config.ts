@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
 import dts from 'vite-plugin-dts';
+import svgr from 'vite-plugin-svgr';
 
 export default defineConfig(({ mode }) => {
   const isDev = mode !== 'production';
@@ -32,6 +33,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [
+      svgr(),
       dts({
         outDir: 'dist',
         rollupTypes: false,
