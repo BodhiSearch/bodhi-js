@@ -24,6 +24,12 @@ dev.build: ## Dev build setup-modal-e2e (only if sources changed)
 	@npm run dev:build
 	@echo "setup-modal-e2e dev build completed"
 
+dev.all: ## Full validation: install → lint:fix → typecheck → build (no test script)
+	npm install
+	npm run lint:fix
+	npm run typecheck
+	npm run dev:build
+
 lint: ## Run ESLint checks
 	@echo "Running ESLint checks..."
 	@npm run lint

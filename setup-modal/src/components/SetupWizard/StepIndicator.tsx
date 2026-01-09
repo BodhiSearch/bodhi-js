@@ -2,7 +2,7 @@ import { SetupStep } from '@/types';
 import { CheckCircle, DownloadCloud, Laptop, Server, Wifi, XCircle } from 'lucide-react';
 import { Fragment } from 'react';
 import { useSetupModalStore } from '@/store/setup-modal-store';
-import { selectStepStatus } from '@/store/selectors';
+import { selectIsLoading, selectStepStatus } from '@/store/selectors';
 
 interface StepIndicatorProps {
   onStepClick: (step: SetupStep) => void;
@@ -10,6 +10,7 @@ interface StepIndicatorProps {
 
 export function StepIndicator({ onStepClick }: StepIndicatorProps) {
   const currentStep = useSetupModalStore(state => state.ui.currentStep);
+  const isLoading = useSetupModalStore(selectIsLoading);
 
   // Get step statuses using selector
   const platformStatus = useSetupModalStore(state => selectStepStatus(state, SetupStep.PLATFORM_CHECK));
@@ -53,6 +54,24 @@ export function StepIndicator({ onStepClick }: StepIndicatorProps) {
 
   const getStepVisuals = (step: (typeof steps)[0]) => {
     const isCurrent = currentStep === step.id;
+
+    // During loading, show neutral styling
+    if (isLoading) {
+      if (isCurrent) {
+        return {
+          circleClass: 'w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 ring-2 ring-blue-300',
+          icon: step.icon,
+          textClass: 'text-gray-500',
+          clickable: false,
+        };
+      }
+      return {
+        circleClass: 'w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 text-gray-300',
+        icon: step.icon,
+        textClass: 'text-gray-400',
+        clickable: false,
+      };
+    }
 
     if (step.status === 'complete') {
       return {

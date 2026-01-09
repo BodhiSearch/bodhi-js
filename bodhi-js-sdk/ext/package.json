@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-ext",
-  "version": "0.0.15-dev",
+  "version": "0.0.16-dev",
   "description": "Extension SDK for Bodhi Browser - chrome.runtime communication",
   "type": "module",
   "main": "dist/bodhi-ext.cjs.js",

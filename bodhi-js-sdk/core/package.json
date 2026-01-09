@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-core",
-  "version": "0.0.15-dev",
+  "version": "0.0.16-dev",
   "description": "Core types and interfaces for Bodhi Browser SDK",
   "type": "module",
   "main": "dist/bodhi-core.cjs.js",
@@ -41,7 +41,7 @@
     "access": "public"
   },
   "scripts": {
-    "clean": "rimraf dist",
+    "clean": "rimraf dist src/onboarding/modal.html",
     "copy-deps": "node scripts/copy-deps.js",
     "build-cli": "vite build --config vite.config.cli.ts",
     "prebuild": "make dependencies",

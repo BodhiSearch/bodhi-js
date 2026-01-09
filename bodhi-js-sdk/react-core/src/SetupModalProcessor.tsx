@@ -30,7 +30,7 @@ import {
   type LogLevel,
 } from '@bodhiapp/bodhi-js-core';
 import type * as ModalTypes from '@bodhiapp/setup-modal/types';
-import { MSG } from '@bodhiapp/setup-modal/types';
+import { MSG, DEFAULT_SETUP_STATE } from '@bodhiapp/setup-modal/types';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { SetupState } from './BodhiProvider';
 
@@ -379,11 +379,12 @@ export function SetupModalProcessor({
   const handlers = useMemo<AsyncRequestHandlers>(
     () => ({
       [MSG.MODAL_READY]: async () => {
-        logger.info('MODAL_READY: building initial state');
-        // const state = await buildSetupState(true);
-        // currentStateRef.current = state;
-        const finalState = getStateWithOverrides();
-        return { setupState: finalState };
+        logger.info('MODAL_READY: returning current state or default');
+        if (currentStateRef.current) {
+          return { setupState: getStateWithOverrides() };
+        }
+        // Return DEFAULT_SETUP_STATE while building (modal already has this but be explicit)
+        return { setupState: DEFAULT_SETUP_STATE };
       },
 
       [MSG.MODAL_REFRESH]: async () => {
@@ -485,10 +486,14 @@ export function SetupModalProcessor({
 
   useEffect(() => {
     if (isVisible && modalRef.current) {
+      // Show modal immediately with loading state
+      modalRef.current.showLoading();
+
+      // Then build actual state asynchronously
       buildSetupState(true)
         .then((state) => {
           currentStateRef.current = state;
-          modalRef.current?.show(state);
+          modalRef.current?.updateState(state);
           onSetupReady?.();
         })
         .catch((error) => {

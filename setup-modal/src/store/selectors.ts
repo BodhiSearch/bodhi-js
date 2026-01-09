@@ -66,6 +66,15 @@ export function selectIsAllReady(state: SetupModalStore): boolean {
   return selectIsPlatformSupported(state) && selectIsAnyPathComplete(state);
 }
 
+/**
+ * Checks if setupState represents loading/initial state
+ * Loading is detected by empty browsers/os arrays (real state always has these populated)
+ */
+export function selectIsLoading(state: SetupModalStore): boolean {
+  const { setupState } = state;
+  return setupState.browsers.length === 0 && setupState.os.length === 0;
+}
+
 // ============================================
 // User Confirmation Selectors
 // ============================================

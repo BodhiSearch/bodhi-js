@@ -20,8 +20,9 @@ describe('App - Integration', () => {
   test('should render SetupWizard', () => {
     render(<App />);
 
-    // Should show platform check with DEFAULT_SETUP_STATE (unknown platform)
-    expect(screen.getByText('Platform Compatibility Check')).toBeInTheDocument();
+    // Should show loading skeleton with DEFAULT_SETUP_STATE (empty browsers/os arrays)
+    expect(screen.getByTestId('loading-skeleton')).toBeInTheDocument();
+    expect(screen.getByText('Detecting platform...')).toBeInTheDocument();
   });
 
   test('should send modal:ready request message on mount', () => {

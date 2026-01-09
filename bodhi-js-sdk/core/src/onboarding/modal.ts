@@ -7,7 +7,7 @@
 
 import type { MessageType, RequestMessage, ResponsePayload } from '@bodhiapp/setup-modal/types';
 import type * as ModalTypes from '@bodhiapp/setup-modal/types';
-import { MSG, isRequestMessage } from '@bodhiapp/setup-modal/types';
+import { MSG, isRequestMessage, DEFAULT_SETUP_STATE } from '@bodhiapp/setup-modal/types';
 import { buildEvent, buildResponse, buildError } from '../types';
 import modalHtml from './modal.html?raw';
 
@@ -151,6 +151,14 @@ export class OnboardingModal {
     // Setup message listener
     this.messageHandler = this.handleMessage.bind(this);
     window.addEventListener('message', this.messageHandler);
+  }
+
+  /**
+   * Show the modal with default loading state
+   * Used to display modal immediately while state is being built
+   */
+  showLoading(): void {
+    this.show(DEFAULT_SETUP_STATE);
   }
 
   /**

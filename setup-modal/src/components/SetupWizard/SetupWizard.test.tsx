@@ -28,11 +28,12 @@ describe('SetupWizard - Step Navigation', () => {
   });
 
   test('should show loading state with DEFAULT_SETUP_STATE', () => {
-    // DEFAULT_SETUP_STATE has unknown platform, so should show platform check
+    // DEFAULT_SETUP_STATE has empty browsers/os arrays, triggering loading skeleton
     render(<SetupWizard />);
 
-    // With default state, should show platform check step
-    expect(screen.getByText('Platform Compatibility Check')).toBeInTheDocument();
+    // Should show loading skeleton during initial load
+    expect(screen.getByTestId('loading-skeleton')).toBeInTheDocument();
+    expect(screen.getByText('Detecting platform...')).toBeInTheDocument();
   });
 
   // Parameterized tests for step navigation logic

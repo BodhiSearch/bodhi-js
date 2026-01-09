@@ -14,6 +14,12 @@ build:
 dev.build: ## Dev: Build with caching
 	npm run dev:build
 
+dev.all: dev.dependencies ## Full validation: install → lint:fix → typecheck → build (no test script)
+	npm install
+	npm run lint:fix
+	npm run typecheck
+	npm run dev:build
+
 ci.build: ## CI: Build only (no dep rebuild)
 	npm run ci:build
 

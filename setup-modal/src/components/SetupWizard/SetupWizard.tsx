@@ -1,19 +1,19 @@
 import { StepIndicator } from '@/components/SetupWizard/StepIndicator';
 import { ExtensionSetup } from '@/components/SetupWizard/Steps/ExtensionSetup';
 import { LnaSetup } from '@/components/SetupWizard/Steps/LnaSetup';
+import { LoadingSkeleton } from '@/components/SetupWizard/LoadingSkeleton';
 import { PlatformCheck } from '@/components/SetupWizard/Steps/PlatformCheck';
 import { ServerSetup } from '@/components/SetupWizard/Steps/ServerSetup';
 import { SuccessState } from '@/components/SetupWizard/Steps/SuccessState';
 import iconBase64Data from '@/icon.txt?raw';
 import { SetupStep } from '@/types';
-import { selectDeterminedStep, selectIsPlatformSupported } from '@/store/selectors';
+import { selectDeterminedStep, selectIsLoading, selectIsPlatformSupported } from '@/store/selectors';
 import { useSetupModalStore } from '@/store/setup-modal-store';
 import { AlertTriangle, Loader2, RefreshCw, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 export function SetupWizard() {
   // Get state and actions from store
-  const setupState = useSetupModalStore(state => state.setupState);
   const currentStep = useSetupModalStore(state => state.ui.currentStep);
   const isRefreshing = useSetupModalStore(state => state.ui.isRefreshing);
   const setCurrentStep = useSetupModalStore(state => state.setCurrentStep);
@@ -26,6 +26,7 @@ export function SetupWizard() {
   // Compute derived state using selectors
   const determinedStep = useSetupModalStore(selectDeterminedStep);
   const isPlatformSupported = useSetupModalStore(selectIsPlatformSupported);
+  const isLoading = useSetupModalStore(selectIsLoading);
   const isPlatformNotSupported = !isPlatformSupported;
 
   // Sync currentStep from determinedStep (authoritative source)
@@ -78,7 +79,7 @@ export function SetupWizard() {
         <div className="flex items-center">
           <img src={`data:image/png;base64,${iconBase64Data.trim()}`} alt="Bodhi Logo" className="w-8 h-8 mr-3" />
           <h2 className="text-xl font-semibold text-gray-900">Bodhi Platform Setup</h2>
-          {!setupState && (
+          {isLoading && (
             <div className="ml-3" data-testid="loading-indicator" title="Loading setup data...">
               <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
             </div>
@@ -111,13 +112,8 @@ export function SetupWizard() {
         </div>
         {/* Scrollable content area with proper height constraints */}
         <div className="mt-6 flex-1 overflow-y-auto min-h-0 w-full" data-testid="content-area">
-          {!setupState ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
-                <p className="text-gray-600">Loading setup data...</p>
-              </div>
-            </div>
+          {isLoading ? (
+            <LoadingSkeleton />
           ) : (
             <>
               {currentStep === SetupStep.PLATFORM_CHECK && <PlatformCheck />}

@@ -37,6 +37,14 @@ dev.build: ## Dev build setup-modal (only if sources changed)
 	@npm run dev:build
 	@echo "setup-modal dev build completed"
 
+# Dev all - full validation pipeline
+dev.all: ## Full validation: install → lint:fix → typecheck → build → test
+	npm install
+	npm run lint:fix
+	npm run typecheck
+	npm run dev:build
+	npm test
+
 # Run tests
 test: ## Test setup-modal
 	npm test
