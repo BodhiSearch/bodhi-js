@@ -30,6 +30,7 @@ export interface WebClientConfig {
   userScope: string;
   basePath: string;
   logLevel: LogLevel;
+  apiTimeoutMs?: number;
   initParams?: {
     extension?: {
       timeoutMs?: number;
@@ -48,6 +49,7 @@ export interface WebUIClientParams {
   userScope?: UserScope;
   basePath?: string;
   logLevel?: LogLevel;
+  apiTimeoutMs?: number;
   initParams?: {
     extension?: {
       timeoutMs?: number;
@@ -93,6 +95,7 @@ export class WebUIClient
       authServerUrl: cfg.authServerUrl || 'https://id.getbodhi.app/realms/bodhi',
       userScope: cfg.userScope || 'scope_user_user',
       logLevel: cfg.logLevel || 'warn',
+      apiTimeoutMs: cfg.apiTimeoutMs,
       initParams: cfg.initParams,
     };
 
@@ -119,6 +122,7 @@ export class WebUIClient
         userScope: config.userScope,
         basePath: config.basePath,
         logLevel: config.logLevel,
+        apiTimeoutMs: config.apiTimeoutMs,
         initParams: config.initParams,
       },
       onStateChange
@@ -138,6 +142,7 @@ export class WebUIClient
         userScope: config.userScope,
         logLevel: config.logLevel,
         basePath: config.basePath,
+        apiTimeoutMs: config.apiTimeoutMs,
       },
       onStateChange
     );

@@ -75,6 +75,12 @@ export type { Tokens, UserInfo, UserScope } from './user-info';
 
 export type { ClientConfig, DiscoveryResult, LogLevel } from './config';
 
+// Login options
+export interface LoginOptions {
+  toolsetScopeIds?: string[];
+  version?: string;
+}
+
 export type { BrowserInfo, OSInfo } from './platform';
 
 export { NOOP_STATE_CALLBACK } from './callback';

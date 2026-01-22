@@ -11,11 +11,14 @@ import {
   createStoragePrefixWithBasePath,
   generateCodeChallenge,
   generateCodeVerifier,
+  getMissingToolsetScopeIds,
+  getRequestedToolsetScopes,
   isApiResultError,
   isApiResultOperationError,
   isApiResultSuccess,
   type AuthState,
   type DirectClientBaseConfig,
+  type LoginOptions,
   type LogLevel,
   type StateChangeCallback,
 } from '@bodhiapp/bodhi-js-core';
@@ -29,6 +32,7 @@ export interface DirectExtClientConfig {
   userScope: string;
   basePath: string;
   logLevel: LogLevel;
+  apiTimeoutMs?: number;
 }
 
 /**
@@ -47,6 +51,7 @@ export class DirectExtClient extends DirectClientBase {
       storagePrefix,
       logLevel: config.logLevel,
       loggerPrefix: 'DirectExtClient',
+      apiTimeoutMs: config.apiTimeoutMs,
     };
     super(baseConfig, onStateChange);
   }
@@ -55,13 +60,13 @@ export class DirectExtClient extends DirectClientBase {
   // Authentication (chrome.identity OAuth)
   // ============================================================================
 
-  async login(): Promise<AuthState> {
+  async login(options?: LoginOptions): Promise<AuthState> {
     const existingAuth = await this.getAuthState();
     if (existingAuth.status === 'authenticated') {
       return existingAuth;
     }
 
-    const result = await this.requestResourceAccess();
+    const result = await this.requestResourceAccess(options?.toolsetScopeIds, options?.version);
 
     if (isApiResultOperationError(result)) {
       throw createOperationError(result.error.message, result.error.type);
@@ -79,7 +84,23 @@ export class DirectExtClient extends DirectClientBase {
     const resourceScope = result.body.scope;
     await chrome.storage.session.set({ [this.storageKeys.RESOURCE_SCOPE]: resourceScope });
 
-    const fullScope = `openid profile email roles ${this.userScope} ${resourceScope}`;
+    // Extract toolset scopes from response
+    const toolsets = result.body.toolsets || [];
+
+    // Validate requested toolset scope IDs are in response
+    const missingScopeIds = getMissingToolsetScopeIds(options?.toolsetScopeIds, toolsets);
+    if (missingScopeIds.length > 0) {
+      throw createOperationError(
+        `toolsetScopeIds not received back from request-access call: [${missingScopeIds.join(', ')}], check developer console on configuring the toolset scopes correctly`,
+        'auth_error'
+      );
+    }
+
+    // Only include scopes for requested toolset IDs (empty string if none requested)
+    const toolsetScopes = getRequestedToolsetScopes(options?.toolsetScopeIds, toolsets);
+
+    const fullScope =
+      `openid profile email roles ${this.userScope} ${resourceScope} ${toolsetScopes}`.trim();
 
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);

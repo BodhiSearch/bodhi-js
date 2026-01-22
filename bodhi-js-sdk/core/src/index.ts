@@ -11,6 +11,9 @@
 // Re-export types
 export * from './types';
 
+// Re-export constants
+export * from './constants';
+
 // Re-export logger
 export * from './logger';
 
@@ -28,6 +31,9 @@ export * from './onboarding';
 
 // Re-export oauth
 export * from './oauth';
+
+// Re-export toolset utilities
+export * from './toolset-utils';
 
 // Re-export direct client base
 export * from './direct-client-base';

@@ -5,6 +5,7 @@ import {
   isWebUIClient,
   type AuthState,
   type InitParams,
+  type LoginOptions,
   type LogLevel,
   type StateChange,
   type UIClient,
@@ -45,7 +46,7 @@ export interface BodhiContext {
   setupState: SetupState;
   auth: AuthState;
   isAuthLoading: boolean;
-  login: () => Promise<AuthState | void>;
+  login: (options?: LoginOptions) => Promise<AuthState | void>;
   logout: () => Promise<void>;
   showSetup: () => Promise<void>;
   hideSetup: () => void;
@@ -191,26 +192,39 @@ export function BodhiProvider({
     initAndHandleCallback();
   }, [init, client, handleCallback, callbackPath, basePath]);
 
-  const login = useCallback(async (): Promise<AuthState | void> => {
-    setIsAuthLoading(true);
-    try {
-      await client.login();
-      // Auth state updated automatically via callback
-    } catch (err) {
-      const errorState: AuthState = {
-        status: 'error',
-        user: null,
-        accessToken: null,
-        error: {
-          message: err instanceof Error ? err.message : 'Login failed',
-          code: 'LOGIN_FAILED',
-        },
-      };
-      setAuth(errorState);
-      setIsAuthLoading(false);
-      return errorState;
-    }
-  }, [client]);
+  const login = useCallback(
+    async (options?: LoginOptions): Promise<AuthState | void> => {
+      setIsAuthLoading(true);
+      try {
+        // Defensively extract only valid LoginOptions properties
+        // Handles React SyntheticEvent when used as onClick={login}
+        const extracted = options
+          ? {
+              ...(options.toolsetScopeIds && { toolsetScopeIds: options.toolsetScopeIds }),
+              ...(options.version && { version: options.version }),
+            }
+          : undefined;
+        const loginOptions = extracted && Object.keys(extracted).length > 0 ? extracted : undefined;
+
+        await client.login(loginOptions);
+        // Auth state updated automatically via callback
+      } catch (err) {
+        const errorState: AuthState = {
+          status: 'error',
+          user: null,
+          accessToken: null,
+          error: {
+            message: err instanceof Error ? err.message : 'Login failed',
+            code: 'LOGIN_FAILED',
+          },
+        };
+        setAuth(errorState);
+        setIsAuthLoading(false);
+        return errorState;
+      }
+    },
+    [client]
+  );
 
   const logout = useCallback(async () => {
     try {

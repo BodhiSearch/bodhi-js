@@ -45,3 +45,10 @@ export const DISCOVERY_TIMEOUT_MS = 5000;
 export const DISCOVERY_ATTEMPTS = 3;
 export const DISCOVERY_ATTEMPT_WAIT_MS = 500;
 export const DISCOVERY_ATTEMPT_TIMEOUT = 500;
+
+/**
+ * Default API request timeout in milliseconds
+ * Used for API requests through extension communication
+ * Default: 30 seconds
+ */
+export const DEFAULT_API_TIMEOUT_MS = 30000;

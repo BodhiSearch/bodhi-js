@@ -21,6 +21,7 @@ import type {
   DirectState,
   ExtensionState,
   InitParams,
+  LoginOptions,
   SerializedClientState,
   SerializedDirectState,
   SerializedExtensionState,
@@ -371,11 +372,11 @@ export abstract class BaseFacadeClient<
   // Authentication
   // ============================================================================
 
-  login(): Promise<AuthState> {
+  login(options?: LoginOptions): Promise<AuthState> {
     if (this.isNotSetOrDirect()) {
-      return this.directClient.login();
+      return this.directClient.login(options);
     }
-    return this.extClient.login();
+    return this.extClient.login(options);
   }
 
   logout(): Promise<AuthState> {

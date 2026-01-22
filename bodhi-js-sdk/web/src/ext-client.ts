@@ -16,6 +16,8 @@ import {
   extractUserInfo,
   generateCodeChallenge,
   generateCodeVerifier,
+  getMissingToolsetScopeIds,
+  getRequestedToolsetScopes,
   isApiResultError,
   isApiResultOperationError,
   isApiResultSuccess,
@@ -30,6 +32,7 @@ import {
   type ExtensionState,
   type IExtensionClient,
   type InitParams,
+  type LoginOptions,
   type LogLevel,
   type OAuthEndpoints,
   type RefreshTokenResponse,
@@ -39,7 +42,7 @@ import {
 } from '@bodhiapp/bodhi-js-core';
 import { type BodhiExtPublicApi, type StreamChunk } from '@bodhiapp/bodhi-browser/types';
 import type { AppAccessRequest, AppAccessResponse, OpenAiApiError } from '@bodhiapp/ts-client';
-import { POLL_INTERVAL, POLL_TIMEOUT } from './constants';
+import { DEFAULT_API_TIMEOUT_MS, POLL_INTERVAL, POLL_TIMEOUT } from './constants';
 
 // Empty object type for future-proofing
 export type SerializedWebExtensionState = { extensionId?: string };
@@ -54,6 +57,7 @@ export interface WindowBodhiextClientConfig {
   userScope: string;
   basePath: string;
   logLevel: LogLevel;
+  apiTimeoutMs?: number;
   initParams?: {
     extension?: {
       timeoutMs?: number;
@@ -81,6 +85,7 @@ export class WindowBodhiextClient implements IExtensionClient {
   private onStateChange: StateChangeCallback;
   private refreshPromise: Promise<string | null> | null = null;
   private storageKeys: StorageKeys;
+  private apiTimeoutMs: number;
 
   // OpenAI-compatible resource namespaces
   private _chat: Chat | undefined;
@@ -99,6 +104,7 @@ export class WindowBodhiextClient implements IExtensionClient {
     this.onStateChange = onStateChange ?? NOOP_STATE_CALLBACK;
     const prefix = createStoragePrefixWithBasePath(config.basePath, STORAGE_PREFIXES.WEB_EXT);
     this.storageKeys = createStorageKeys(prefix);
+    this.apiTimeoutMs = config.apiTimeoutMs ?? DEFAULT_API_TIMEOUT_MS;
   }
 
   /**
@@ -176,36 +182,46 @@ export class WindowBodhiextClient implements IExtensionClient {
       };
     }
     try {
-      let requestHeaders = headers || {};
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                `[bodhi-js-sdk/web] network timeout: api request not completed within configured/default timeout of ${this.apiTimeoutMs}ms`
+              )
+            ),
+          this.apiTimeoutMs
+        )
+      );
 
-      // Token injection for authenticated requests
-      if (authenticated) {
-        const accessToken = await this._getAccessTokenRaw();
-        if (!accessToken) {
-          return {
-            error: {
-              message: 'Not authenticated. Please log in first.',
-              type: 'extension_error',
-            },
+      const apiPromise = (async () => {
+        let requestHeaders = headers || {};
+
+        // Token injection for authenticated requests
+        if (authenticated) {
+          const accessToken = await this._getAccessTokenRaw();
+          if (!accessToken) {
+            return {
+              error: {
+                message: 'Not authenticated. Please log in first.',
+                type: 'extension_error',
+              },
+            };
+          }
+          requestHeaders = {
+            ...requestHeaders,
+            Authorization: `Bearer ${accessToken}`,
           };
         }
-        requestHeaders = {
-          ...requestHeaders,
-          Authorization: `Bearer ${accessToken}`,
-        };
-      }
 
-      const response = await this.bodhiext!.sendApiRequest<unknown, TRes>(
-        method,
-        endpoint,
-        body,
-        requestHeaders
-      );
-      return response;
+        return this.bodhiext!.sendApiRequest<unknown, TRes>(method, endpoint, body, requestHeaders);
+      })();
+
+      return await Promise.race([apiPromise, timeoutPromise]);
     } catch (e) {
       const errorObj = (e as { error?: { message?: string; type?: string } })?.error;
       const message = errorObj?.message ?? (e instanceof Error ? e.message : String(e));
-      const errorType = errorObj?.type || 'extension_error';
+      const errorType = errorObj?.type || 'network_error';
       return {
         error: {
           message,
@@ -319,21 +335,31 @@ export class WindowBodhiextClient implements IExtensionClient {
    * Request resource access scope from backend
    * Required for authenticated API access
    */
-  private async requestResourceAccess(): Promise<ApiResponseResult<AppAccessResponse>> {
+  private async requestResourceAccess(
+    toolsetScopeIds?: string[],
+    version?: string
+  ): Promise<ApiResponseResult<AppAccessResponse>> {
     this.ensureBodhiext();
+
+    const requestBody: AppAccessRequest = {
+      app_client_id: this.authClientId,
+      ...(toolsetScopeIds && { toolset_scope_ids: toolsetScopeIds }),
+      ...(version && { version }),
+    };
 
     return this.bodhiext!.sendApiRequest<AppAccessRequest, AppAccessResponse>(
       'POST',
       '/bodhi/v1/apps/request-access',
-      { app_client_id: this.authClientId }
+      requestBody
     );
   }
 
   /**
    * Login via browser redirect OAuth2 + PKCE flow
+   * @param options - Optional login options (toolsetScopeIds, version)
    * @returns AuthState (though in practice, this redirects and never returns)
    */
-  async login(): Promise<AuthState> {
+  async login(options?: LoginOptions): Promise<AuthState> {
     // Check if already logged in
     const existingAuth = await this.getAuthState();
     if (existingAuth.status === 'authenticated') {
@@ -344,7 +370,7 @@ export class WindowBodhiextClient implements IExtensionClient {
     this.ensureBodhiext();
 
     // Request resource access scope
-    const result = await this.requestResourceAccess();
+    const result = await this.requestResourceAccess(options?.toolsetScopeIds, options?.version);
 
     if (isApiResultOperationError(result)) {
       throw createOperationError(result.error.message, result.error.type);
@@ -362,6 +388,21 @@ export class WindowBodhiextClient implements IExtensionClient {
     const resourceScope = result.body.scope;
     localStorage.setItem(this.storageKeys.RESOURCE_SCOPE, resourceScope);
 
+    // Extract toolset scopes from response
+    const toolsets = result.body.toolsets || [];
+
+    // Validate requested toolset scope IDs are in response
+    const missingScopeIds = getMissingToolsetScopeIds(options?.toolsetScopeIds, toolsets);
+    if (missingScopeIds.length > 0) {
+      throw createOperationError(
+        `toolsetScopeIds not received back from request-access call: [${missingScopeIds.join(', ')}], check developer console on configuring the toolset scopes correctly`,
+        'auth_error'
+      );
+    }
+
+    // Only include scopes for requested toolset IDs (empty string if none requested)
+    const toolsetScopesStr = getRequestedToolsetScopes(options?.toolsetScopeIds, toolsets);
+
     // Generate PKCE verifier and challenge
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
@@ -374,7 +415,15 @@ export class WindowBodhiextClient implements IExtensionClient {
     localStorage.setItem(this.storageKeys.STATE, state);
 
     // Build OAuth authorization URL
-    const scopes = ['openid', 'profile', 'email', 'roles', this.config.userScope, resourceScope];
+    const scopes = [
+      'openid',
+      'profile',
+      'email',
+      'roles',
+      this.config.userScope,
+      resourceScope,
+      ...(toolsetScopesStr ? toolsetScopesStr.split(' ') : []),
+    ];
 
     const params = new URLSearchParams({
       response_type: 'code',

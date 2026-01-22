@@ -40,7 +40,7 @@ export {
 } from './client-ctx';
 
 // Re-exported types from core (internal monorepo package)
-export type { ApiResponseResult, ClientState } from '@bodhiapp/bodhi-js-core';
+export type { ApiResponseResult, ClientState, LogLevel } from '@bodhiapp/bodhi-js-core';
 
 // Re-exported utilities from core
 export {

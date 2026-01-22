@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js",
-  "version": "0.0.16-dev",
+  "version": "0.0.17-dev",
   "description": "Web SDK for Bodhi Browser - window.bodhiext communication",
   "type": "module",
   "main": "dist/bodhi-web.cjs.js",
@@ -38,7 +38,7 @@
   },
   "dependencies": {
     "@bodhiapp/bodhi-js-core": "file:../core",
-    "@bodhiapp/ts-client": "0.1.9"
+    "@bodhiapp/ts-client": "0.1.14"
   },
   "devDependencies": {
     "@eslint/js": "^9.23.0",

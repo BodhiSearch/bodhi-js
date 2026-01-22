@@ -1,4 +1,4 @@
-.PHONY: all setup install build dev.build clean lint lint-fix dependencies dev.dependencies ci.build typecheck
+.PHONY: all setup install build dev.build clean lint lint-fix dependencies dev.dependencies ci.build typecheck upgrade.ts-client
 
 all: setup lint-fix build
 
@@ -58,3 +58,27 @@ release: ## Create and push tag for bodhi-js-sdk release
 	git tag "$$TAG_NAME" && \
 	git push origin "$$TAG_NAME" && \
 	echo "Tag $$TAG_NAME pushed. GitHub workflow will handle the release process."
+
+upgrade.ts-client: ## Upgrade @bodhiapp/ts-client to latest version
+	@echo "Upgrading @bodhiapp/ts-client..."
+	@echo "Current version:"
+	@npm list @bodhiapp/ts-client --depth=0 2>/dev/null || echo "Not installed"
+	@echo ""
+	@echo "Fetching latest version from npm..."
+	$(eval LATEST_VERSION := $(shell npm view @bodhiapp/ts-client version))
+	@echo "Latest version: $(LATEST_VERSION)"
+	@echo ""
+	@echo "Updating package.json files with exact version $(LATEST_VERSION)..."
+	@sed -i '' 's/"@bodhiapp\/ts-client": "[^"]*"/"@bodhiapp\/ts-client": "$(LATEST_VERSION)"/' package.json
+	@sed -i '' 's/"@bodhiapp\/ts-client": "[^"]*"/"@bodhiapp\/ts-client": "$(LATEST_VERSION)"/' core/package.json
+	@sed -i '' 's/"@bodhiapp\/ts-client": "[^"]*"/"@bodhiapp\/ts-client": "$(LATEST_VERSION)"/' ext/package.json
+	@sed -i '' 's/"@bodhiapp\/ts-client": "[^"]*"/"@bodhiapp\/ts-client": "$(LATEST_VERSION)"/' web/package.json
+	@sed -i '' 's/"@bodhiapp\/ts-client": "[^"]*"/"@bodhiapp\/ts-client": "$(LATEST_VERSION)"/' react-core/package.json
+	@echo ""
+	@echo "Installing..."
+	npm install
+	@echo "Linting..."
+	$(MAKE) lint
+	@echo "Building..."
+	$(MAKE) clean
+	$(MAKE) build

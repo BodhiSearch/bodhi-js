@@ -23,12 +23,14 @@ import {
   type ClientState,
   type ExtensionState,
   type InitParams,
+  type LoginOptions,
   type LogLevel,
   type ServerInfoResponse,
   type StateChangeCallback,
 } from '@bodhiapp/bodhi-js-core';
 import { isApiSuccessResponse, isExtError, isOperationError } from '@bodhiapp/bodhi-browser/types';
 import {
+  DEFAULT_API_TIMEOUT_MS,
   DISCOVERY_TIMEOUT_MS,
   EXT2EXT_CLIENT_ACTIONS,
   EXT2EXT_CLIENT_MESSAGE_TYPES,
@@ -52,6 +54,7 @@ import { isExtClientApiError } from './messages';
  */
 export interface ExtClientConfig {
   logLevel?: LogLevel;
+  apiTimeoutMs?: number;
   initParams?: {
     extension?: {
       timeoutMs?: number;
@@ -83,6 +86,7 @@ export class ExtClient implements IExtensionClient {
   private extensionId: string | null = null;
   private broadcastListenerActive = false;
   private config: ExtClientConfig;
+  private apiTimeoutMs: number;
 
   // OpenAI-compatible resource namespaces
   private _chat: Chat | undefined;
@@ -93,6 +97,7 @@ export class ExtClient implements IExtensionClient {
     this.config = config;
     this.logger = new Logger('ExtClient', config?.logLevel || 'warn');
     this.onStateChange = onStateChange ?? NOOP_STATE_CALLBACK;
+    this.apiTimeoutMs = config.apiTimeoutMs ?? DEFAULT_API_TIMEOUT_MS;
   }
 
   /**
@@ -363,32 +368,52 @@ export class ExtClient implements IExtensionClient {
     headers?: Record<string, string>,
     authenticated?: boolean
   ): Promise<ApiResponseResult<TRes>> {
-    const extResponse = await this.sendRawApiMessage<TReq, TRes>(
-      method,
-      endpoint,
-      body,
-      headers,
-      authenticated
-    );
+    try {
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                `[bodhi-js-sdk/ext] network timeout: api request not completed within configured/default timeout of ${this.apiTimeoutMs}ms`
+              )
+            ),
+          this.apiTimeoutMs
+        )
+      );
 
-    if (isExtClientApiError(extResponse)) {
-      const errorType = extResponse.error.type || 'extension_error';
+      const extResponse = await Promise.race([
+        this.sendRawApiMessage<TReq, TRes>(method, endpoint, body, headers, authenticated),
+        timeoutPromise,
+      ]);
+
+      if (isExtClientApiError(extResponse)) {
+        const errorType = extResponse.error.type || 'extension_error';
+        return {
+          error: {
+            message: extResponse.error.message,
+            type: errorType,
+          },
+        };
+      }
+      return extResponse.response;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         error: {
-          message: extResponse.error.message,
-          type: errorType,
+          message: errorMessage,
+          type: 'network_error',
         },
       };
     }
-    return extResponse.response;
   }
 
   /**
    * Login user via OAuth
+   * @param options - Optional login parameters including toolsetScopeIds
    * @throws ExtError if login fails
    * @returns AuthState with login state and user info
    */
-  async login(): Promise<AuthState> {
+  async login(options?: LoginOptions): Promise<AuthState> {
     return new Promise((resolve, reject) => {
       // One-time listener for auth broadcast
       const listener = async (message: unknown) => {
@@ -426,7 +451,7 @@ export class ExtClient implements IExtensionClient {
       chrome.runtime.onMessage.addListener(listener);
 
       // Send login request (opens OAuth popup)
-      this.sendExtRequest(EXT2EXT_CLIENT_ACTIONS.LOGIN).catch((err) => {
+      this.sendExtRequest(EXT2EXT_CLIENT_ACTIONS.LOGIN, options).catch((err) => {
         chrome.runtime.onMessage.removeListener(listener);
         reject(err);
       });

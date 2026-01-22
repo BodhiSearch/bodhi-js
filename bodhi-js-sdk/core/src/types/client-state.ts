@@ -172,6 +172,9 @@ export interface InitParams {
 
   // Extension mode: interval for polling (web mode only)
   intervalMs?: number;
+
+  // API request timeout in milliseconds (both extension and direct modes)
+  apiTimeoutMs?: number;
 }
 
 // --- Base Type Guards (used by DirectState and ExtensionState) ---

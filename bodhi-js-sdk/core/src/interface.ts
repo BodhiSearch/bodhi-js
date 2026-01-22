@@ -7,6 +7,7 @@ import type {
   DirectState,
   ExtensionState,
   InitParams,
+  LoginOptions,
   StateChangeCallback,
 } from './types';
 import type { Chat, Models, Embeddings } from './openai-client-compat';
@@ -115,9 +116,10 @@ export interface IConnectionClient<IParams = unknown, SerialState = unknown> {
    * Login via OAuth
    * - IExtensionClient: Delegates to extension (chrome.identity or browser redirect)
    * - DirectClient: Direct HTTP OAuth flow
+   * @param options - Optional login options (toolsetScopeIds, version)
    * @returns AuthState with login state and user info
    */
-  login(): Promise<AuthState>;
+  login(options?: LoginOptions): Promise<AuthState>;
 
   /**
    * Logout and revoke tokens

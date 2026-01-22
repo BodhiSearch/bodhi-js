@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-core",
-  "version": "0.0.16-dev",
+  "version": "0.0.17-dev",
   "description": "Core types and interfaces for Bodhi Browser SDK",
   "type": "module",
   "main": "dist/bodhi-core.cjs.js",
@@ -56,7 +56,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bodhiapp/ts-client": "0.1.9",
+    "@bodhiapp/ts-client": "0.1.14",
     "ua-parser-js": "^1.0.40"
   },
   "devDependencies": {

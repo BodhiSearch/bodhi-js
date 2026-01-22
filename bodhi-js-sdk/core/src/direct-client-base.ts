@@ -14,14 +14,18 @@ export interface ConnectivityTestResult {
 /**
  * Test connectivity to a local server
  * @param serverUrl - The server URL to test
+ * @param timeoutMs - Optional timeout in milliseconds (default: DEFAULT_API_TIMEOUT_MS)
  * @returns Promise with connectivity test result
  */
-export async function testServerConnectivity(serverUrl: string): Promise<ConnectivityTestResult> {
+export async function testServerConnectivity(
+  serverUrl: string,
+  timeoutMs: number = DEFAULT_API_TIMEOUT_MS
+): Promise<ConnectivityTestResult> {
   const url = `${serverUrl}/bodhi/v1/info`;
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     const response = await fetch(url, {
       method: 'GET',
@@ -62,6 +66,7 @@ export async function testServerConnectivity(serverUrl: string): Promise<Connect
 }
 
 import type { AppAccessRequest, AppAccessResponse } from '@bodhiapp/ts-client';
+import { DEFAULT_API_TIMEOUT_MS } from './constants';
 import { createOperationError } from './errors';
 import type { IDirectClient } from './interface';
 import { Logger } from './logger';
@@ -103,6 +108,7 @@ export interface DirectClientBaseConfig {
   storagePrefix: string;
   logLevel: LogLevel;
   loggerPrefix: string;
+  apiTimeoutMs?: number;
 }
 
 /**
@@ -119,6 +125,7 @@ export abstract class DirectClientBase implements IDirectClient {
   protected state: DirectState = DIRECT_STATE_NOT_INITIALIZED;
   private onStateChange: StateChangeCallback;
   private refreshPromise: Promise<string | null> | null = null;
+  private apiTimeoutMs: number;
 
   // OpenAI-compatible resource namespaces
   private _chat: Chat | undefined;
@@ -133,6 +140,7 @@ export abstract class DirectClientBase implements IDirectClient {
     this.authEndpoints = createOAuthEndpoints(this.authServerUrl);
     this.storageKeys = createStorageKeys(config.storagePrefix);
     this.onStateChange = onStateChange ?? NOOP_STATE_CALLBACK;
+    this.apiTimeoutMs = config.apiTimeoutMs ?? DEFAULT_API_TIMEOUT_MS;
   }
 
   /**
@@ -271,7 +279,7 @@ export abstract class DirectClientBase implements IDirectClient {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), this.apiTimeoutMs);
 
       const fetchHeaders: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -309,6 +317,15 @@ export abstract class DirectClientBase implements IDirectClient {
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      // Check if error is from abort controller timeout
+      if (error instanceof Error && error.name === 'AbortError') {
+        return {
+          error: {
+            message: `[bodhi-js-sdk/direct] network timeout: api request not completed within configured/default timeout of ${this.apiTimeoutMs}ms`,
+            type: 'network_error',
+          },
+        };
+      }
       return {
         error: {
           message: `Network error: ${errorMessage}`,
@@ -470,7 +487,7 @@ export abstract class DirectClientBase implements IDirectClient {
   async testConnectivity(): Promise<ConnectivityTestResult> {
     this.ensureInitialized();
     this.logger.debug('Testing connectivity to:', this.serverUrl);
-    return testServerConnectivity(this.serverUrl!);
+    return testServerConnectivity(this.serverUrl!, this.apiTimeoutMs);
   }
 
   // ============================================================================
@@ -629,11 +646,20 @@ export abstract class DirectClientBase implements IDirectClient {
   // OAuth Helper Methods (Extracted Common Logic)
   // ============================================================================
 
-  protected async requestResourceAccess(): Promise<ApiResponseResult<AppAccessResponse>> {
+  protected async requestResourceAccess(
+    toolsetScopeIds?: string[],
+    version?: string
+  ): Promise<ApiResponseResult<AppAccessResponse>> {
+    const requestBody: AppAccessRequest = {
+      app_client_id: this.authClientId,
+      ...(toolsetScopeIds && { toolset_scope_ids: toolsetScopeIds }),
+      ...(version && { version }),
+    };
+
     return this.sendApiRequest<AppAccessRequest, AppAccessResponse>(
       'POST',
       '/bodhi/v1/apps/request-access',
-      { app_client_id: this.authClientId },
+      requestBody,
       {},
       false
     );

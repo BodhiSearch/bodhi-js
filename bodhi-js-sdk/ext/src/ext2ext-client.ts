@@ -47,6 +47,8 @@ import {
 import {
   Logger,
   createOperationError,
+  getMissingToolsetScopeIds,
+  getRequestedToolsetScopes,
   isApiResultError,
   isApiResultOperationError,
   isApiResultSuccess,
@@ -54,6 +56,7 @@ import {
   type ApiResponseResult,
   type AuthState,
   type DiscoveryResult,
+  type LoginOptions,
   type LogLevel,
   type RefreshTokenResponse,
   type Tokens,
@@ -635,10 +638,12 @@ export class BodhiExtClient {
           };
         }
 
-        case EXT2EXT_CLIENT_ACTIONS.LOGIN:
-          await this.login();
+        case EXT2EXT_CLIENT_ACTIONS.LOGIN: {
+          const loginParams = params as LoginOptions | undefined;
+          await this.login(loginParams);
           this.broadcastAuthStateChange();
           break;
+        }
 
         case EXT2EXT_CLIENT_ACTIONS.LOGOUT:
           await this.logout();
@@ -734,9 +739,10 @@ export class BodhiExtClient {
 
   /**
    * Login user via OAuth2 + PKCE flow
+   * @param options - Optional login options (toolsetScopeIds, version)
    * @throws Error if login fails
    */
-  async login(): Promise<void> {
+  async login(options?: LoginOptions): Promise<void> {
     // Prevent concurrent login attempts
     if (this.isAuthenticating) {
       return;
@@ -757,7 +763,7 @@ export class BodhiExtClient {
       }
 
       // Request resource access scope - required for authenticated API access
-      const result = await this.requestAccess();
+      const result = await this.requestAccess(options?.toolsetScopeIds, options?.version);
 
       if (isApiResultOperationError(result)) {
         throw createOperationError(result.error.message, result.error.type);
@@ -774,8 +780,24 @@ export class BodhiExtClient {
 
       const resourceScope = result.body.scope;
 
-      // OAuth scopes with additional resource scope
-      const fullScope = `openid profile email roles ${this.userScope} ${resourceScope}`;
+      // Extract toolset scopes from response
+      const toolsets = result.body.toolsets || [];
+
+      // Validate requested toolset scope IDs are in response
+      const missingScopeIds = getMissingToolsetScopeIds(options?.toolsetScopeIds, toolsets);
+      if (missingScopeIds.length > 0) {
+        throw createOperationError(
+          `toolsetScopeIds not received back from request-access call: [${missingScopeIds.join(', ')}], check developer console on configuring the toolset scopes correctly`,
+          'auth_error'
+        );
+      }
+
+      // Only include scopes for requested toolset IDs (empty string if none requested)
+      const toolsetScopes = getRequestedToolsetScopes(options?.toolsetScopeIds, toolsets);
+
+      // OAuth scopes with additional resource and toolset scopes
+      const fullScope =
+        `openid profile email roles ${this.userScope} ${resourceScope} ${toolsetScopes}`.trim();
 
       const codeVerifier = BodhiExtClient.generateCodeVerifier();
       const codeChallenge = await BodhiExtClient.generateCodeChallenge(codeVerifier);
@@ -1355,11 +1377,20 @@ export class BodhiExtClient {
    * Required for authenticated API access - token will include aud claim.
    * @returns ApiResponseResult with scope or error
    */
-  private async requestAccess(): Promise<ApiResponseResult<AppAccessResponse>> {
+  private async requestAccess(
+    toolsetScopeIds?: string[],
+    version?: string
+  ): Promise<ApiResponseResult<AppAccessResponse>> {
+    const requestBody: AppAccessRequest = {
+      app_client_id: this.authClientId,
+      ...(toolsetScopeIds && { toolset_scope_ids: toolsetScopeIds }),
+      ...(version && { version }),
+    };
+
     return this.sendApiRequest<AppAccessRequest, AppAccessResponse>(
       'POST',
       '/bodhi/v1/apps/request-access',
-      { app_client_id: this.authClientId }
+      requestBody
     );
   }
 
@@ -1483,7 +1514,7 @@ export class BodhiExtClient {
   }
 
   private async clearTokens(): Promise<void> {
-    // Only clear OAuth tokens, not all session storage (preserve Bodhi token)
+    // Clear OAuth tokens
     await chrome.storage.session.remove([
       'accessToken',
       'refreshToken',

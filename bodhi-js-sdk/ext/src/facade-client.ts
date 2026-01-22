@@ -28,6 +28,7 @@ export interface ExtUIClientConfig {
   userScope: string;
   basePath: string;
   logLevel: LogLevel;
+  apiTimeoutMs?: number;
   initParams?: {
     extension?: {
       timeoutMs?: number;
@@ -47,6 +48,7 @@ export interface ExtUIClientParams {
   userScope?: UserScope;
   basePath?: string;
   logLevel?: LogLevel;
+  apiTimeoutMs?: number;
   initParams?: {
     extension?: {
       timeoutMs?: number;
@@ -79,6 +81,7 @@ export class ExtUIClient
       authServerUrl: cfg.authServerUrl || 'https://id.getbodhi.app/realms/bodhi',
       userScope: cfg.userScope || 'scope_user_user',
       logLevel: cfg.logLevel || 'warn',
+      apiTimeoutMs: cfg.apiTimeoutMs,
       initParams: cfg.initParams,
     };
 
@@ -98,7 +101,11 @@ export class ExtUIClient
     onStateChange: (change: StateChange) => void
   ): ExtClient {
     return new ExtClient(
-      { logLevel: config.logLevel, initParams: config.initParams },
+      {
+        logLevel: config.logLevel,
+        apiTimeoutMs: config.apiTimeoutMs,
+        initParams: config.initParams,
+      },
       onStateChange
     );
   }
@@ -115,6 +122,7 @@ export class ExtUIClient
         userScope: config.userScope,
         logLevel: config.logLevel,
         basePath: config.basePath,
+        apiTimeoutMs: config.apiTimeoutMs,
       },
       onStateChange
     );
