@@ -32,6 +32,7 @@ export {
   type ClientState,
   type AuthState,
   type UIClient,
+  type LogLevel,
   type OperationError,
   isApiResultError,
   isApiResultOperationError,
@@ -54,3 +55,4 @@ export {
 
 // Re-export build info
 export { BUILD_MODE as REACT_BUILD_MODE } from './build-info';
+export { WEB_BUILD_MODE } from '@bodhiapp/bodhi-js';

@@ -8,8 +8,8 @@
 // Local exports - preset BodhiProvider
 export { BodhiProvider, type BodhiProviderProps } from './BodhiProvider';
 
-// Re-export ExtUIClient and types for convenience
-export { ExtUIClient, type ExtUIClientParams } from '@bodhiapp/bodhi-js-ext';
+// Re-export ExtUIClient and BodhiExtClient for convenience
+export { ExtUIClient, type ExtUIClientParams, BodhiExtClient } from '@bodhiapp/bodhi-js-ext';
 
 // Re-export everything from react-core
 export {
@@ -32,6 +32,7 @@ export {
   type ClientState,
   type AuthState,
   type UIClient,
+  type LogLevel,
   type OperationError,
   isApiResultError,
   isApiResultOperationError,
@@ -54,3 +55,4 @@ export {
 
 // Re-export build info
 export { BUILD_MODE as REACT_EXT_BUILD_MODE } from './build-info';
+export { EXT_BUILD_MODE } from '@bodhiapp/bodhi-js-ext';
