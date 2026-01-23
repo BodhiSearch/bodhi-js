@@ -10,13 +10,21 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       lib: {
-        entry: resolve(__dirname, 'src/index.ts'),
+        entry: {
+          index: resolve(__dirname, 'src/index.ts'),
+          'api/index': resolve(__dirname, 'src/api/index.ts'),
+          'types/index': resolve(__dirname, 'src/types/index.ts'),
+        },
         name: 'BodhiCore',
         formats: ['es', 'cjs'],
-        fileName: (format) => {
-          if (format === 'es') return 'bodhi-core.esm.js';
-          if (format === 'cjs') return 'bodhi-core.cjs.js';
-          return `bodhi-core.${format}.js`;
+        fileName: (format, entryName) => {
+          if (entryName === 'index') {
+            if (format === 'es') return 'bodhi-core.esm.js';
+            if (format === 'cjs') return 'bodhi-core.cjs.js';
+            return `bodhi-core.${format}.js`;
+          }
+          const ext = format === 'es' ? 'esm.js' : 'cjs.js';
+          return `${entryName}.${ext}`;
         },
       },
       sourcemap: isDev,
@@ -33,6 +41,9 @@ export default defineConfig(({ mode }) => {
         exclude: ['**/*.html'],
         insertTypesEntry: true,
         copyDtsFiles: true,
+        pathsToAliases: false,
+        staticImport: true,
+        entryRoot: 'src',
       }),
     ],
     resolve: {

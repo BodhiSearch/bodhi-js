@@ -13,10 +13,10 @@
     "react-ext"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
-    "ci:build": "npm run ci:build --workspaces",
-    "dev:build": "npm run dev:build --workspaces",
-    "build:prod": "npm run build:prod --workspaces",
+    "build": "npm run build --workspaces && node scripts/fix-api-dts.cjs",
+    "ci:build": "npm run ci:build --workspaces && node scripts/fix-api-dts.cjs",
+    "dev:build": "npm run dev:build --workspaces && node scripts/fix-api-dts.cjs",
+    "build:prod": "npm run build:prod --workspaces && node scripts/fix-api-dts.cjs",
     "clean": "npm run clean --workspaces",
     "lint": "prettier --check . && npm run lint --workspaces",
     "lint:fix": "prettier --write . && npm run lint:fix --workspaces",

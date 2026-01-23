@@ -10,19 +10,26 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       lib: {
-        entry: resolve(__dirname, 'src/index.ts'),
+        entry: {
+          index: resolve(__dirname, 'src/index.ts'),
+          'api/index': resolve(__dirname, 'src/api/index.ts'),
+        },
         name: 'BodhiReactExt',
         formats: ['es', 'cjs'],
-        fileName: format => {
-          if (format === 'es') return 'bodhi-react-ext.esm.js';
-          if (format === 'cjs') return 'bodhi-react-ext.cjs.js';
-          return `bodhi-react-ext.${format}.js`;
+        fileName: (format, entryName) => {
+          if (entryName === 'index') {
+            if (format === 'es') return 'bodhi-react-ext.esm.js';
+            if (format === 'cjs') return 'bodhi-react-ext.cjs.js';
+            return `bodhi-react-ext.${format}.js`;
+          }
+          const ext = format === 'es' ? 'esm.js' : 'cjs.js';
+          return `${entryName}.${ext}`;
         },
       },
       sourcemap: isDev,
       minify: isDev ? false : 'esbuild',
       rollupOptions: {
-        external: ['react', 'react/jsx-runtime', 'react-dom', '@bodhiapp/bodhi-js-react-core', '@bodhiapp/bodhi-js-ext', '@bodhiapp/bodhi-js-core', '@bodhiapp/ts-client'],
+        external: ['react', 'react/jsx-runtime', 'react-dom', '@bodhiapp/bodhi-js-react-core', '@bodhiapp/bodhi-js-react-core/api', '@bodhiapp/bodhi-js-ext', '@bodhiapp/bodhi-js-core', '@bodhiapp/bodhi-js-core/api', '@bodhiapp/bodhi-js-core/types', '@bodhiapp/ts-client'],
       },
     },
     plugins: [
@@ -31,12 +38,18 @@ export default defineConfig(({ mode }) => {
         rollupTypes: false,
         insertTypesEntry: true,
         copyDtsFiles: true,
+        pathsToAliases: false,
+        staticImport: true,
+        entryRoot: 'src',
       }),
     ],
     resolve: {
       alias: {
+        '@bodhiapp/bodhi-js-react-core/api': resolve(__dirname, '../react-core/src/api/index.ts'),
         '@bodhiapp/bodhi-js-react-core': resolve(__dirname, '../react-core/src/index.ts'),
         '@bodhiapp/bodhi-js-ext': resolve(__dirname, '../ext/src/index.ts'),
+        '@bodhiapp/bodhi-js-core/api': resolve(__dirname, '../core/src/api/index.ts'),
+        '@bodhiapp/bodhi-js-core/types': resolve(__dirname, '../core/src/types/index.ts'),
         '@bodhiapp/bodhi-js-core': resolve(__dirname, '../core/src/index.ts'),
         '@bodhiapp/bodhi-browser/types': resolve(__dirname, '../../bodhi-browser-ext/src/types'),
         '@bodhiapp/setup-modal/types': resolve(__dirname, '../../setup-modal/src/types'),

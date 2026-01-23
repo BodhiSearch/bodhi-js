@@ -1,20 +1,20 @@
 {
   "name": "@bodhiapp/bodhi-js-react",
-  "version": "0.0.18-dev",
+  "version": "0.0.19-dev",
   "description": "React bindings for Bodhi Browser SDK with WebUIClient preset",
   "type": "module",
   "main": "dist/bodhi-react.cjs.js",
   "module": "dist/bodhi-react.esm.js",
   "exports": {
     ".": {
-      "types": "./dist/bodhi-react.esm.d.ts",
+      "types": "./dist/index.d.ts",
       "import": "./dist/bodhi-react.esm.js",
       "require": "./dist/bodhi-react.cjs.js"
     },
     "./api": {
-      "types": "./src/api/index.ts",
-      "import": "./src/api/index.ts",
-      "default": "./src/api/index.ts"
+      "types": "./dist/api/index.d.ts",
+      "import": "./dist/api/index.esm.js",
+      "require": "./dist/api/index.cjs.js"
     }
   },
   "files": [

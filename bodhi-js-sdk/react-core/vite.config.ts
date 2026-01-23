@@ -11,13 +11,20 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       lib: {
-        entry: resolve(__dirname, 'src/index.ts'),
+        entry: {
+          index: resolve(__dirname, 'src/index.ts'),
+          'api/index': resolve(__dirname, 'src/api/index.ts'),
+        },
         name: 'BodhiReactCore',
         formats: ['es', 'cjs'],
-        fileName: (format) => {
-          if (format === 'es') return 'bodhi-react-core.esm.js';
-          if (format === 'cjs') return 'bodhi-react-core.cjs.js';
-          return `bodhi-react-core.${format}.js`;
+        fileName: (format, entryName) => {
+          if (entryName === 'index') {
+            if (format === 'es') return 'bodhi-react-core.esm.js';
+            if (format === 'cjs') return 'bodhi-react-core.cjs.js';
+            return `bodhi-react-core.${format}.js`;
+          }
+          const ext = format === 'es' ? 'esm.js' : 'cjs.js';
+          return `${entryName}.${ext}`;
         },
       },
       sourcemap: isDev,
@@ -28,6 +35,8 @@ export default defineConfig(({ mode }) => {
           'react/jsx-runtime',
           'react-dom',
           '@bodhiapp/bodhi-js-core',
+          '@bodhiapp/bodhi-js-core/api',
+          '@bodhiapp/bodhi-js-core/types',
           '@bodhiapp/ts-client',
         ],
       },
@@ -39,10 +48,15 @@ export default defineConfig(({ mode }) => {
         rollupTypes: false,
         insertTypesEntry: true,
         copyDtsFiles: true,
+        pathsToAliases: false,
+        staticImport: true,
+        entryRoot: 'src',
       }),
     ],
     resolve: {
       alias: {
+        '@bodhiapp/bodhi-js-core/api': resolve(__dirname, '../core/src/api/index.ts'),
+        '@bodhiapp/bodhi-js-core/types': resolve(__dirname, '../core/src/types/index.ts'),
         '@bodhiapp/bodhi-js-core': resolve(__dirname, '../core/src/index.ts'),
         '@bodhiapp/bodhi-browser/types': resolve(__dirname, '../../bodhi-browser-ext/src/types'),
         '@bodhiapp/setup-modal/types': resolve(__dirname, '../../setup-modal/src/types'),
