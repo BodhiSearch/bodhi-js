@@ -6,7 +6,7 @@ import type {
   ExtRequest,
   ExtResponse,
   OperationErrorResponse,
-} from '@bodhiapp/bodhi-browser/types';
+} from '@bodhiapp/bodhi-browser-types';
 import type { OpenAiApiError } from '@bodhiapp/ts-client';
 import { EXT2EXT_CLIENT_MESSAGE_TYPES } from './constants';
 

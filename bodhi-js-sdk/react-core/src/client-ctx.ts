@@ -1,6 +1,6 @@
 import type { BackendServerState, ClientState } from '@bodhiapp/bodhi-js-core';
 import { BACKEND_SERVER_NOT_CONNECTED, isExtensionState } from '@bodhiapp/bodhi-js-core';
-import type { OperationErrorResponse } from '@bodhiapp/bodhi-browser/types';
+import type { OperationErrorResponse } from '@bodhiapp/bodhi-browser-types';
 
 // ============================================================================
 // Flat Client Context State - Following AuthState pattern for consistent DX

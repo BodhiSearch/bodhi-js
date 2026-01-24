@@ -5,9 +5,9 @@
  * Falls back to sandboxed srcdoc for non-extension environments
  */
 
-import type { MessageType, RequestMessage, ResponsePayload } from '@bodhiapp/setup-modal/types';
-import type * as ModalTypes from '@bodhiapp/setup-modal/types';
-import { MSG, isRequestMessage, DEFAULT_SETUP_STATE } from '@bodhiapp/setup-modal/types';
+import type { MessageType, RequestMessage, ResponsePayload } from '@bodhiapp/setup-modal-types';
+import type * as ModalTypes from '@bodhiapp/setup-modal-types';
+import { MSG, isRequestMessage, DEFAULT_SETUP_STATE } from '@bodhiapp/setup-modal-types';
 import { buildEvent, buildResponse, buildError } from '../types';
 import modalHtml from './modal.html?raw';
 

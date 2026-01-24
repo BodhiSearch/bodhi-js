@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-react",
-  "version": "0.0.20-dev",
+  "version": "0.0.21-dev",
   "description": "React bindings for Bodhi Browser SDK with WebUIClient preset",
   "type": "module",
   "main": "dist/bodhi-react.cjs.js",
@@ -42,6 +42,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@bodhiapp/bodhi-browser-types": "file:../../bodhi-browser-ext/src/types",
+    "@bodhiapp/setup-modal-types": "file:../../setup-modal/src/types",
     "@bodhiapp/bodhi-js-react-core": "file:../react-core",
     "@bodhiapp/bodhi-js": "file:../web",
     "@bodhiapp/bodhi-js-core": "file:../core"

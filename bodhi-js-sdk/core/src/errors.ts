@@ -5,7 +5,7 @@
  * The type definitions come from bodhi-browser-ext types.
  */
 
-import type { ApiError, OperationError } from '@bodhiapp/bodhi-browser/types';
+import type { ApiError, OperationError } from '@bodhiapp/bodhi-browser-types';
 import type { OpenAiApiError } from '@bodhiapp/ts-client';
 
 /**

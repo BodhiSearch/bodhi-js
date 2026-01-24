@@ -4,7 +4,7 @@ import type {
   ResponsePayload,
   RequestMessage,
   RequestId,
-} from '@bodhiapp/setup-modal/types';
+} from '@bodhiapp/setup-modal-types';
 
 /** Build fire-and-forget event message */
 export function buildEvent<T extends MessageType>(type: T, payload: RequestPayload<T>) {

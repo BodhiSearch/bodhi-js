@@ -29,8 +29,8 @@ import {
   type ExtensionState,
   type LogLevel,
 } from '@bodhiapp/bodhi-js-core';
-import type * as ModalTypes from '@bodhiapp/setup-modal/types';
-import { MSG, DEFAULT_SETUP_STATE } from '@bodhiapp/setup-modal/types';
+import type * as ModalTypes from '@bodhiapp/setup-modal-types';
+import { MSG, DEFAULT_SETUP_STATE } from '@bodhiapp/setup-modal-types';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { SetupState } from './BodhiProvider';
 

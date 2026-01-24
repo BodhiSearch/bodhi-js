@@ -2,7 +2,7 @@
  * Platform detection types
  */
 
-import type { BrowserType, OSType } from '@bodhiapp/setup-modal/types';
+import type { BrowserType, OSType } from '@bodhiapp/setup-modal-types';
 
 /**
  * Browser detection result

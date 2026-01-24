@@ -2,7 +2,7 @@
  * Client state and initialization types
  */
 
-import type { OperationErrorResponse } from '@bodhiapp/bodhi-browser/types';
+import type { OperationErrorResponse } from '@bodhiapp/bodhi-browser-types';
 
 // ============================================================================
 // Serialization Types

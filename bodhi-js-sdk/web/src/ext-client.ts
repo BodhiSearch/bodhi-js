@@ -40,7 +40,7 @@ import {
   type StateChangeCallback,
   type StorageKeys,
 } from '@bodhiapp/bodhi-js-core';
-import { type BodhiExtPublicApi, type StreamChunk } from '@bodhiapp/bodhi-browser/types';
+import { type BodhiExtPublicApi, type StreamChunk } from '@bodhiapp/bodhi-browser-types';
 import type { AppAccessRequest, AppAccessResponse, OpenAiApiError } from '@bodhiapp/ts-client';
 import { DEFAULT_API_TIMEOUT_MS, POLL_INTERVAL, POLL_TIMEOUT } from './constants';
 

@@ -32,7 +32,7 @@ import type {
   ExtResponse,
   ExtResponseMessage,
   StreamMessage,
-} from '@bodhiapp/bodhi-browser/types';
+} from '@bodhiapp/bodhi-browser-types';
 import {
   BODHI_STREAM_PORT,
   EXT_ACTIONS,
@@ -41,7 +41,7 @@ import {
   isStreamApiError,
   isStreamChunk,
   isStreamError,
-} from '@bodhiapp/bodhi-browser/types';
+} from '@bodhiapp/bodhi-browser-types';
 
 // Import from core
 import {

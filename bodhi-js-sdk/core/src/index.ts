@@ -45,7 +45,7 @@ export * from './facade-client-base';
 export * from './openai-client-compat';
 
 // Re-export error types from bodhi-browser (for type encapsulation)
-export { isOperationError, type OperationError } from '@bodhiapp/bodhi-browser/types';
+export { isOperationError, type OperationError } from '@bodhiapp/bodhi-browser-types';
 
 // Re-export build info
 export { BUILD_MODE as CORE_BUILD_MODE } from './build-info';

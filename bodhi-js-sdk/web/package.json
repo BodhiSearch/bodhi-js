@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js",
-  "version": "0.0.20-dev",
+  "version": "0.0.21-dev",
   "description": "Web SDK for Bodhi Browser - window.bodhiext communication",
   "type": "module",
   "main": "dist/bodhi-web.cjs.js",
@@ -37,6 +37,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@bodhiapp/bodhi-browser-types": "file:../../bodhi-browser-ext/src/types",
     "@bodhiapp/bodhi-js-core": "file:../core",
     "@bodhiapp/ts-client": "0.1.14"
   },

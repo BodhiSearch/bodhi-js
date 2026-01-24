@@ -28,7 +28,7 @@ import {
   type ServerInfoResponse,
   type StateChangeCallback,
 } from '@bodhiapp/bodhi-js-core';
-import { isApiSuccessResponse, isExtError, isOperationError } from '@bodhiapp/bodhi-browser/types';
+import { isApiSuccessResponse, isExtError, isOperationError } from '@bodhiapp/bodhi-browser-types';
 import {
   DEFAULT_API_TIMEOUT_MS,
   DISCOVERY_TIMEOUT_MS,

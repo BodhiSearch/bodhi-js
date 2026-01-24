@@ -38,6 +38,8 @@ export default defineConfig(({ mode }) => {
           '@bodhiapp/bodhi-js-core/api',
           '@bodhiapp/bodhi-js-core/types',
           '@bodhiapp/ts-client',
+          '@bodhiapp/bodhi-browser-types',
+          '@bodhiapp/setup-modal-types',
         ],
       },
     },
@@ -53,15 +55,6 @@ export default defineConfig(({ mode }) => {
         entryRoot: 'src',
       }),
     ],
-    resolve: {
-      alias: {
-        '@bodhiapp/bodhi-js-core/api': resolve(__dirname, '../core/src/api/index.ts'),
-        '@bodhiapp/bodhi-js-core/types': resolve(__dirname, '../core/src/types/index.ts'),
-        '@bodhiapp/bodhi-js-core': resolve(__dirname, '../core/src/index.ts'),
-        '@bodhiapp/bodhi-browser/types': resolve(__dirname, '../../bodhi-browser-ext/src/types'),
-        '@bodhiapp/setup-modal/types': resolve(__dirname, '../../setup-modal/src/types'),
-      },
-    },
     esbuild: {
       jsx: 'automatic',
     },

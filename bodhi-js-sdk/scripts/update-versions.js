@@ -29,11 +29,17 @@ const packageNameMap = {
   'react-ext': '@bodhiapp/bodhi-js-react-ext',
 };
 
-// Type packages (outside bodhi-js-sdk, no dependencies to manage)
+// Type packages (outside bodhi-js-sdk)
 const typePackages = [
   { name: '@bodhiapp/bodhi-browser-types', path: '../bodhi-browser-ext/src/types' },
   { name: '@bodhiapp/setup-modal-types', path: '../setup-modal/src/types' },
 ];
+
+// Map type package name to file: path for dependency management
+const typePackageMap = {
+  '@bodhiapp/bodhi-browser-types': 'file:../../bodhi-browser-ext/src/types',
+  '@bodhiapp/setup-modal-types': 'file:../../setup-modal/src/types',
+};
 
 async function updatePackage(packageName, version, mode) {
   const packagePath = join(rootDir, packageName, 'package.json');
@@ -46,8 +52,20 @@ async function updatePackage(packageName, version, mode) {
   // Update dependencies - dynamically convert all file: references
   if (pkg.dependencies) {
     for (const [depName, depVersion] of Object.entries(pkg.dependencies)) {
-      // Check if this is a file: reference to a local package
-      if (depVersion.startsWith('file:../')) {
+      // Check if this is a type package dependency
+      if (typePackageMap[depName]) {
+        if (mode === 'release') {
+          // Convert to npm version
+          pkg.dependencies[depName] = version;
+          console.log(`  ${depName}: ${depVersion} → ${version}`);
+        } else {
+          // Restore to file: protocol in dev mode
+          pkg.dependencies[depName] = typePackageMap[depName];
+          console.log(`  ${depName}: ${depVersion} → ${typePackageMap[depName]}`);
+        }
+      }
+      // Check if this is a file: reference to a local SDK package
+      else if (depVersion.startsWith('file:../')) {
         const targetDir = depVersion.replace('file:../', '');
         const targetPackageName = packageNameMap[targetDir];
 

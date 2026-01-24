@@ -3,7 +3,7 @@
  * Used by setup modal to display installation instructions
  */
 
-import type { Browser, OS } from '@bodhiapp/setup-modal/types';
+import type { Browser, OS } from '@bodhiapp/setup-modal-types';
 
 /**
  * Browser configurations with extension store URLs

@@ -3,7 +3,7 @@ import {
   isOperationErrorStructure,
   type ApiResponse,
   type OperationErrorResponse,
-} from '@bodhiapp/bodhi-browser/types';
+} from '@bodhiapp/bodhi-browser-types';
 import { OpenAiApiError } from '@bodhiapp/ts-client';
 
 /**

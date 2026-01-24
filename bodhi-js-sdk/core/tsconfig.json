@@ -2,16 +2,8 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "types": ["vite/client", "chrome"],
-    "paths": {
-      "@bodhiapp/bodhi-browser/types": ["../../bodhi-browser-ext/src/types"],
-      "@bodhiapp/setup-modal/types": ["../../setup-modal/src/types"]
-    }
+    "types": ["vite/client", "chrome"]
   },
-  "include": [
-    "src/**/*",
-    "../../bodhi-browser-ext/src/types/**/*",
-    "../../setup-modal/src/types/**/*"
-  ],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
 }

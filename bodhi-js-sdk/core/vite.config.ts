@@ -31,7 +31,12 @@ export default defineConfig(({ mode }) => {
       minify: isDev ? false : 'esbuild',
       emptyOutDir: false, // Don't clear dist/ - preserves dist/cli/ from build-cli
       rollupOptions: {
-        external: ['@bodhiapp/ts-client', 'ua-parser-js'],
+        external: [
+          '@bodhiapp/ts-client',
+          'ua-parser-js',
+          '@bodhiapp/bodhi-browser-types',
+          '@bodhiapp/setup-modal-types',
+        ],
       },
     },
     plugins: [
@@ -46,11 +51,5 @@ export default defineConfig(({ mode }) => {
         entryRoot: 'src',
       }),
     ],
-    resolve: {
-      alias: {
-        '@bodhiapp/bodhi-browser/types': resolve(__dirname, '../../bodhi-browser-ext/src/types'),
-        '@bodhiapp/setup-modal/types': resolve(__dirname, '../../setup-modal/src/types'),
-      },
-    },
   };
 });

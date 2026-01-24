@@ -22,7 +22,11 @@ export default defineConfig(({ mode }) => {
       sourcemap: isDev,
       minify: isDev ? false : 'esbuild',
       rollupOptions: {
-        external: ['@bodhiapp/bodhi-js-core', '@bodhiapp/ts-client'],
+        external: [
+          '@bodhiapp/bodhi-js-core',
+          '@bodhiapp/ts-client',
+          '@bodhiapp/bodhi-browser-types',
+        ],
       },
     },
     plugins: [
@@ -33,13 +37,5 @@ export default defineConfig(({ mode }) => {
         copyDtsFiles: true,
       }),
     ],
-    resolve: {
-      alias: {
-        '@bodhiapp/bodhi-js-core': resolve(__dirname, '../core/src/index.ts'),
-        '@bodhiapp/bodhi-js-core/types': resolve(__dirname, '../core/src/types/index.ts'),
-        '@bodhiapp/bodhi-browser/types': resolve(__dirname, '../../bodhi-browser-ext/src/types'),
-        '@bodhiapp/setup-modal/types': resolve(__dirname, '../../setup-modal/src/types'),
-      },
-    },
   };
 });
