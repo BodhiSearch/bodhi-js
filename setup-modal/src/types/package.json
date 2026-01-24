@@ -1,0 +1,28 @@
+{
+  "name": "@bodhiapp/setup-modal-types",
+  "version": "0.0.20-dev",
+  "description": "TypeScript types for Bodhi Setup Modal",
+  "type": "module",
+  "main": "index.ts",
+  "types": "index.ts",
+  "exports": {
+    ".": {
+      "types": "./index.ts",
+      "import": "./index.ts",
+      "require": "./index.ts"
+    }
+  },
+  "files": [
+    "*.ts"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BodhiSearch/bodhi-js.git",
+    "directory": "setup-modal/src/types"
+  },
+  "license": "MIT",
+  "author": "BodhiSearch",
+  "publishConfig": {
+    "access": "public"
+  }
+}

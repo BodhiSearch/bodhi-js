@@ -29,6 +29,12 @@ const packageNameMap = {
   'react-ext': '@bodhiapp/bodhi-js-react-ext',
 };
 
+// Type packages (outside bodhi-js-sdk, no dependencies to manage)
+const typePackages = [
+  { name: '@bodhiapp/bodhi-browser-types', path: '../bodhi-browser-ext/src/types' },
+  { name: '@bodhiapp/setup-modal-types', path: '../setup-modal/src/types' },
+];
+
 async function updatePackage(packageName, version, mode) {
   const packagePath = join(rootDir, packageName, 'package.json');
   const content = await readFile(packagePath, 'utf-8');
@@ -70,6 +76,17 @@ async function updatePackage(packageName, version, mode) {
   console.log(`Updated ${packageName}: version=${version}, mode=${mode}`);
 }
 
+async function updateTypePackage(typePackage, version) {
+  const packagePath = join(rootDir, typePackage.path, 'package.json');
+  const content = await readFile(packagePath, 'utf-8');
+  const pkg = JSON.parse(content);
+
+  pkg.version = version;
+
+  await writeFile(packagePath, JSON.stringify(pkg, null, 2) + '\n');
+  console.log(`Updated ${typePackage.name}: version=${version}`);
+}
+
 async function main() {
   const version = process.argv[2];
   const mode = process.argv[3];
@@ -96,9 +113,15 @@ async function main() {
 
   console.log(`Updating all packages to version ${version} (${mode} mode)...`);
 
-  // Update all packages
+  // Update all SDK packages
   for (const pkg of packages) {
     await updatePackage(pkg, version, mode);
+  }
+
+  // Update type packages
+  console.log('Updating type packages...');
+  for (const typePkg of typePackages) {
+    await updateTypePackage(typePkg, version);
   }
 
   // Run npm install to update package-lock.json
