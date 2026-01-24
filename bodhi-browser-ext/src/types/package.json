@@ -1,20 +1,32 @@
 {
   "name": "@bodhiapp/bodhi-browser-types",
-  "version": "0.0.21-dev",
+  "version": "0.0.22-dev",
   "description": "TypeScript types for Bodhi Browser Extension",
   "type": "module",
-  "main": "index.ts",
-  "types": "index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./index.ts",
-      "import": "./index.ts",
-      "require": "./index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
   },
   "files": [
-    "*.ts"
+    "dist"
   ],
+  "scripts": {
+    "build": "vite build",
+    "clean": "rimraf dist"
+  },
+  "peerDependencies": {
+    "@bodhiapp/ts-client": ">=0.1.0"
+  },
+  "devDependencies": {
+    "vite": "^7.1.12",
+    "vite-plugin-dts": "^4.5.4",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.8.3"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/BodhiSearch/bodhi-js.git",

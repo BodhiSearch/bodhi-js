@@ -13,8 +13,9 @@
   "scripts": {
     "dev": "npx vite",
     "clean": "rimraf dist",
-    "build": "npx vite build && npm run lint:fix",
-    "ci:build": "npx vite build",
+    "build:types": "cd src/types && npm run build",
+    "build": "npm run build:types && npx vite build && npm run lint:fix",
+    "ci:build": "npm run build:types && npx vite build",
     "dev:build": "node ../scripts/build-fast.mjs setup-modal 'npm run build' src package.json vite.config.ts",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx && prettier --check .",
     "lint:fix": "prettier --write . && eslint . --ext .js,.jsx,.ts,.tsx --fix",

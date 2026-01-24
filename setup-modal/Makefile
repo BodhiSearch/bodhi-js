@@ -8,18 +8,24 @@ all: setup lint build ci.test ## Default target, builds and tests everything
 setup: ## Install dependencies with exact versions (using npm ci)
 	@echo "Installing dependencies for setup-modal..."
 	npm ci
+	@echo "Installing type package dependencies..."
+	cd src/types && npm ci
 	@echo "setup-modal dependencies installed successfully"
 
 # Install - install dependencies
 install: ## Install dependencies (using npm install)
 	@echo "Installing dependencies for setup-modal..."
 	npm install
+	@echo "Installing type package dependencies..."
+	cd src/types && npm install
 	@echo "setup-modal dependencies installed successfully"
 
 # Clean build artifacts
 clean: ## Clean build artifacts
 	@echo "Cleaning build artifacts..."
 	@npm run clean
+	@echo "Cleaning type package build artifacts..."
+	@cd src/types && npm run clean
 	@echo "Build artifacts cleaned"
 
 # Build the package
@@ -44,6 +50,11 @@ dev.all: ## Full validation: install → lint:fix → typecheck → build → te
 	npm run typecheck
 	npm run dev:build
 	npm test
+
+# Build types package
+types: ## Build types package
+	@cd src/types && npm run build
+	@echo "setup-modal types built successfully"
 
 # Run tests
 test: ## Test setup-modal
