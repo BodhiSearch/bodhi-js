@@ -132,6 +132,9 @@ export class OnboardingModal {
       this.iframeElement.srcdoc = modalHtml;
     }
 
+    // Allow clipboard access for copy functionality
+    this.iframeElement.allow = 'clipboard-write';
+
     this.iframeElement.style.cssText = `
       width: 90%;
       max-width: 800px;

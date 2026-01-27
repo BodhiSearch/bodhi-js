@@ -29,14 +29,14 @@ export function ServerSetup() {
   const handleDownloadServer = () => {
     const targetOS = osArray.find(o => o.id === selectedOS);
     if (targetOS && isSupportedOS(targetOS)) {
-      window.open(targetOS.download_url, '_blank');
+      window.open(targetOS.download_url, '_blank', 'noopener');
     }
   };
 
   const handleViewGitHubIssue = () => {
     const targetOS = osArray.find(o => o.id === selectedOS);
     if (targetOS && isNotSupportedOS(targetOS) && targetOS.github_issue_url) {
-      window.open(targetOS.github_issue_url, '_blank');
+      window.open(targetOS.github_issue_url, '_blank', 'noopener');
     }
   };
 

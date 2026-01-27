@@ -27,19 +27,19 @@ export const BROWSER_CONFIGS: Browser[] = [
     id: 'firefox',
     status: 'not-supported',
     name: 'Mozilla Firefox',
-    github_issue_url: 'https://github.com/BodhiSearch/bodhi-browser/issues/firefox-support',
+    github_issue_url: 'https://github.com/BodhiSearch/bodhi-js/issues/1',
   },
   {
     id: 'safari',
     status: 'not-supported',
     name: 'Safari',
-    github_issue_url: 'https://github.com/BodhiSearch/bodhi-browser/issues/safari-support',
+    github_issue_url: 'https://github.com/BodhiSearch/bodhi-js/issues/2',
   },
   {
     id: 'unknown',
     status: 'not-supported',
     name: 'Unknown Browser',
-    github_issue_url: 'https://github.com/BodhiSearch/bodhi-js/issues/new',
+    github_issue_url: 'https://github.com/BodhiSearch/bodhi-js/issues/3',
   },
 ];
 
@@ -51,27 +51,24 @@ export const OS_CONFIGS: OS[] = [
     id: 'macos',
     status: 'supported',
     name: 'macOS',
-    download_url:
-      'https://github.com/BodhiSearch/bodhi-browser/releases/latest/download/bodhi-server-macos',
+    download_url: 'https://getbodhi.app/',
   },
   {
     id: 'windows',
     status: 'supported',
     name: 'Windows',
-    download_url:
-      'https://github.com/BodhiSearch/bodhi-browser/releases/latest/download/bodhi-server-windows.exe',
+    download_url: 'https://getbodhi.app/',
   },
   {
     id: 'linux',
     status: 'supported',
     name: 'Linux',
-    download_url:
-      'https://github.com/BodhiSearch/bodhi-browser/releases/latest/download/bodhi-server-linux',
+    download_url: 'https://getbodhi.app/',
   },
   {
     id: 'unknown',
     status: 'not-supported',
     name: 'Unknown OS',
-    github_issue_url: 'https://github.com/BodhiSearch/bodhi-browser/issues/new',
+    github_issue_url: 'https://github.com/BodhiSearch/bodhi-js/issues/4',
   },
 ];

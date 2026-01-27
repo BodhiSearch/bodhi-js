@@ -4,10 +4,10 @@ import { TroubleshootingBox } from '@/components/common/TroubleshootingBox';
 import { DEFAULT_SERVER_URL, getServerSetupUrl, getServerAdminUrl } from '@/lib/constants';
 import { BrowserType } from '@/types';
 import { isSupportedBrowser, isNotSupportedBrowser } from '@/types/type-guards';
-import { AlertCircle, CheckCircle2, Download, ExternalLink } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Copy, ExternalLink } from 'lucide-react';
 import { useSetupModalStore } from '@/store/setup-modal-store';
 import { selectEffectiveBrowser } from '@/store/selectors';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export function ExtensionSetup() {
   const setupState = useSetupModalStore(state => state.setupState);
@@ -17,6 +17,7 @@ export function ExtensionSetup() {
   const setExtensionOpen = useSetupModalStore(state => state.setExtensionAccordionOpen);
   const setServerOpen = useSetupModalStore(state => state.setExtensionServerAccordionOpen);
   const selectedBrowser = useSetupModalStore(selectEffectiveBrowser);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   const { extension, server, env, browsers } = setupState!;
 
@@ -41,17 +42,24 @@ export function ExtensionSetup() {
 
   const selectedBrowserData = browsers.find(b => b.id === selectedBrowser);
 
-  const handleInstallExtension = () => {
+  const handleCopyUrl = async () => {
     const targetBrowser = browsers.find(b => b.id === selectedBrowser);
     if (targetBrowser && isSupportedBrowser(targetBrowser)) {
-      window.open(targetBrowser.extension_url, '_blank');
+      try {
+        await navigator.clipboard.writeText(targetBrowser.extension_url);
+        setCopyStatus('copied');
+        setTimeout(() => setCopyStatus('idle'), 2000);
+      } catch {
+        setCopyStatus('failed');
+        setTimeout(() => setCopyStatus('idle'), 4000);
+      }
     }
   };
 
   const handleViewGitHubIssue = () => {
     const targetBrowser = browsers.find(b => b.id === selectedBrowser);
     if (targetBrowser && isNotSupportedBrowser(targetBrowser) && targetBrowser.github_issue_url) {
-      window.open(targetBrowser.github_issue_url, '_blank');
+      window.open(targetBrowser.github_issue_url, '_blank', 'noopener');
     }
   };
 
@@ -90,22 +98,37 @@ export function ExtensionSetup() {
         {/* Installation Actions */}
         {selectedBrowserData?.status === 'supported' ? (
           <div className="space-y-4">
-            <button
-              onClick={handleInstallExtension}
-              className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Download Extension for {selectedBrowserData.name}
-            </button>
+            <div className="space-y-2">
+              <input
+                type="text"
+                readOnly
+                value={selectedBrowserData.extension_url}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-50 cursor-pointer select-all focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onClick={e => e.currentTarget.select()}
+              />
+              <button
+                onClick={handleCopyUrl}
+                className={`w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                  copyStatus === 'copied' ? 'bg-green-600 hover:bg-green-700' : copyStatus === 'failed' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                {copyStatus === 'copied'
+                  ? 'Copied!'
+                  : copyStatus === 'failed'
+                    ? 'Copy failed, select above text and copy manually'
+                    : `Copy Extension URL for ${selectedBrowserData.name}`}
+              </button>
+            </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
               <h5 className="text-sm font-medium text-blue-900 mb-2">Installation Instructions for {selectedBrowserData.name}</h5>
               <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
-                <li>Click the download button above to open the extension store</li>
+                <li>Copy the URL above and open it in a new tab</li>
                 <li>Click "Add to {selectedBrowserData.name}" or "Install"</li>
                 <li>Accept the permissions when prompted</li>
                 <li>Look for the Bodhi icon in your browser toolbar</li>
-                <li>Click refresh in this modal to detect the extension</li>
+                <li>Refresh this page and open this setup window again</li>
               </ol>
             </div>
           </div>

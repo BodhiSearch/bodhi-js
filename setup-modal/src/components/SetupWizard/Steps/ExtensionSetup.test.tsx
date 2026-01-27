@@ -436,13 +436,13 @@ describe('ExtensionSetup - Accordion UI', () => {
       useSetupModalStore.setState({ setupState: state });
       render(<ExtensionSetup />);
 
-      expect(screen.getByText('Download Extension for Chrome')).toBeInTheDocument();
+      expect(screen.getByText('Copy Extension URL for Chrome')).toBeInTheDocument();
 
       const dropdownButton = screen.getByText('Chrome').closest('button')!;
       await user.click(dropdownButton);
       await user.click(screen.getByText('Edge'));
 
-      expect(screen.getByText('Download Extension for Edge')).toBeInTheDocument();
+      expect(screen.getByText('Copy Extension URL for Edge')).toBeInTheDocument();
     });
 
     test('should show GitHub issue link for unsupported browsers', () => {

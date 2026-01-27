@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-react-core",
-  "version": "0.0.23-dev",
+  "version": "0.0.24-dev",
   "description": "Core React bindings for Bodhi Browser SDK (dependency injection)",
   "type": "module",
   "main": "dist/bodhi-react-core.cjs.js",

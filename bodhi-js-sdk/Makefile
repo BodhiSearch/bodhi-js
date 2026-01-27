@@ -1,14 +1,14 @@
-.PHONY: all setup install build dev.build clean lint lint-fix dependencies dev.dependencies ci.build typecheck upgrade.ts-client
+.PHONY: all setup install build dev.build clean lint lint-fix dependencies dev.dependencies ci.build typecheck upgrade.ts-client help
 
-all: setup lint-fix build
+all: setup lint-fix build ## Default: setup → lint-fix → build
 
-setup:
+setup: ## Install dependencies (npm ci)
 	npm ci
 
-install:
+install: ## Install dependencies (npm install)
 	npm install
 
-build:
+build: ## Build all packages
 	npm run build
 
 dev.build: ## Dev: Build with caching
@@ -23,20 +23,20 @@ dev.all: dev.dependencies ## Full validation: install → lint:fix → typecheck
 ci.build: ## CI: Build only (no dep rebuild)
 	npm run ci:build
 
-clean:
+clean: ## Clean build artifacts
 	npm run clean
 
-lint:
+lint: ## Run ESLint checks
 	npm run lint
 
 typecheck: ## Type check all
 	npm run typecheck
 
-lint-fix:
+lint-fix: ## Fix ESLint and formatting issues
 	npm run lint:fix
 	npm run typecheck
 
-dependencies:
+dependencies: ## Build dependencies (setup-modal) and install
 	$(MAKE) -C ../setup-modal build
 	npm install
 
@@ -82,3 +82,10 @@ upgrade.ts-client: ## Upgrade @bodhiapp/ts-client to latest version
 	@echo "Building..."
 	$(MAKE) clean
 	$(MAKE) build
+
+.DEFAULT_GOAL := help
+help: ## Show this help message
+	@echo 'Usage: make [target]'
+	@echo ''
+	@echo 'Targets:'
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9._-]+:.*?## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)

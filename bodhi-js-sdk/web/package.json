@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js",
-  "version": "0.0.23-dev",
+  "version": "0.0.24-dev",
   "description": "Web SDK for Bodhi Browser - window.bodhiext communication",
   "type": "module",
   "main": "dist/bodhi-web.cjs.js",
