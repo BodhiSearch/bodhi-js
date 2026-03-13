@@ -221,7 +221,12 @@ export function SetupModalProcessor({
       // Check extension server
       if (extensionState.server.status !== 'pending-extension-ready') {
         const status = extensionState.server.status;
-        if (status === 'ready' || status === 'setup' || status === 'resource_admin' || status === 'tenant_selection') {
+        if (
+          status === 'ready' ||
+          status === 'setup' ||
+          status === 'resource_admin' ||
+          status === 'tenant_selection'
+        ) {
           return true;
         }
       }
@@ -229,7 +234,12 @@ export function SetupModalProcessor({
       // Check direct server
       if (directState.server.status !== 'not-connected') {
         const status = directState.server.status;
-        if (status === 'ready' || status === 'setup' || status === 'resource_admin' || status === 'tenant_selection') {
+        if (
+          status === 'ready' ||
+          status === 'setup' ||
+          status === 'resource_admin' ||
+          status === 'tenant_selection'
+        ) {
           return true;
         }
       }
