@@ -1,5 +1,10 @@
 // Import types from local modules
-import type { AppAccessRequest, AppAccessResponse, OpenAiApiError } from '@bodhiapp/ts-client';
+import type {
+  AccessRequestStatusResponse,
+  CreateAccessRequest,
+  CreateAccessRequestResponse,
+  OpenAiApiError,
+} from '@bodhiapp/ts-client';
 import {
   DISCOVERY_ATTEMPTS,
   DISCOVERY_ATTEMPT_TIMEOUT,
@@ -45,11 +50,12 @@ import {
 
 // Import from core
 import {
+  AccessRequestBuilder,
+  DEFAULT_POLL_INTERVAL_MS,
+  DEFAULT_POLL_TIMEOUT_MS,
+  pollAccessRequestUntilResolved,
   Logger,
   createOperationError,
-  getMissingToolsetScopeIds,
-  getRequestedToolsetScopes,
-  isApiResultError,
   isApiResultOperationError,
   isApiResultSuccess,
   refreshAccessToken,
@@ -74,7 +80,7 @@ export interface BodhiExtClientConfig {
   authServerUrl?: string;
   extensionId?: string;
   logLevel?: LogLevel;
-  userScope?: UserScope;
+  userRole?: UserScope;
   attempts?: number;
   attemptWaitMs?: number;
   attemptTimeout?: number;
@@ -102,7 +108,7 @@ export class BodhiExtClient {
   private isAuthenticating = false;
   private authClientId: string;
   private authServerUrl: string;
-  private userScope: UserScope;
+  private userRole: UserScope;
   private logger: Logger;
   private state: ClientExtState = 'setup';
   private listenersInitialized = false;
@@ -151,7 +157,7 @@ export class BodhiExtClient {
   constructor(authClientId: string, config?: BodhiExtClientConfig) {
     this.authClientId = authClientId;
     this.authServerUrl = config?.authServerUrl || 'https://id.getbodhi.app/realms/bodhi';
-    this.userScope = config?.userScope || 'scope_user_user';
+    this.userRole = config?.userRole || 'scope_user_user';
     this.extensionId = config?.extensionId;
     this.logger = new Logger('BodhiExtClient', config?.logLevel || 'warn');
 
@@ -738,8 +744,8 @@ export class BodhiExtClient {
   // ============================================================================
 
   /**
-   * Login user via OAuth2 + PKCE flow
-   * @param options - Optional login options (toolsetScopeIds, version)
+   * Login user via access-request + OAuth2 + PKCE flow
+   * @param options - Optional login options
    * @throws Error if login fails
    */
   async login(options?: LoginOptions): Promise<void> {
@@ -762,112 +768,56 @@ export class BodhiExtClient {
         throw new Error('Extension not discovered. Please detect Bodhi extension before login.');
       }
 
-      // Request resource access scope - required for authenticated API access
-      const result = await this.requestAccess(options?.toolsetScopeIds, options?.version);
-
-      if (isApiResultOperationError(result)) {
-        throw createOperationError(result.error.message, result.error.type);
+      if (options?.flowType === 'redirect') {
+        this.logger.warn('Extension mode does not support redirect flow type; using popup instead');
       }
 
-      if (isApiResultError(result)) {
-        const { message } = result.body.error;
-        throw createOperationError(message, 'auth_error');
+      const userRole = options?.userRole ?? this.userRole;
+
+      // Step 1: Create access request
+      const builder = new AccessRequestBuilder(this.authClientId)
+        .requestedRole(userRole)
+        .flowType('popup');
+
+      if (options?.requested) {
+        builder.requested(options.requested);
       }
 
-      if (!isApiResultSuccess(result)) {
-        throw createOperationError(`Unexpected HTTP ${result.status}`, 'auth_error');
-      }
+      const accessRequestBody = builder.build();
+      const accessRequestResult = await this.requestAccess(accessRequestBody);
 
-      const resourceScope = result.body.scope;
-
-      // Extract toolset scopes from response
-      const toolsets = result.body.toolsets || [];
-
-      // Validate requested toolset scope IDs are in response
-      const missingScopeIds = getMissingToolsetScopeIds(options?.toolsetScopeIds, toolsets);
-      if (missingScopeIds.length > 0) {
+      if (isApiResultOperationError(accessRequestResult)) {
         throw createOperationError(
-          `toolsetScopeIds not received back from request-access call: [${missingScopeIds.join(', ')}], check developer console on configuring the toolset scopes correctly`,
+          accessRequestResult.error.message,
+          accessRequestResult.error.type
+        );
+      }
+      if (!isApiResultSuccess(accessRequestResult)) {
+        throw createOperationError(
+          `Access request failed: HTTP ${accessRequestResult.status}`,
           'auth_error'
         );
       }
 
-      // Only include scopes for requested toolset IDs (empty string if none requested)
-      const toolsetScopes = getRequestedToolsetScopes(options?.toolsetScopeIds, toolsets);
+      const { id: requestId, review_url: reviewUrl } = accessRequestResult.body;
 
-      // OAuth scopes with additional resource and toolset scopes
-      const fullScope =
-        `openid profile email roles ${this.userScope} ${resourceScope} ${toolsetScopes}`.trim();
+      // Open review URL in a new tab
+      await chrome.tabs.create({ url: reviewUrl });
 
-      const codeVerifier = BodhiExtClient.generateCodeVerifier();
-      const codeChallenge = await BodhiExtClient.generateCodeChallenge(codeVerifier);
-      const state = BodhiExtClient.generateCodeVerifier();
-
-      await chrome.storage.session.set({
-        codeVerifier,
-        state,
-        authInProgress: true,
+      // Poll for approval
+      const statusResponse = await this.pollAccessRequestStatus(requestId, {
+        intervalMs: options?.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
+        timeoutMs: options?.pollTimeoutMs ?? DEFAULT_POLL_TIMEOUT_MS,
       });
 
-      const redirectUri = chrome.identity.getRedirectURL('callback');
-      const authUrl = new URL(this.authEndpoints.authorize);
-      authUrl.searchParams.set('client_id', this.authClientId);
-      authUrl.searchParams.set('response_type', 'code');
-      authUrl.searchParams.set('redirect_uri', redirectUri);
-      authUrl.searchParams.set('scope', fullScope);
-      authUrl.searchParams.set('code_challenge', codeChallenge);
-      authUrl.searchParams.set('code_challenge_method', 'S256');
-      authUrl.searchParams.set('state', state);
+      if (statusResponse.status !== 'approved') {
+        throw createOperationError(`Access request ${statusResponse.status}`, 'auth_error');
+      }
 
-      return new Promise((resolve, reject) => {
-        chrome.identity.launchWebAuthFlow(
-          {
-            url: authUrl.toString(),
-            interactive: true,
-          },
-          async (redirectUrl) => {
-            await chrome.storage.session.set({ authInProgress: false });
+      const accessRequestScope = statusResponse.access_request_scope;
+      const scope = `openid profile email roles ${accessRequestScope ?? ''}`.trim();
 
-            if (chrome.runtime.lastError) {
-              await chrome.storage.session.remove(['codeVerifier', 'state']);
-              reject(chrome.runtime.lastError);
-              return;
-            }
-
-            if (!redirectUrl) {
-              await chrome.storage.session.remove(['codeVerifier', 'state']);
-              reject(new Error('No redirect URL received'));
-              return;
-            }
-
-            try {
-              const url = new URL(redirectUrl);
-              const code = url.searchParams.get('code');
-              const returnedState = url.searchParams.get('state');
-
-              const { state: savedState } = await chrome.storage.session.get('state');
-              if (returnedState !== savedState) {
-                await chrome.storage.session.remove(['codeVerifier', 'state']);
-                reject(new Error('State mismatch - possible CSRF'));
-                return;
-              }
-
-              if (!code) {
-                await chrome.storage.session.remove(['codeVerifier', 'state']);
-                reject(new Error('No authorization code received'));
-                return;
-              }
-
-              await this.exchangeCodeForTokens(code);
-              await chrome.storage.session.remove(['codeVerifier', 'state']);
-              resolve();
-            } catch (error) {
-              await chrome.storage.session.remove(['codeVerifier', 'state']);
-              reject(error);
-            }
-          }
-        );
-      });
+      await this.performOAuthPkce(scope);
     } finally {
       this.isAuthenticating = false;
     }
@@ -978,6 +928,142 @@ export class BodhiExtClient {
   }
 
   // ============================================================================
+  // ============================================================================
+  // Access Request Methods
+  // ============================================================================
+
+  async requestAccess(
+    body: CreateAccessRequest
+  ): Promise<ApiResponseResult<CreateAccessRequestResponse>> {
+    try {
+      const response = await this.sendApiRequest<CreateAccessRequest, CreateAccessRequestResponse>(
+        'POST',
+        '/bodhi/v1/apps/request-access',
+        body
+      );
+      return {
+        body: response.body as CreateAccessRequestResponse,
+        status: response.status,
+        headers: response.headers,
+      };
+    } catch (err) {
+      return {
+        error: {
+          message: err instanceof Error ? err.message : String(err),
+          type: 'extension_error',
+        },
+      };
+    }
+  }
+
+  async getAccessRequestStatus(
+    requestId: string
+  ): Promise<ApiResponseResult<AccessRequestStatusResponse>> {
+    try {
+      const response = await this.sendApiRequest<void, AccessRequestStatusResponse>(
+        'GET',
+        `/bodhi/v1/apps/access-requests/${requestId}?app_client_id=${encodeURIComponent(this.authClientId)}`
+      );
+      return {
+        body: response.body as AccessRequestStatusResponse,
+        status: response.status,
+        headers: response.headers,
+      };
+    } catch (err) {
+      return {
+        error: {
+          message: err instanceof Error ? err.message : String(err),
+          type: 'extension_error',
+        },
+      };
+    }
+  }
+
+  async pollAccessRequestStatus(
+    requestId: string,
+    options?: { intervalMs?: number; timeoutMs?: number }
+  ): Promise<AccessRequestStatusResponse> {
+    return pollAccessRequestUntilResolved(
+      (id) => this.getAccessRequestStatus(id),
+      requestId,
+      options
+    );
+  }
+
+  private async performOAuthPkce(scope: string): Promise<AuthState> {
+    const codeVerifier = BodhiExtClient.generateCodeVerifier();
+    const codeChallenge = await BodhiExtClient.generateCodeChallenge(codeVerifier);
+    const state = BodhiExtClient.generateCodeVerifier();
+
+    await chrome.storage.session.set({
+      codeVerifier,
+      state,
+      authInProgress: true,
+    });
+
+    const redirectUri = chrome.identity.getRedirectURL('callback');
+    const authUrl = new URL(this.authEndpoints.authorize);
+    authUrl.searchParams.set('client_id', this.authClientId);
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('redirect_uri', redirectUri);
+    authUrl.searchParams.set('scope', scope);
+    authUrl.searchParams.set('code_challenge', codeChallenge);
+    authUrl.searchParams.set('code_challenge_method', 'S256');
+    authUrl.searchParams.set('state', state);
+
+    return new Promise((resolve, reject) => {
+      chrome.identity.launchWebAuthFlow(
+        { url: authUrl.toString(), interactive: true },
+        async (redirectUrl) => {
+          await chrome.storage.session.set({ authInProgress: false });
+
+          if (chrome.runtime.lastError) {
+            await chrome.storage.session.remove(['codeVerifier', 'state']);
+            reject(chrome.runtime.lastError);
+            return;
+          }
+
+          if (!redirectUrl) {
+            await chrome.storage.session.remove(['codeVerifier', 'state']);
+            reject(createOperationError('No redirect URL received', 'oauth-error'));
+            return;
+          }
+
+          try {
+            const url = new URL(redirectUrl);
+            const code = url.searchParams.get('code');
+            const returnedState = url.searchParams.get('state');
+
+            const { state: savedState } = await chrome.storage.session.get('state');
+            if (returnedState !== savedState) {
+              await chrome.storage.session.remove(['codeVerifier', 'state']);
+              reject(createOperationError('State mismatch', 'oauth-error'));
+              return;
+            }
+
+            if (!code) {
+              await chrome.storage.session.remove(['codeVerifier', 'state']);
+              reject(createOperationError('No authorization code', 'oauth-error'));
+              return;
+            }
+
+            await this.exchangeCodeForTokens(code);
+            await chrome.storage.session.remove(['codeVerifier', 'state']);
+
+            const authStateResult = await this.getAuthState();
+            if (authStateResult.status !== 'authenticated') {
+              throw createOperationError('Login failed', 'oauth-error');
+            }
+            resolve(authStateResult);
+          } catch (error) {
+            await chrome.storage.session.remove(['codeVerifier', 'state']);
+            reject(error);
+          }
+        }
+      );
+    });
+  }
+
   // Ext2Ext Communication (Private Methods)
   // ============================================================================
 
@@ -1366,32 +1452,6 @@ export class BodhiExtClient {
       }
       this.activeStreamPorts.delete(requestId);
     }
-  }
-
-  // ============================================================================
-  // Resource Access (Private Methods)
-  // ============================================================================
-
-  /**
-   * Request resource access scope from backend via bodhi-browser-ext.
-   * Required for authenticated API access - token will include aud claim.
-   * @returns ApiResponseResult with scope or error
-   */
-  private async requestAccess(
-    toolsetScopeIds?: string[],
-    version?: string
-  ): Promise<ApiResponseResult<AppAccessResponse>> {
-    const requestBody: AppAccessRequest = {
-      app_client_id: this.authClientId,
-      ...(toolsetScopeIds && { toolset_scope_ids: toolsetScopeIds }),
-      ...(version && { version }),
-    };
-
-    return this.sendApiRequest<AppAccessRequest, AppAccessResponse>(
-      'POST',
-      '/bodhi/v1/apps/request-access',
-      requestBody
-    );
   }
 
   // ============================================================================

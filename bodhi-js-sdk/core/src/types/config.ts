@@ -2,7 +2,7 @@
  * Configuration and utility types
  */
 
-import type { UserScope } from './user-info';
+import type { UserScope } from '@bodhiapp/ts-client';
 
 /**
  * Log levels for client logging
@@ -23,7 +23,7 @@ export interface DiscoveryResult {
  */
 export interface ClientConfig {
   authServerUrl?: string;
-  userScope?: UserScope;
+  userRole?: UserScope;
   extensionId?: string;
   logLevel?: LogLevel;
   discoveryAttempts?: number;

@@ -7,7 +7,7 @@
 
 export interface ConnectivityTestResult {
   success: boolean;
-  serverInfo?: { status: string; version: string };
+  serverInfo?: { status: string; version: string; deployment?: DeploymentMode; client_id?: string };
   error?: { message: string; type: string };
 }
 
@@ -42,6 +42,8 @@ export async function testServerConnectivity(
         serverInfo: {
           status: body.status || 'unknown',
           version: body.version || 'unknown',
+          deployment: body.deployment,
+          client_id: body.client_id,
         },
       };
     }
@@ -65,12 +67,19 @@ export async function testServerConnectivity(
   }
 }
 
-import type { AppAccessRequest, AppAccessResponse } from '@bodhiapp/ts-client';
+import type {
+  AccessRequestStatusResponse,
+  CreateAccessRequest,
+  CreateAccessRequestResponse,
+  DeploymentMode,
+  UserScope,
+} from '@bodhiapp/ts-client';
 import { DEFAULT_API_TIMEOUT_MS } from './constants';
 import { createOperationError } from './errors';
+import { pollAccessRequestUntilResolved } from './access-request';
 import type { IDirectClient } from './interface';
 import { Logger } from './logger';
-import { Chat, Models, Embeddings } from './openai-client-compat';
+import { Chat, Models, Embeddings, Toolsets, Mcps } from './openai-client-compat';
 import {
   createOAuthEndpoints,
   extractUserInfo,
@@ -79,16 +88,16 @@ import {
   type RefreshTokenResponse,
 } from './oauth';
 import { createStorageKeys, type StorageKeys } from './storage';
-import type {
-  ApiResponseResult,
-  AuthState,
-  BackendServerState,
-  ClientState,
-  DirectState,
-  InitParams,
-  LogLevel,
-  SerializedDirectState,
-  StateChangeCallback,
+import {
+  type ApiResponseResult,
+  type AuthState,
+  type BackendServerState,
+  type ClientState,
+  type DirectState,
+  type InitParams,
+  type LogLevel,
+  type SerializedDirectState,
+  type StateChangeCallback,
 } from './types';
 import {
   BACKEND_SERVER_NOT_CONNECTED,
@@ -104,7 +113,7 @@ import {
 export interface DirectClientBaseConfig {
   authClientId: string;
   authServerUrl: string;
-  userScope: string;
+  userRole: UserScope;
   storagePrefix: string;
   logLevel: LogLevel;
   loggerPrefix: string;
@@ -119,7 +128,7 @@ export abstract class DirectClientBase implements IDirectClient {
   protected serverUrl: string | null = null;
   protected authClientId: string;
   protected authServerUrl: string;
-  protected userScope: string;
+  protected userRole: UserScope;
   protected authEndpoints: OAuthEndpoints;
   protected storageKeys: StorageKeys;
   protected state: DirectState = DIRECT_STATE_NOT_INITIALIZED;
@@ -131,12 +140,14 @@ export abstract class DirectClientBase implements IDirectClient {
   private _chat: Chat | undefined;
   private _models: Models | undefined;
   private _embeddings: Embeddings | undefined;
+  private _toolsets: Toolsets | undefined;
+  private _mcps: Mcps | undefined;
 
   constructor(config: DirectClientBaseConfig, onStateChange?: StateChangeCallback) {
     this.logger = new Logger(config.loggerPrefix, config.logLevel);
     this.authClientId = config.authClientId;
     this.authServerUrl = config.authServerUrl;
-    this.userScope = config.userScope;
+    this.userRole = config.userRole;
     this.authEndpoints = createOAuthEndpoints(this.authServerUrl);
     this.storageKeys = createStorageKeys(config.storagePrefix);
     this.onStateChange = onStateChange ?? NOOP_STATE_CALLBACK;
@@ -199,9 +210,26 @@ export abstract class DirectClientBase implements IDirectClient {
         const version = connectivity.serverInfo.version;
 
         if (status === 'ready') {
-          serverState = { status: 'ready', version, error: null };
-        } else if (status === 'setup' || status === 'resource-admin' || status === 'error') {
-          serverState = backendServerNotReady(status, version);
+          serverState = {
+            status: 'ready',
+            version,
+            error: null,
+            deployment: connectivity.serverInfo.deployment ?? null,
+            client_id: connectivity.serverInfo.client_id ?? null,
+          };
+        } else if (
+          status === 'setup' ||
+          status === 'resource_admin' ||
+          status === 'tenant_selection' ||
+          status === 'error'
+        ) {
+          serverState = backendServerNotReady(
+            status,
+            version,
+            undefined,
+            connectivity.serverInfo.deployment,
+            connectivity.serverInfo.client_id
+          );
         } else {
           serverState = BACKEND_SERVER_NOT_REACHABLE;
         }
@@ -355,26 +383,32 @@ export abstract class DirectClientBase implements IDirectClient {
     }
 
     const info = result.serverInfo!;
+    const baseFields = { deployment: info.deployment ?? null, client_id: info.client_id ?? null };
     switch (info.status) {
       case 'ready':
-        return { status: 'ready', version: info.version, error: null };
+        return { status: 'ready', version: info.version, error: null, ...baseFields };
       case 'setup':
         return {
           status: 'setup',
           version: info.version,
           error: { message: 'Setup required', type: 'extension_error' },
+          ...baseFields,
         };
-      case 'resource-admin':
+      case 'resource_admin':
         return {
-          status: 'resource-admin',
+          status: 'resource_admin',
           version: info.version,
           error: { message: 'Resource admin required', type: 'extension_error' },
+          ...baseFields,
         };
+      case 'tenant_selection':
+        return { status: 'tenant_selection', version: info.version, error: null, ...baseFields };
       case 'error':
         return {
           status: 'error',
           version: info.version || 'unknown',
           error: { message: 'Server error', type: 'extension_error' },
+          ...baseFields,
         };
       default:
         return {
@@ -477,6 +511,14 @@ export abstract class DirectClientBase implements IDirectClient {
     return (this._embeddings ??= new Embeddings(this));
   }
 
+  get toolsets(): Toolsets {
+    return (this._toolsets ??= new Toolsets(this));
+  }
+
+  get mcps(): Mcps {
+    return (this._mcps ??= new Mcps(this));
+  }
+
   // ============================================================================
   // Direct-Specific Methods
   // ============================================================================
@@ -512,8 +554,47 @@ export abstract class DirectClientBase implements IDirectClient {
       authState: await this.getAuthState(),
       authClientId: this.authClientId,
       authServerUrl: this.authServerUrl,
-      userScope: this.userScope,
+      userRole: this.userRole,
     };
+  }
+
+  // ============================================================================
+  // Access Request Methods
+  // ============================================================================
+
+  async requestAccess(
+    body: CreateAccessRequest
+  ): Promise<ApiResponseResult<CreateAccessRequestResponse>> {
+    return this.sendApiRequest<CreateAccessRequest, CreateAccessRequestResponse>(
+      'POST',
+      '/bodhi/v1/apps/request-access',
+      body,
+      {},
+      false
+    );
+  }
+
+  async getAccessRequestStatus(
+    requestId: string
+  ): Promise<ApiResponseResult<AccessRequestStatusResponse>> {
+    return this.sendApiRequest<void, AccessRequestStatusResponse>(
+      'GET',
+      `/bodhi/v1/apps/access-requests/${requestId}?app_client_id=${encodeURIComponent(this.authClientId)}`,
+      undefined,
+      {},
+      false
+    );
+  }
+
+  async pollAccessRequestStatus(
+    requestId: string,
+    options?: { intervalMs?: number; timeoutMs?: number }
+  ): Promise<AccessRequestStatusResponse> {
+    return pollAccessRequestUntilResolved(
+      (id) => this.getAccessRequestStatus(id),
+      requestId,
+      options
+    );
   }
 
   // ============================================================================
@@ -522,6 +603,7 @@ export abstract class DirectClientBase implements IDirectClient {
 
   abstract login(): Promise<AuthState>;
   abstract logout(): Promise<AuthState>;
+  protected abstract performOAuthPkce(scope: string): Promise<AuthState>;
 
   async getAuthState(): Promise<AuthState> {
     const accessToken = await this._getAccessTokenRaw();
@@ -646,25 +728,6 @@ export abstract class DirectClientBase implements IDirectClient {
   // OAuth Helper Methods (Extracted Common Logic)
   // ============================================================================
 
-  protected async requestResourceAccess(
-    toolsetScopeIds?: string[],
-    version?: string
-  ): Promise<ApiResponseResult<AppAccessResponse>> {
-    const requestBody: AppAccessRequest = {
-      app_client_id: this.authClientId,
-      ...(toolsetScopeIds && { toolset_scope_ids: toolsetScopeIds }),
-      ...(version && { version }),
-    };
-
-    return this.sendApiRequest<AppAccessRequest, AppAccessResponse>(
-      'POST',
-      '/bodhi/v1/apps/request-access',
-      requestBody,
-      {},
-      false
-    );
-  }
-
   protected async exchangeCodeForTokens(code: string): Promise<void> {
     const codeVerifier = await this._storageGet(this.storageKeys.CODE_VERIFIER);
     if (!codeVerifier) {
@@ -729,7 +792,6 @@ export abstract class DirectClientBase implements IDirectClient {
       this.storageKeys.ACCESS_TOKEN,
       this.storageKeys.REFRESH_TOKEN,
       this.storageKeys.EXPIRES_AT,
-      this.storageKeys.RESOURCE_SCOPE,
     ]);
   }
 

@@ -8,7 +8,8 @@ export type ServerErrorCode =
   | 'server-service-unavailable'
   | 'server-unexpected-error'
   | 'server-in-setup-status'
-  | 'server-in-admin-status';
+  | 'server-in-admin-status'
+  | 'server-in-tenant-selection-status';
 
 // Server error code constants
 export const SERVER_PENDING_EXT_READY: ServerErrorCode = 'server-pending-ext-ready';
@@ -20,6 +21,7 @@ export const SERVER_SERVICE_UNAVAILABLE: ServerErrorCode = 'server-service-unava
 export const SERVER_UNEXPECTED_ERROR: ServerErrorCode = 'server-unexpected-error';
 export const SERVER_IN_SETUP_STATUS: ServerErrorCode = 'server-in-setup-status';
 export const SERVER_IN_ADMIN_STATUS: ServerErrorCode = 'server-in-admin-status';
+export const SERVER_IN_TENANT_SELECTION_STATUS: ServerErrorCode = 'server-in-tenant-selection-status';
 
 // Server state interfaces
 export interface ServerStateReady {
@@ -31,7 +33,7 @@ export interface ServerStateReady {
 
 export interface ServerStateReachable {
   /** Current server status */
-  status: 'setup' | 'resource-admin';
+  status: 'setup' | 'resource_admin' | 'tenant_selection';
   /** Server version */
   version: string;
   /** Error details */

@@ -8,6 +8,7 @@ import {
   LnaServerStateReady,
   LnaServerStateResourceAdmin,
   LnaServerStateSetup,
+  LnaServerStateTenantSelection,
   LnaStateDenied,
   LnaStateGranted,
   LnaStatePrompt,
@@ -115,11 +116,20 @@ export const createSetupServerState = (message = 'Server requires initial setup'
 });
 
 export const createResourceAdminServerState = (message = 'Server in resource admin mode', version = '2.0.0'): ServerState => ({
-  status: 'resource-admin',
+  status: 'resource_admin',
   version,
   error: {
     message,
     code: 'server-in-admin-status',
+  },
+});
+
+export const createTenantSelectionServerState = (message = 'Server requires tenant selection', version = '2.0.0'): ServerState => ({
+  status: 'tenant_selection',
+  version,
+  error: {
+    message,
+    code: 'server-in-tenant-selection-status',
   },
 });
 
@@ -174,7 +184,12 @@ export const createLnaServerSetupState = (version = '1.0.0'): LnaServerStateSetu
 });
 
 export const createLnaServerResourceAdminState = (version = '1.0.0'): LnaServerStateResourceAdmin => ({
-  status: 'resource-admin',
+  status: 'resource_admin',
+  version,
+});
+
+export const createLnaServerTenantSelectionState = (version = '1.0.0'): LnaServerStateTenantSelection => ({
+  status: 'tenant_selection',
   version,
 });
 

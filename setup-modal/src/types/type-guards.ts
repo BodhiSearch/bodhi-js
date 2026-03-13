@@ -7,6 +7,7 @@ import type {
   LnaServerStateReady,
   LnaServerStateResourceAdmin,
   LnaServerStateSetup,
+  LnaServerStateTenantSelection,
   LnaState,
   LnaStateDenied,
   LnaStateGranted,
@@ -38,7 +39,7 @@ export function isServerStateReady(server: ServerState): server is ServerStateRe
 }
 
 export function isServerStateReachable(server: ServerState): server is ServerStateReachable {
-  return server.status === 'setup' || server.status === 'resource-admin';
+  return server.status === 'setup' || server.status === 'resource_admin' || server.status === 'tenant_selection';
 }
 
 export function isServerStatePending(server: ServerState): server is ServerStatePending {
@@ -98,7 +99,11 @@ export function isLnaServerStateSetup(server: LnaServerState): server is LnaServ
 }
 
 export function isLnaServerStateResourceAdmin(server: LnaServerState): server is LnaServerStateResourceAdmin {
-  return server.status === 'resource-admin';
+  return server.status === 'resource_admin';
+}
+
+export function isLnaServerStateTenantSelection(server: LnaServerState): server is LnaServerStateTenantSelection {
+  return server.status === 'tenant_selection';
 }
 
 export function isLnaServerStateError(server: LnaServerState): server is LnaServerStateError {

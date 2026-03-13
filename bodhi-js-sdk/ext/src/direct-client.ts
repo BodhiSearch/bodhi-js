@@ -5,15 +5,15 @@
  */
 
 import {
+  AccessRequestBuilder,
+  DEFAULT_POLL_INTERVAL_MS,
+  DEFAULT_POLL_TIMEOUT_MS,
   DirectClientBase,
   STORAGE_PREFIXES,
   createOperationError,
   createStoragePrefixWithBasePath,
   generateCodeChallenge,
   generateCodeVerifier,
-  getMissingToolsetScopeIds,
-  getRequestedToolsetScopes,
-  isApiResultError,
   isApiResultOperationError,
   isApiResultSuccess,
   type AuthState,
@@ -22,6 +22,7 @@ import {
   type LogLevel,
   type StateChangeCallback,
 } from '@bodhiapp/bodhi-js-core';
+import type { UserScope } from '@bodhiapp/ts-client';
 
 /**
  * Configuration for DirectExtClient
@@ -29,7 +30,7 @@ import {
 export interface DirectExtClientConfig {
   authClientId: string;
   authServerUrl: string;
-  userScope: string;
+  userRole: UserScope;
   basePath: string;
   logLevel: LogLevel;
   apiTimeoutMs?: number;
@@ -47,7 +48,7 @@ export class DirectExtClient extends DirectClientBase {
     const baseConfig: DirectClientBaseConfig = {
       authClientId: config.authClientId,
       authServerUrl: config.authServerUrl,
-      userScope: config.userScope,
+      userRole: config.userRole,
       storagePrefix,
       logLevel: config.logLevel,
       loggerPrefix: 'DirectExtClient',
@@ -66,42 +67,57 @@ export class DirectExtClient extends DirectClientBase {
       return existingAuth;
     }
 
-    const result = await this.requestResourceAccess(options?.toolsetScopeIds, options?.version);
-
-    if (isApiResultOperationError(result)) {
-      throw createOperationError(result.error.message, result.error.type);
+    if (options?.flowType === 'redirect') {
+      this.logger.warn('Extension mode does not support redirect flow type; using popup instead');
     }
 
-    if (isApiResultError(result)) {
-      const { message } = result.body.error;
-      throw createOperationError(message, 'auth_error');
+    const userRole = options?.userRole ?? this.userRole;
+
+    options?.onProgress?.('requesting');
+    const builder = new AccessRequestBuilder(this.authClientId)
+      .requestedRole(userRole)
+      .flowType('popup');
+
+    if (options?.requested) {
+      builder.requested(options.requested);
     }
 
-    if (!isApiResultSuccess(result)) {
-      throw createOperationError(`Unexpected HTTP ${result.status}`, 'auth_error');
+    const accessRequestBody = builder.build();
+    const accessRequestResult = await this.requestAccess(accessRequestBody);
+
+    if (isApiResultOperationError(accessRequestResult)) {
+      throw createOperationError(accessRequestResult.error.message, accessRequestResult.error.type);
     }
-
-    const resourceScope = result.body.scope;
-    await chrome.storage.session.set({ [this.storageKeys.RESOURCE_SCOPE]: resourceScope });
-
-    // Extract toolset scopes from response
-    const toolsets = result.body.toolsets || [];
-
-    // Validate requested toolset scope IDs are in response
-    const missingScopeIds = getMissingToolsetScopeIds(options?.toolsetScopeIds, toolsets);
-    if (missingScopeIds.length > 0) {
+    if (!isApiResultSuccess(accessRequestResult)) {
       throw createOperationError(
-        `toolsetScopeIds not received back from request-access call: [${missingScopeIds.join(', ')}], check developer console on configuring the toolset scopes correctly`,
+        `Access request failed: HTTP ${accessRequestResult.status}`,
         'auth_error'
       );
     }
 
-    // Only include scopes for requested toolset IDs (empty string if none requested)
-    const toolsetScopes = getRequestedToolsetScopes(options?.toolsetScopeIds, toolsets);
+    const { id: requestId, review_url: reviewUrl } = accessRequestResult.body;
+    options?.onProgress?.('reviewing');
 
-    const fullScope =
-      `openid profile email roles ${this.userScope} ${resourceScope} ${toolsetScopes}`.trim();
+    // Open review URL in a new tab
+    await chrome.tabs.create({ url: reviewUrl });
 
+    // Poll for approval
+    const statusResponse = await this.pollAccessRequestStatus(requestId, {
+      intervalMs: options?.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
+      timeoutMs: options?.pollTimeoutMs ?? DEFAULT_POLL_TIMEOUT_MS,
+    });
+
+    if (statusResponse.status !== 'approved') {
+      throw createOperationError(`Access request ${statusResponse.status}`, 'auth_error');
+    }
+
+    const accessRequestScope = statusResponse.access_request_scope;
+    options?.onProgress?.('authenticating');
+
+    return this.performOAuthPkce(`openid profile email roles ${accessRequestScope ?? ''}`.trim());
+  }
+
+  protected async performOAuthPkce(scope: string): Promise<AuthState> {
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
     const state = generateCodeVerifier();
@@ -116,17 +132,14 @@ export class DirectExtClient extends DirectClientBase {
     authUrl.searchParams.set('client_id', this.authClientId);
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('redirect_uri', redirectUri);
-    authUrl.searchParams.set('scope', fullScope);
+    authUrl.searchParams.set('scope', scope);
     authUrl.searchParams.set('code_challenge', codeChallenge);
     authUrl.searchParams.set('code_challenge_method', 'S256');
     authUrl.searchParams.set('state', state);
 
     return new Promise((resolve, reject) => {
       chrome.identity.launchWebAuthFlow(
-        {
-          url: authUrl.toString(),
-          interactive: true,
-        },
+        { url: authUrl.toString(), interactive: true },
         async (redirectUrl) => {
           if (chrome.runtime.lastError) {
             await chrome.storage.session.remove([
@@ -136,7 +149,6 @@ export class DirectExtClient extends DirectClientBase {
             reject(chrome.runtime.lastError);
             return;
           }
-
           if (!redirectUrl) {
             await chrome.storage.session.remove([
               this.storageKeys.CODE_VERIFIER,
@@ -145,40 +157,32 @@ export class DirectExtClient extends DirectClientBase {
             reject(createOperationError('No redirect URL received', 'oauth-error'));
             return;
           }
-
           try {
             const url = new URL(redirectUrl);
             const code = url.searchParams.get('code');
             const returnedState = url.searchParams.get('state');
-
             const data = await chrome.storage.session.get(this.storageKeys.STATE);
-            const savedState = data[this.storageKeys.STATE];
-            if (returnedState !== savedState) {
+            if (returnedState !== data[this.storageKeys.STATE]) {
               await chrome.storage.session.remove([
                 this.storageKeys.CODE_VERIFIER,
                 this.storageKeys.STATE,
               ]);
-              reject(createOperationError('State mismatch - possible CSRF', 'oauth-error'));
+              reject(createOperationError('State mismatch', 'oauth-error'));
               return;
             }
-
             if (!code) {
               await chrome.storage.session.remove([
                 this.storageKeys.CODE_VERIFIER,
                 this.storageKeys.STATE,
               ]);
-              reject(createOperationError('No authorization code received', 'oauth-error'));
+              reject(createOperationError('No authorization code', 'oauth-error'));
               return;
             }
-
             await this.exchangeCodeForTokens(code);
-
             const authState = await this.getAuthState();
-
             if (authState.status !== 'authenticated') {
               throw createOperationError('Login failed', 'oauth-error');
             }
-
             this.setAuthState(authState);
             await chrome.storage.session.remove([
               this.storageKeys.CODE_VERIFIER,
@@ -225,7 +229,6 @@ export class DirectExtClient extends DirectClientBase {
       this.storageKeys.ACCESS_TOKEN,
       this.storageKeys.REFRESH_TOKEN,
       this.storageKeys.EXPIRES_AT,
-      this.storageKeys.RESOURCE_SCOPE,
     ]);
 
     const result: AuthState = {

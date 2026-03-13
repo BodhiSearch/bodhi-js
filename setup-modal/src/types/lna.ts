@@ -61,7 +61,12 @@ export interface LnaServerStateSetup {
 }
 
 export interface LnaServerStateResourceAdmin {
-  status: 'resource-admin';
+  status: 'resource_admin';
+  version: string;
+}
+
+export interface LnaServerStateTenantSelection {
+  status: 'tenant_selection';
   version: string;
 }
 
@@ -72,4 +77,4 @@ export interface LnaServerStateError {
   };
 }
 
-export type LnaServerState = LnaServerStatePending | LnaServerStateReady | LnaServerStateSetup | LnaServerStateResourceAdmin | LnaServerStateError;
+export type LnaServerState = LnaServerStatePending | LnaServerStateReady | LnaServerStateSetup | LnaServerStateResourceAdmin | LnaServerStateTenantSelection | LnaServerStateError;

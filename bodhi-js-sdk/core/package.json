@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-core",
-  "version": "0.0.24-dev",
+  "version": "0.0.25-dev",
   "description": "Core types and interfaces for Bodhi Browser SDK",
   "type": "module",
   "main": "dist/bodhi-core.cjs.js",
@@ -58,7 +58,7 @@
   "dependencies": {
     "@bodhiapp/bodhi-browser-types": "file:../../bodhi-browser-ext/src/types",
     "@bodhiapp/setup-modal-types": "file:../../setup-modal/src/types",
-    "@bodhiapp/ts-client": "0.1.16",
+    "@bodhiapp/ts-client": "0.1.19",
     "ua-parser-js": "^1.0.40"
   },
   "devDependencies": {

@@ -1,5 +1,15 @@
+import type {
+  AccessRequestStatusResponse,
+  CreateAccessRequest,
+  CreateAccessRequestResponse,
+  UserScope,
+} from '@bodhiapp/ts-client';
 import {
+  AccessRequestBuilder,
   BACKEND_SERVER_NOT_REACHABLE,
+  DEFAULT_POLL_INTERVAL_MS,
+  DEFAULT_POLL_TIMEOUT_MS,
+  pollAccessRequestUntilResolved,
   EXTENSION_STATE_NOT_FOUND,
   EXTENSION_STATE_NOT_INITIALIZED,
   Logger,
@@ -16,15 +26,15 @@ import {
   extractUserInfo,
   generateCodeChallenge,
   generateCodeVerifier,
-  getMissingToolsetScopeIds,
-  getRequestedToolsetScopes,
-  isApiResultError,
   isApiResultOperationError,
   isApiResultSuccess,
+  openPopupReview,
   refreshAccessToken,
   Chat,
   Models,
   Embeddings,
+  Toolsets,
+  Mcps,
   type ApiResponseResult,
   type AuthState,
   type BackendServerState,
@@ -41,7 +51,6 @@ import {
   type StorageKeys,
 } from '@bodhiapp/bodhi-js-core';
 import { type BodhiExtPublicApi, type StreamChunk } from '@bodhiapp/bodhi-browser-types';
-import type { AppAccessRequest, AppAccessResponse, OpenAiApiError } from '@bodhiapp/ts-client';
 import { DEFAULT_API_TIMEOUT_MS, POLL_INTERVAL, POLL_TIMEOUT } from './constants';
 
 // Empty object type for future-proofing
@@ -54,7 +63,7 @@ export type SerializedWebExtensionState = { extensionId?: string };
 export interface WindowBodhiextClientConfig {
   authServerUrl: string;
   redirectUri: string;
-  userScope: string;
+  userRole: UserScope;
   basePath: string;
   logLevel: LogLevel;
   apiTimeoutMs?: number;
@@ -91,6 +100,8 @@ export class WindowBodhiextClient implements IExtensionClient {
   private _chat: Chat | undefined;
   private _models: Models | undefined;
   private _embeddings: Embeddings | undefined;
+  private _toolsets: Toolsets | undefined;
+  private _mcps: Mcps | undefined;
 
   constructor(
     authClientId: string,
@@ -332,32 +343,9 @@ export class WindowBodhiextClient implements IExtensionClient {
   // ============================================================================
 
   /**
-   * Request resource access scope from backend
-   * Required for authenticated API access
-   */
-  private async requestResourceAccess(
-    toolsetScopeIds?: string[],
-    version?: string
-  ): Promise<ApiResponseResult<AppAccessResponse>> {
-    this.ensureBodhiext();
-
-    const requestBody: AppAccessRequest = {
-      app_client_id: this.authClientId,
-      ...(toolsetScopeIds && { toolset_scope_ids: toolsetScopeIds }),
-      ...(version && { version }),
-    };
-
-    return this.bodhiext!.sendApiRequest<AppAccessRequest, AppAccessResponse>(
-      'POST',
-      '/bodhi/v1/apps/request-access',
-      requestBody
-    );
-  }
-
-  /**
-   * Login via browser redirect OAuth2 + PKCE flow
-   * @param options - Optional login options (toolsetScopeIds, version)
-   * @returns AuthState (though in practice, this redirects and never returns)
+   * Login via access-request flow with popup or redirect
+   * @param options - Optional login options
+   * @returns AuthState
    */
   async login(options?: LoginOptions): Promise<AuthState> {
     // Check if already logged in
@@ -369,80 +357,71 @@ export class WindowBodhiextClient implements IExtensionClient {
     // Ensure extension discovered
     this.ensureBodhiext();
 
-    // Request resource access scope
-    const result = await this.requestResourceAccess(options?.toolsetScopeIds, options?.version);
+    const userRole = options?.userRole ?? this.config.userRole;
+    const flowType = options?.flowType ?? 'popup';
 
-    if (isApiResultOperationError(result)) {
-      throw createOperationError(result.error.message, result.error.type);
+    // Step 1: Create access request
+    options?.onProgress?.('requesting');
+    const builder = new AccessRequestBuilder(this.authClientId)
+      .requestedRole(userRole)
+      .flowType(flowType);
+
+    if (options?.requested) {
+      builder.requested(options.requested);
+    }
+    if (flowType === 'redirect') {
+      const redirectUrl = options?.redirectUrl ?? this.config.redirectUri;
+      builder.redirectUrl(redirectUrl);
     }
 
-    if (isApiResultError(result)) {
-      const { message } = result.body.error;
-      throw createOperationError(message, 'auth_error');
+    const accessRequestBody = builder.build();
+    const accessRequestResult = await this.requestAccess(accessRequestBody);
+
+    if (isApiResultOperationError(accessRequestResult)) {
+      throw createOperationError(accessRequestResult.error.message, accessRequestResult.error.type);
     }
-
-    if (!isApiResultSuccess(result)) {
-      throw createOperationError(`Unexpected HTTP ${result.status}`, 'auth_error');
-    }
-
-    const resourceScope = result.body.scope;
-    localStorage.setItem(this.storageKeys.RESOURCE_SCOPE, resourceScope);
-
-    // Extract toolset scopes from response
-    const toolsets = result.body.toolsets || [];
-
-    // Validate requested toolset scope IDs are in response
-    const missingScopeIds = getMissingToolsetScopeIds(options?.toolsetScopeIds, toolsets);
-    if (missingScopeIds.length > 0) {
+    if (!isApiResultSuccess(accessRequestResult)) {
       throw createOperationError(
-        `toolsetScopeIds not received back from request-access call: [${missingScopeIds.join(', ')}], check developer console on configuring the toolset scopes correctly`,
+        `Access request failed: HTTP ${accessRequestResult.status}`,
         'auth_error'
       );
     }
 
-    // Only include scopes for requested toolset IDs (empty string if none requested)
-    const toolsetScopesStr = getRequestedToolsetScopes(options?.toolsetScopeIds, toolsets);
+    const { id: requestId, review_url: reviewUrl } = accessRequestResult.body;
+    options?.onProgress?.('reviewing');
 
-    // Generate PKCE verifier and challenge
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    let accessRequestScope: string | null | undefined;
 
-    // Generate state for CSRF protection
-    const state = generateCodeVerifier();
+    if (flowType === 'popup') {
+      // Popup flow: open review popup and poll
+      const pollFn = async () => {
+        const statusResult = await this.getAccessRequestStatus(requestId);
+        if (!isApiResultSuccess(statusResult)) return null;
+        const { status, access_request_scope } = statusResult.body;
+        if (status === 'approved')
+          return { approved: true, accessRequestScope: access_request_scope ?? undefined };
+        if (['denied', 'failed', 'expired'].includes(status)) return { approved: false };
+        return null; // still pending
+      };
 
-    // Store verifier and state for callback
-    localStorage.setItem(this.storageKeys.CODE_VERIFIER, codeVerifier);
-    localStorage.setItem(this.storageKeys.STATE, state);
+      const reviewResult = await openPopupReview(reviewUrl, pollFn, {
+        intervalMs: options?.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
+        timeoutMs: options?.pollTimeoutMs ?? DEFAULT_POLL_TIMEOUT_MS,
+      });
 
-    // Build OAuth authorization URL
-    const scopes = [
-      'openid',
-      'profile',
-      'email',
-      'roles',
-      this.config.userScope,
-      resourceScope,
-      ...(toolsetScopesStr ? toolsetScopesStr.split(' ') : []),
-    ];
+      if (!reviewResult.approved) {
+        throw createOperationError('Access request was denied or expired', 'auth_error');
+      }
+      accessRequestScope = reviewResult.accessRequestScope;
+    } else {
+      // Redirect flow: store requestId and redirect
+      localStorage.setItem(this.storageKeys.ACCESS_REQUEST_ID, requestId);
+      window.location.href = reviewUrl;
+      return new Promise(() => {}); // never resolves
+    }
 
-    const params = new URLSearchParams({
-      response_type: 'code',
-      client_id: this.authClientId,
-      redirect_uri: this.config.redirectUri,
-      scope: scopes.join(' '),
-      state: state,
-      code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
-    });
-
-    const authUrl = `${this.authEndpoints.authorize}?${params}`;
-
-    // Redirect to authorization server
-    window.location.href = authUrl;
-
-    // TypeScript requires a return statement, but this code never executes
-    // because the browser redirects above
-    return new Promise(() => {});
+    options?.onProgress?.('authenticating');
+    return this.performOAuthPkce(`openid profile email roles ${accessRequestScope ?? ''}`.trim());
   }
 
   /**
@@ -557,7 +536,6 @@ export class WindowBodhiextClient implements IExtensionClient {
     localStorage.removeItem(this.storageKeys.EXPIRES_AT);
     localStorage.removeItem(this.storageKeys.CODE_VERIFIER);
     localStorage.removeItem(this.storageKeys.STATE);
-    localStorage.removeItem(this.storageKeys.RESOURCE_SCOPE);
 
     const result: AuthState = {
       status: 'unauthenticated',
@@ -691,7 +669,6 @@ export class WindowBodhiextClient implements IExtensionClient {
     localStorage.removeItem(this.storageKeys.ACCESS_TOKEN);
     localStorage.removeItem(this.storageKeys.REFRESH_TOKEN);
     localStorage.removeItem(this.storageKeys.EXPIRES_AT);
-    localStorage.removeItem(this.storageKeys.RESOURCE_SCOPE);
   }
 
   /**
@@ -733,20 +710,43 @@ export class WindowBodhiextClient implements IExtensionClient {
 
     const body = result.body;
 
+    const version = body.version || 'unknown';
     switch (body.status) {
       case 'ready':
-        return { status: 'ready', version: body.version || 'unknown', error: null };
+        return {
+          status: 'ready',
+          version,
+          error: null,
+          deployment: body.deployment ?? null,
+          client_id: body.client_id ?? null,
+        };
       case 'setup':
-        return backendServerNotReady('setup', body.version || 'unknown');
-      case 'resource-admin':
-        return backendServerNotReady('resource-admin', body.version || 'unknown');
+        return backendServerNotReady('setup', version, undefined, body.deployment, body.client_id);
+      case 'resource_admin':
+        return backendServerNotReady(
+          'resource_admin',
+          version,
+          undefined,
+          body.deployment,
+          body.client_id
+        );
+      case 'tenant_selection':
+        return {
+          status: 'tenant_selection',
+          version,
+          error: null,
+          deployment: body.deployment ?? null,
+          client_id: body.client_id ?? null,
+        };
       case 'error':
         return backendServerNotReady(
           'error',
-          body.version || 'unknown',
+          version,
           body.error
             ? { message: body.error.message, type: body.error.type }
-            : SERVER_ERROR_CODES.SERVER_NOT_READY
+            : SERVER_ERROR_CODES.SERVER_NOT_READY,
+          body.deployment,
+          body.client_id
         );
       default:
         return BACKEND_SERVER_NOT_REACHABLE;
@@ -794,7 +794,7 @@ export class WindowBodhiextClient implements IExtensionClient {
       if (err instanceof Error) {
         // Check for 'response' field = API error
         if ('response' in err) {
-          const apiErr = err as Error & { response: { status: number; body: OpenAiApiError } };
+          const apiErr = err as Error & { response: { status: number; body: any } };
           throw createApiError(err.message, apiErr.response.status, apiErr.response.body);
         }
         // Check for 'error' field = network/extension error
@@ -826,6 +826,91 @@ export class WindowBodhiextClient implements IExtensionClient {
     return (this._embeddings ??= new Embeddings(this));
   }
 
+  get toolsets(): Toolsets {
+    return (this._toolsets ??= new Toolsets(this));
+  }
+
+  get mcps(): Mcps {
+    return (this._mcps ??= new Mcps(this));
+  }
+
+  // ============================================================================
+  // Access Request Methods
+  // ============================================================================
+
+  async requestAccess(
+    body: CreateAccessRequest
+  ): Promise<ApiResponseResult<CreateAccessRequestResponse>> {
+    return this.sendApiRequest<CreateAccessRequest, CreateAccessRequestResponse>(
+      'POST',
+      '/bodhi/v1/apps/request-access',
+      body,
+      {},
+      false
+    );
+  }
+
+  async getAccessRequestStatus(
+    requestId: string
+  ): Promise<ApiResponseResult<AccessRequestStatusResponse>> {
+    return this.sendApiRequest<void, AccessRequestStatusResponse>(
+      'GET',
+      `/bodhi/v1/apps/access-requests/${requestId}?app_client_id=${encodeURIComponent(this.authClientId)}`,
+      undefined,
+      {},
+      false
+    );
+  }
+
+  async pollAccessRequestStatus(
+    requestId: string,
+    options?: { intervalMs?: number; timeoutMs?: number }
+  ): Promise<AccessRequestStatusResponse> {
+    return pollAccessRequestUntilResolved(
+      (id) => this.getAccessRequestStatus(id),
+      requestId,
+      options
+    );
+  }
+
+  private async performOAuthPkce(scope: string): Promise<AuthState> {
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    const state = generateCodeVerifier();
+
+    localStorage.setItem(this.storageKeys.CODE_VERIFIER, codeVerifier);
+    localStorage.setItem(this.storageKeys.STATE, state);
+
+    const scopes = scope.split(' ').filter(Boolean);
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: this.authClientId,
+      redirect_uri: this.config.redirectUri,
+      scope: scopes.join(' '),
+      state: state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+    });
+
+    window.location.href = `${this.authEndpoints.authorize}?${params}`;
+    return new Promise(() => {});
+  }
+
+  async handleAccessRequestCallback(requestId: string): Promise<AuthState> {
+    // Poll once to get the approved status
+    const statusResult = await this.getAccessRequestStatus(requestId);
+    if (!isApiResultSuccess(statusResult)) {
+      throw createOperationError('Failed to get access request status', 'auth_error');
+    }
+    const { status, access_request_scope } = statusResult.body;
+    if (status !== 'approved') {
+      throw createOperationError(`Access request is not approved: ${status}`, 'auth_error');
+    }
+    const scope = `openid profile email roles ${access_request_scope ?? ''}`.trim();
+    localStorage.removeItem(this.storageKeys.ACCESS_REQUEST_ID);
+    return this.performOAuthPkce(scope);
+  }
+
   /**
    * Serialize web extension client state (all transient, nothing to persist)
    */
@@ -850,7 +935,7 @@ export class WindowBodhiextClient implements IExtensionClient {
       authClientId: this.authClientId,
       authServerUrl: this.config.authServerUrl,
       redirectUri: this.config.redirectUri,
-      userScope: this.config.userScope,
+      userRole: this.config.userRole,
     };
   }
 }

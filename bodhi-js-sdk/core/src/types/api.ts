@@ -4,7 +4,7 @@ import {
   type ApiResponse,
   type OperationErrorResponse,
 } from '@bodhiapp/bodhi-browser-types';
-import { OpenAiApiError } from '@bodhiapp/ts-client';
+import type { OpenAiApiError } from '@bodhiapp/ts-client';
 
 /**
  * Public API result type - discriminated union without protocol fields
@@ -51,7 +51,7 @@ export function isApiResultSuccess<T>(
 
 export function isApiResultError<T>(
   result: ApiResponseResult<T>
-): result is ApiResponse<OpenAiApiError> & { body: OpenAiApiError; status: number } {
+): result is ApiResponse<T> & { body: OpenAiApiError; status: number } {
   return (
     'body' in result &&
     'status' in result &&

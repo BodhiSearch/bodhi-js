@@ -3,11 +3,6 @@
  */
 
 /**
- * User scope types for regular and power users
- */
-export type UserScope = 'scope_user_user' | 'scope_user_power_user';
-
-/**
  * User information from OAuth
  */
 export interface UserInfo {

@@ -11,5 +11,5 @@ export type BrowserType = 'chrome' | 'edge' | 'firefox' | 'safari' | 'unknown';
 export type ExtensionStatus = 'ready' | 'not-installed' | 'unreachable';
 export type ServerStatus = 'ready' | 'pending-extension-ready' | 'unreachable' | 'setup';
 export type LnaStatus = 'prompt' | 'granted' | 'skipped' | 'unreachable' | 'denied' | 'unsupported';
-export type LnaServerStatus = 'pending-lna-ready' | 'ready' | 'setup' | 'resource-admin' | 'error';
+export type LnaServerStatus = 'pending-lna-ready' | 'ready' | 'setup' | 'resource_admin' | 'error';
 export type StepTestId = 'platform-check-step' | 'server-setup-step' | 'lna-setup-step' | 'extension-setup-step' | 'success-state-step';

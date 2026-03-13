@@ -1,7 +1,7 @@
 import { PlatformDropdown } from '@/components/common/PlatformDropdown';
 import { Accordion } from '@/components/common/Accordion';
 import { TroubleshootingBox } from '@/components/common/TroubleshootingBox';
-import { DEFAULT_SERVER_URL, getServerSetupUrl, getServerAdminUrl } from '@/lib/constants';
+import { DEFAULT_SERVER_URL, getServerSetupUrl, getServerAdminUrl, getServerTenantSelectionUrl } from '@/lib/constants';
 import { BrowserType } from '@/types';
 import { isSupportedBrowser, isNotSupportedBrowser } from '@/types/type-guards';
 import { AlertCircle, CheckCircle2, Copy, ExternalLink } from 'lucide-react';
@@ -206,11 +206,20 @@ export function ExtensionSetup() {
           </div>
         )}
 
-        {server.status === 'resource-admin' && (
+        {server.status === 'resource_admin' && (
           <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
             <p className="text-sm text-blue-800 mb-2">Server requires admin approval.</p>
             <a href={getServerAdminUrl(DEFAULT_SERVER_URL)} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
               Open Admin Panel →
+            </a>
+          </div>
+        )}
+
+        {server.status === 'tenant_selection' && (
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+            <p className="text-sm text-blue-800 mb-2">Server requires tenant selection.</p>
+            <a href={getServerTenantSelectionUrl(DEFAULT_SERVER_URL)} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
+              Select Tenant →
             </a>
           </div>
         )}

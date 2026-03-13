@@ -15,6 +15,9 @@ import type {
   CreateEmbeddingResponse,
   Model,
   ListModelsResponse,
+  ListToolsetsResponse,
+  ListMcpsResponse,
+  McpToolsResponse,
 } from '@bodhiapp/ts-client';
 import type { ApiResponseResult } from './types';
 import { createOperationError } from './errors';
@@ -172,5 +175,125 @@ export class Embeddings extends APIResource {
     }
 
     return result.body as CreateEmbeddingResponse;
+  }
+}
+
+/**
+ * Toolsets resource
+ */
+export class Toolsets extends APIResource {
+  /**
+   * List available toolsets
+   */
+  async list(): Promise<ListToolsetsResponse> {
+    const result = await this.client.sendApiRequest<void, ListToolsetsResponse>(
+      'GET',
+      '/bodhi/v1/toolsets',
+      undefined,
+      undefined,
+      true
+    );
+    if ('error' in result) {
+      throw createOperationError(result.error.message, result.error.type);
+    }
+    return result.body as ListToolsetsResponse;
+  }
+
+  /**
+   * Execute a tool on a toolset
+   */
+  async executeTool(
+    toolsetId: string,
+    toolName: string,
+    params: Record<string, unknown>
+  ): Promise<unknown> {
+    const result = await this.client.sendApiRequest<{ params: Record<string, unknown> }, unknown>(
+      'POST',
+      `/bodhi/v1/toolsets/${toolsetId}/tools/${toolName}/execute`,
+      { params },
+      undefined,
+      true
+    );
+    if ('error' in result) {
+      throw createOperationError(result.error.message, result.error.type);
+    }
+    return result.body;
+  }
+}
+
+/**
+ * MCPs resource
+ */
+export class Mcps extends APIResource {
+  /**
+   * List available MCP servers
+   */
+  async list(): Promise<ListMcpsResponse> {
+    const result = await this.client.sendApiRequest<void, ListMcpsResponse>(
+      'GET',
+      '/bodhi/v1/mcps',
+      undefined,
+      undefined,
+      true
+    );
+    if ('error' in result) {
+      throw createOperationError(result.error.message, result.error.type);
+    }
+    return result.body as ListMcpsResponse;
+  }
+
+  /**
+   * List tools for a specific MCP server
+   */
+  async listTools(mcpId: string): Promise<McpToolsResponse> {
+    const result = await this.client.sendApiRequest<void, McpToolsResponse>(
+      'GET',
+      `/bodhi/v1/mcps/${mcpId}/tools`,
+      undefined,
+      undefined,
+      true
+    );
+    if ('error' in result) {
+      throw createOperationError(result.error.message, result.error.type);
+    }
+    return result.body as McpToolsResponse;
+  }
+
+  /**
+   * Refresh tools for a specific MCP server
+   */
+  async refreshTools(mcpId: string): Promise<McpToolsResponse> {
+    const result = await this.client.sendApiRequest<void, McpToolsResponse>(
+      'POST',
+      `/bodhi/v1/mcps/${mcpId}/tools/refresh`,
+      undefined,
+      undefined,
+      true
+    );
+    if ('error' in result) {
+      throw createOperationError(result.error.message, result.error.type);
+    }
+    return result.body as McpToolsResponse;
+  }
+
+  /**
+   * Execute a tool on an MCP server
+   */
+  async executeTool(
+    mcpId: string,
+    toolName: string,
+    params: Record<string, unknown>
+  ): Promise<unknown> {
+    const result = await this.client.sendApiRequest<{ params: Record<string, unknown> }, unknown>(
+      'POST',
+      `/bodhi/v1/mcps/${mcpId}/tools/${toolName}/execute`,
+      { params },
+      undefined,
+      true
+    );
+    if ('error' in result) {
+      throw createOperationError(result.error.message, result.error.type);
+    }
+    return result.body;
   }
 }

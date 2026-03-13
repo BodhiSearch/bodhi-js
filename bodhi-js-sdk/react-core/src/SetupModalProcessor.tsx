@@ -129,13 +129,22 @@ export function SetupModalProcessor({
             code: 'server-in-setup-status',
           },
         };
-      case 'resource-admin':
+      case 'resource_admin':
         return {
-          status: 'resource-admin',
+          status: 'resource_admin',
           version: serverState.version || 'unknown',
           error: {
             message: serverState.error?.message || 'Resource admin required',
             code: 'server-in-admin-status',
+          },
+        };
+      case 'tenant_selection':
+        return {
+          status: 'tenant_selection',
+          version: serverState.version || 'unknown',
+          error: {
+            message: 'Tenant selection required',
+            code: 'server-in-tenant-selection-status',
           },
         };
       case 'error':
@@ -182,8 +191,10 @@ export function SetupModalProcessor({
         return { status: 'ready', version: serverState.version || 'unknown' };
       case 'setup':
         return { status: 'setup', version: serverState.version || 'unknown' };
-      case 'resource-admin':
-        return { status: 'resource-admin', version: serverState.version || 'unknown' };
+      case 'resource_admin':
+        return { status: 'resource_admin', version: serverState.version || 'unknown' };
+      case 'tenant_selection':
+        return { status: 'tenant_selection', version: serverState.version || 'unknown' };
       case 'error':
       case 'not-reachable':
         return {
@@ -203,14 +214,14 @@ export function SetupModalProcessor({
 
   /**
    * Check if server is reachable (installed) based on extension or direct state
-   * Returns true for ready, setup, or resource-admin statuses
+   * Returns true for ready, setup, resource_admin, or tenant_selection statuses
    */
   const isServerReachable = useCallback(
     (extensionState: ExtensionState, directState: DirectState): boolean => {
       // Check extension server
       if (extensionState.server.status !== 'pending-extension-ready') {
         const status = extensionState.server.status;
-        if (status === 'ready' || status === 'setup' || status === 'resource-admin') {
+        if (status === 'ready' || status === 'setup' || status === 'resource_admin' || status === 'tenant_selection') {
           return true;
         }
       }
@@ -218,7 +229,7 @@ export function SetupModalProcessor({
       // Check direct server
       if (directState.server.status !== 'not-connected') {
         const status = directState.server.status;
-        if (status === 'ready' || status === 'setup' || status === 'resource-admin') {
+        if (status === 'ready' || status === 'setup' || status === 'resource_admin' || status === 'tenant_selection') {
           return true;
         }
       }
@@ -249,7 +260,8 @@ export function SetupModalProcessor({
         if (
           serverState.status === 'ready' ||
           serverState.status === 'setup' ||
-          serverState.status === 'resource-admin'
+          serverState.status === 'resource_admin' ||
+          serverState.status === 'tenant_selection'
         ) {
           return { status: 'granted', serverUrl };
         } else {
@@ -409,7 +421,8 @@ export function SetupModalProcessor({
           if (
             serverStatus === 'ready' ||
             serverStatus === 'setup' ||
-            serverStatus === 'resource-admin'
+            serverStatus === 'resource_admin' ||
+            serverStatus === 'tenant_selection'
           ) {
             // Connection succeeded
             prefs.setDirectStatus('granted');

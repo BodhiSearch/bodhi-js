@@ -1,4 +1,9 @@
 import type {
+  AccessRequestStatusResponse,
+  CreateAccessRequest,
+  CreateAccessRequestResponse,
+} from '@bodhiapp/ts-client';
+import type {
   ApiResponseResult,
   AuthState,
   BackendServerState,
@@ -10,7 +15,7 @@ import type {
   LoginOptions,
   StateChangeCallback,
 } from './types';
-import type { Chat, Models, Embeddings } from './openai-client-compat';
+import type { Chat, Models, Embeddings, Toolsets, Mcps } from './openai-client-compat';
 
 /**
  * ConnectionClient - Base interface for all client implementations
@@ -134,6 +139,28 @@ export interface IConnectionClient<IParams = unknown, SerialState = unknown> {
   getAuthState(): Promise<AuthState>;
 
   /**
+   * Request access for this app (draft → review flow)
+   * POST /bodhi/v1/apps/request-access
+   */
+  requestAccess(body: CreateAccessRequest): Promise<ApiResponseResult<CreateAccessRequestResponse>>;
+
+  /**
+   * Get status of an access request
+   * GET /bodhi/v1/apps/access-requests/{id}?app_client_id=xxx
+   */
+  getAccessRequestStatus(
+    requestId: string
+  ): Promise<ApiResponseResult<AccessRequestStatusResponse>>;
+
+  /**
+   * Poll access request until approved/denied/failed/expired
+   */
+  pollAccessRequestStatus(
+    requestId: string,
+    options?: { intervalMs?: number; timeoutMs?: number }
+  ): Promise<AccessRequestStatusResponse>;
+
+  /**
    * Set or update the state change callback
    * Allows setting callback after construction (for React dependency injection)
    * @param callback - Callback invoked on client state or auth state changes
@@ -176,6 +203,18 @@ export interface IConnectionClient<IParams = unknown, SerialState = unknown> {
    * Usage: await client.embeddings.create({ model, input })
    */
   readonly embeddings: Embeddings;
+
+  /**
+   * Toolsets resource
+   * Usage: await client.toolsets.list()
+   */
+  readonly toolsets: Toolsets;
+
+  /**
+   * MCPs resource
+   * Usage: await client.mcps.list()
+   */
+  readonly mcps: Mcps;
 }
 
 /**
@@ -297,6 +336,12 @@ export interface IWebUIClient extends UIClient {
    * @returns AuthLoggedIn with login state and user info
    */
   handleOAuthCallback(code: string, state: string): Promise<AuthState>;
+
+  /**
+   * Handle access request callback after redirect review (web only)
+   * Called when user returns from review_url redirect
+   */
+  handleAccessRequestCallback(requestId: string): Promise<AuthState>;
 }
 
 /**

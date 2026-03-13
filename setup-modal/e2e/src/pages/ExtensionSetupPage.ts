@@ -172,15 +172,15 @@ export class ExtensionSetupPage extends BaseModalPage {
   /**
    * Expect server state error for a specific app status
    * Encapsulates domain knowledge about expected error messages for different server states
-   * @param appStatus - The app status ('setup' | 'resource-admin')
+   * @param appStatus - The app status ('setup' | 'resource_admin')
    */
-  async expectServerStateError(appStatus: 'setup' | 'resource-admin'): Promise<void> {
+  async expectServerStateError(appStatus: 'setup' | 'resource_admin'): Promise<void> {
     const expectedMessages = {
       setup: {
         message: 'Bodhi server requires initial setup',
         code: 'server-in-setup-status',
       },
-      'resource-admin': {
+      resource_admin: {
         message: 'Bodhi server is in admin mode for resource management',
         code: 'server-in-admin-status',
       },

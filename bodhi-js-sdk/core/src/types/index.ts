@@ -71,14 +71,25 @@ export type {
 export { INITIAL_AUTH_STATE, isAuthError, isAuthLoading, isAuthenticated } from './auth';
 export type { AuthError, AuthState, AuthStatus } from './auth';
 
-export type { Tokens, UserInfo, UserScope } from './user-info';
+export type { Tokens, UserInfo } from './user-info';
+export type { UserScope } from '@bodhiapp/ts-client';
 
 export type { ClientConfig, DiscoveryResult, LogLevel } from './config';
 
+// Login progress types
+export type LoginProgressStage = 'requesting' | 'reviewing' | 'authenticating';
+export type LoginProgressCallback = (stage: LoginProgressStage) => void;
+
 // Login options
+import type { FlowType, RequestedResources, UserScope } from '@bodhiapp/ts-client';
 export interface LoginOptions {
-  toolsetScopeIds?: string[];
-  version?: string;
+  userRole?: UserScope;
+  requested?: RequestedResources;
+  flowType?: FlowType;
+  redirectUrl?: string;
+  onProgress?: LoginProgressCallback;
+  pollIntervalMs?: number;
+  pollTimeoutMs?: number;
 }
 
 export type { BrowserInfo, OSInfo } from './platform';

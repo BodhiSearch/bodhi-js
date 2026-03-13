@@ -1,5 +1,10 @@
 export type SerializedExt2ExtState = { extensionId?: string };
 
+import type {
+  AccessRequestStatusResponse,
+  CreateAccessRequest,
+  CreateAccessRequestResponse,
+} from '@bodhiapp/ts-client';
 import {
   INITIAL_AUTH_STATE,
   BACKEND_SERVER_NOT_REACHABLE,
@@ -14,9 +19,12 @@ import {
   isApiResultOperationError,
   isApiResultSuccess,
   isAuthError,
+  pollAccessRequestUntilResolved,
   Chat,
   Models,
   Embeddings,
+  Toolsets,
+  Mcps,
   type ApiResponseResult,
   type AuthState,
   type BackendServerState,
@@ -53,6 +61,7 @@ import { isExtClientApiError } from './messages';
  * Configuration for ExtClient
  */
 export interface ExtClientConfig {
+  authClientId?: string;
   logLevel?: LogLevel;
   apiTimeoutMs?: number;
   initParams?: {
@@ -87,17 +96,21 @@ export class ExtClient implements IExtensionClient {
   private broadcastListenerActive = false;
   private config: ExtClientConfig;
   private apiTimeoutMs: number;
+  private authClientId: string;
 
   // OpenAI-compatible resource namespaces
   private _chat: Chat | undefined;
   private _models: Models | undefined;
   private _embeddings: Embeddings | undefined;
+  private _toolsets: Toolsets | undefined;
+  private _mcps: Mcps | undefined;
 
   constructor(config: ExtClientConfig = {}, onStateChange?: StateChangeCallback) {
     this.config = config;
     this.logger = new Logger('ExtClient', config?.logLevel || 'warn');
     this.onStateChange = onStateChange ?? NOOP_STATE_CALLBACK;
     this.apiTimeoutMs = config.apiTimeoutMs ?? DEFAULT_API_TIMEOUT_MS;
+    this.authClientId = config.authClientId ?? '';
   }
 
   /**
@@ -524,32 +537,39 @@ export class ExtClient implements IExtensionClient {
 
     const body = result.body;
 
+    const version = body.version || 'unknown';
+    const baseFields = { deployment: body.deployment ?? null, client_id: body.client_id ?? null };
     switch (body.status) {
       case 'ready':
-        return { status: 'ready', version: body.version || 'unknown', error: null };
+        return { status: 'ready', version, error: null, ...baseFields };
       case 'setup':
         return {
           status: 'setup',
-          version: body.version || 'unknown',
+          version,
           error: body.error
             ? { message: body.error.message, type: body.error.type }
             : { message: 'Setup required', type: 'extension_error' },
+          ...baseFields,
         };
-      case 'resource-admin':
+      case 'resource_admin':
         return {
-          status: 'resource-admin',
-          version: body.version || 'unknown',
+          status: 'resource_admin',
+          version,
           error: body.error
             ? { message: body.error.message, type: body.error.type }
             : { message: 'Resource admin required', type: 'extension_error' },
+          ...baseFields,
         };
+      case 'tenant_selection':
+        return { status: 'tenant_selection', version, error: null, ...baseFields };
       case 'error':
         return {
           status: 'error',
-          version: body.version || 'unknown',
+          version,
           error: body.error
             ? { message: body.error.message, type: body.error.type }
             : { message: 'Server error', type: 'extension_error' },
+          ...baseFields,
         };
       default:
         return {
@@ -687,6 +707,53 @@ export class ExtClient implements IExtensionClient {
 
   get embeddings(): Embeddings {
     return (this._embeddings ??= new Embeddings(this));
+  }
+
+  get toolsets(): Toolsets {
+    return (this._toolsets ??= new Toolsets(this));
+  }
+
+  get mcps(): Mcps {
+    return (this._mcps ??= new Mcps(this));
+  }
+
+  // ============================================================================
+  // Access Request Methods
+  // ============================================================================
+
+  async requestAccess(
+    body: CreateAccessRequest
+  ): Promise<ApiResponseResult<CreateAccessRequestResponse>> {
+    return this.sendApiRequest<CreateAccessRequest, CreateAccessRequestResponse>(
+      'POST',
+      '/bodhi/v1/apps/request-access',
+      body,
+      {},
+      false
+    );
+  }
+
+  async getAccessRequestStatus(
+    requestId: string
+  ): Promise<ApiResponseResult<AccessRequestStatusResponse>> {
+    return this.sendApiRequest<void, AccessRequestStatusResponse>(
+      'GET',
+      `/bodhi/v1/apps/access-requests/${requestId}?app_client_id=${encodeURIComponent(this.authClientId)}`,
+      undefined,
+      {},
+      false
+    );
+  }
+
+  async pollAccessRequestStatus(
+    requestId: string,
+    options?: { intervalMs?: number; timeoutMs?: number }
+  ): Promise<AccessRequestStatusResponse> {
+    return pollAccessRequestUntilResolved(
+      (id) => this.getAccessRequestStatus(id),
+      requestId,
+      options
+    );
   }
 
   /**

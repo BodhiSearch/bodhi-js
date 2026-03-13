@@ -27,7 +27,7 @@ import { WindowBodhiextClient } from './ext-client';
 export interface WebClientConfig {
   authServerUrl: string;
   redirectUri: string;
-  userScope: string;
+  userRole: UserScope;
   basePath: string;
   logLevel: LogLevel;
   apiTimeoutMs?: number;
@@ -46,7 +46,7 @@ export interface WebClientConfig {
 export interface WebUIClientParams {
   redirectUri?: string;
   authServerUrl?: string;
-  userScope?: UserScope;
+  userRole?: UserScope;
   basePath?: string;
   logLevel?: LogLevel;
   apiTimeoutMs?: number;
@@ -93,7 +93,7 @@ export class WebUIClient
       basePath: cfg.basePath || '/',
       redirectUri: cfg.redirectUri || computeDefaultRedirectUri(cfg.basePath || '/'),
       authServerUrl: cfg.authServerUrl || 'https://id.getbodhi.app/realms/bodhi',
-      userScope: cfg.userScope || 'scope_user_user',
+      userRole: cfg.userRole || 'scope_user_user',
       logLevel: cfg.logLevel || 'warn',
       apiTimeoutMs: cfg.apiTimeoutMs,
       initParams: cfg.initParams,
@@ -119,7 +119,7 @@ export class WebUIClient
       {
         authServerUrl: config.authServerUrl,
         redirectUri: config.redirectUri,
-        userScope: config.userScope,
+        userRole: config.userRole,
         basePath: config.basePath,
         logLevel: config.logLevel,
         apiTimeoutMs: config.apiTimeoutMs,
@@ -139,7 +139,7 @@ export class WebUIClient
         authClientId,
         authServerUrl: config.authServerUrl,
         redirectUri: config.redirectUri,
-        userScope: config.userScope,
+        userRole: config.userRole,
         logLevel: config.logLevel,
         basePath: config.basePath,
         apiTimeoutMs: config.apiTimeoutMs,
@@ -157,5 +157,13 @@ export class WebUIClient
       return this.directClient.handleOAuthCallback(code, state);
     }
     return this.extClient.handleOAuthCallback(code, state);
+  }
+
+  async handleAccessRequestCallback(requestId: string): Promise<AuthState> {
+    // Delegate to active client based on connection mode
+    if (this.connectionMode === 'direct') {
+      return this.directClient.handleAccessRequestCallback(requestId);
+    }
+    return this.extClient.handleAccessRequestCallback(requestId);
   }
 }

@@ -40,7 +40,7 @@ export interface StreamChunk {
  */
 export interface ServerStateInfo {
   /** Current application status */
-  status: 'setup' | 'ready' | 'resource-admin' | 'error' | 'unreachable';
+  status: 'setup' | 'ready' | 'resource_admin' | 'tenant_selection' | 'error' | 'unreachable';
   /** Application version */
   version?: string;
   /** Server URL (added by extension) */

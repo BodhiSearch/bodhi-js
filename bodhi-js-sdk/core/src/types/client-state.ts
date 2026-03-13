@@ -3,6 +3,7 @@
  */
 
 import type { OperationErrorResponse } from '@bodhiapp/bodhi-browser-types';
+import type { DeploymentMode } from '@bodhiapp/ts-client';
 
 // ============================================================================
 // Serialization Types
@@ -58,7 +59,8 @@ export type ServerStatus =
   | 'pending-extension-ready' // Extension mode: awaiting extension
   | 'ready' // Server operational
   | 'setup' // Server needs initial setup
-  | 'resource-admin' // Server needs resource/admin config
+  | 'resource_admin' // Server needs resource/admin config
+  | 'tenant_selection' // Multi-tenant: tenant selection required
   | 'error' // Server error
   | 'not-reachable'; // Network error/wrong URL
 
@@ -71,6 +73,8 @@ export interface BackendServerState {
   status: ServerStatus;
   version: string | null; // Present when server is reachable
   error: OperationErrorResponse | null; // Present when error occurred
+  deployment?: DeploymentMode | null; // Deployment mode from AppInfo
+  client_id?: string | null; // Active tenant's OAuth client_id (multi-tenant)
 }
 
 // --- Constants ---
@@ -97,9 +101,11 @@ export const BACKEND_SERVER_NOT_CONNECTED: BackendServerState = {
  * Raw response from /bodhi/v1/info endpoint
  */
 export interface ServerInfoResponse {
-  status: 'setup' | 'ready' | 'resource-admin' | 'error';
+  status: 'setup' | 'ready' | 'resource_admin' | 'tenant_selection' | 'error';
   version?: string;
   error?: OperationErrorResponse;
+  deployment?: DeploymentMode;
+  client_id?: string;
 }
 
 // --- Type Guards ---
@@ -111,14 +117,18 @@ export function isServerReady(state: BackendServerState): boolean {
 // --- Factory Functions ---
 
 export function backendServerNotReady(
-  status: 'setup' | 'resource-admin' | 'error',
+  status: 'setup' | 'resource_admin' | 'tenant_selection' | 'error',
   version: string = 'unknown',
-  error: OperationErrorResponse = SERVER_ERROR_CODES.SERVER_NOT_READY
+  error: OperationErrorResponse = SERVER_ERROR_CODES.SERVER_NOT_READY,
+  deployment?: DeploymentMode,
+  client_id?: string
 ): BackendServerState {
   return {
     status,
     version,
     error,
+    deployment: deployment ?? null,
+    client_id: client_id ?? null,
   };
 }
 

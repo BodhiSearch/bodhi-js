@@ -8,10 +8,15 @@
  * Subclasses must implement factory methods to create their specific internal clients.
  */
 
+import type {
+  AccessRequestStatusResponse,
+  CreateAccessRequest,
+  CreateAccessRequestResponse,
+} from '@bodhiapp/ts-client';
 import type { IConnectionClient, IExtensionClient } from './interface';
 import { Logger } from './logger';
 import { BodhiClientUserPrefsManager } from './storage';
-import { Chat, Models, Embeddings } from './openai-client-compat';
+import { Chat, Models, Embeddings, Toolsets, Mcps } from './openai-client-compat';
 import type {
   ApiResponseResult,
   AuthState,
@@ -55,6 +60,8 @@ export abstract class BaseFacadeClient<
   private _chat: Chat | undefined;
   private _models: Models | undefined;
   private _embeddings: Embeddings | undefined;
+  private _toolsets: Toolsets | undefined;
+  private _mcps: Mcps | undefined;
 
   constructor(authClientId: string, config: TConfig, onStateChange?: StateChangeCallback) {
     this.authClientId = authClientId;
@@ -393,6 +400,34 @@ export abstract class BaseFacadeClient<
     return this.extClient.getAuthState();
   }
 
+  requestAccess(
+    body: CreateAccessRequest
+  ): Promise<ApiResponseResult<CreateAccessRequestResponse>> {
+    if (this.isNotSetOrDirect()) {
+      return this.directClient.requestAccess(body);
+    }
+    return this.extClient.requestAccess(body);
+  }
+
+  getAccessRequestStatus(
+    requestId: string
+  ): Promise<ApiResponseResult<AccessRequestStatusResponse>> {
+    if (this.isNotSetOrDirect()) {
+      return this.directClient.getAccessRequestStatus(requestId);
+    }
+    return this.extClient.getAccessRequestStatus(requestId);
+  }
+
+  pollAccessRequestStatus(
+    requestId: string,
+    options?: { intervalMs?: number; timeoutMs?: number }
+  ): Promise<AccessRequestStatusResponse> {
+    if (this.isNotSetOrDirect()) {
+      return this.directClient.pollAccessRequestStatus(requestId, options);
+    }
+    return this.extClient.pollAccessRequestStatus(requestId, options);
+  }
+
   // ============================================================================
   // API Convenience
   // ============================================================================
@@ -442,6 +477,14 @@ export abstract class BaseFacadeClient<
 
   get embeddings(): Embeddings {
     return (this._embeddings ??= new Embeddings(this));
+  }
+
+  get toolsets(): Toolsets {
+    return (this._toolsets ??= new Toolsets(this));
+  }
+
+  get mcps(): Mcps {
+    return (this._mcps ??= new Mcps(this));
   }
 
   // ============================================================================

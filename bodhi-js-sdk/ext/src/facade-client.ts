@@ -25,7 +25,7 @@ import { ExtClient } from './ext-client';
  */
 export interface ExtUIClientConfig {
   authServerUrl: string;
-  userScope: string;
+  userRole: UserScope;
   basePath: string;
   logLevel: LogLevel;
   apiTimeoutMs?: number;
@@ -45,7 +45,7 @@ export interface ExtUIClientConfig {
  */
 export interface ExtUIClientParams {
   authServerUrl?: string;
-  userScope?: UserScope;
+  userRole?: UserScope;
   basePath?: string;
   logLevel?: LogLevel;
   apiTimeoutMs?: number;
@@ -79,7 +79,7 @@ export class ExtUIClient
     const normalizedConfig: ExtUIClientConfig = {
       basePath: cfg.basePath || '/',
       authServerUrl: cfg.authServerUrl || 'https://id.getbodhi.app/realms/bodhi',
-      userScope: cfg.userScope || 'scope_user_user',
+      userRole: cfg.userRole || 'scope_user_user',
       logLevel: cfg.logLevel || 'warn',
       apiTimeoutMs: cfg.apiTimeoutMs,
       initParams: cfg.initParams,
@@ -102,6 +102,7 @@ export class ExtUIClient
   ): ExtClient {
     return new ExtClient(
       {
+        authClientId: this.authClientId,
         logLevel: config.logLevel,
         apiTimeoutMs: config.apiTimeoutMs,
         initParams: config.initParams,
@@ -119,7 +120,7 @@ export class ExtUIClient
       {
         authClientId,
         authServerUrl: config.authServerUrl,
-        userScope: config.userScope,
+        userRole: config.userRole,
         logLevel: config.logLevel,
         basePath: config.basePath,
         apiTimeoutMs: config.apiTimeoutMs,

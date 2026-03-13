@@ -17,3 +17,10 @@ export const getServerSetupUrl = (baseUrl: string = DEFAULT_SERVER_URL): string 
  * @returns Admin endpoint URL
  */
 export const getServerAdminUrl = (baseUrl: string = DEFAULT_SERVER_URL): string => `${baseUrl}/admin`;
+
+/**
+ * Get server tenant selection URL for a given base URL
+ * @param baseUrl - Base server URL (defaults to DEFAULT_SERVER_URL)
+ * @returns Tenant selection endpoint URL
+ */
+export const getServerTenantSelectionUrl = (baseUrl: string = DEFAULT_SERVER_URL): string => `${baseUrl}/tenant-selection`;

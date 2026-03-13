@@ -200,8 +200,13 @@ export function BodhiProvider({
         // Handles React SyntheticEvent when used as onClick={login}
         const extracted = options
           ? {
-              ...(options.toolsetScopeIds && { toolsetScopeIds: options.toolsetScopeIds }),
-              ...(options.version && { version: options.version }),
+              ...(options.userRole && { userRole: options.userRole }),
+              ...(options.requested && { requested: options.requested }),
+              ...(options.flowType && { flowType: options.flowType }),
+              ...(options.redirectUrl && { redirectUrl: options.redirectUrl }),
+              ...(options.onProgress && { onProgress: options.onProgress }),
+              ...(options.pollIntervalMs && { pollIntervalMs: options.pollIntervalMs }),
+              ...(options.pollTimeoutMs && { pollTimeoutMs: options.pollTimeoutMs }),
             }
           : undefined;
         const loginOptions = extracted && Object.keys(extracted).length > 0 ? extracted : undefined;

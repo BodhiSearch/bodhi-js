@@ -56,7 +56,7 @@ export {
 export { createApiError, createOperationError } from '@bodhiapp/bodhi-js-core';
 
 // Types (for type annotations)
-export type { AuthState, UIClient } from '@bodhiapp/bodhi-js-core';
+export type { AuthState, UIClient, LoginOptions, UserScope } from '@bodhiapp/bodhi-js-core';
 
 // Type guards and helpers (for auth state)
 export {

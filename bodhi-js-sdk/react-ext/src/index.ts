@@ -31,6 +31,8 @@ export {
   type ApiResponseResult,
   type ClientState,
   type AuthState,
+  type LoginOptions,
+  type UserScope,
   type UIClient,
   type LogLevel,
   type OperationError,

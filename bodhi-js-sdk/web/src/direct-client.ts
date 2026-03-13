@@ -5,23 +5,25 @@
  */
 
 import {
+  AccessRequestBuilder,
+  DEFAULT_POLL_INTERVAL_MS,
+  DEFAULT_POLL_TIMEOUT_MS,
   DirectClientBase,
   STORAGE_PREFIXES,
   createOperationError,
   createStoragePrefixWithBasePath,
   generateCodeChallenge,
   generateCodeVerifier,
-  getMissingToolsetScopeIds,
-  getRequestedToolsetScopes,
-  isApiResultError,
   isApiResultOperationError,
   isApiResultSuccess,
+  openPopupReview,
   type AuthState,
   type DirectClientBaseConfig,
   type LoginOptions,
   type LogLevel,
   type StateChangeCallback,
 } from '@bodhiapp/bodhi-js-core';
+import type { UserScope } from '@bodhiapp/ts-client';
 
 /**
  * Configuration for DirectWebClient
@@ -29,7 +31,7 @@ import {
 export interface DirectWebClientConfig {
   authClientId: string;
   authServerUrl: string;
-  userScope: string;
+  userRole: UserScope;
   basePath: string;
   logLevel: LogLevel;
   redirectUri: string;
@@ -50,7 +52,7 @@ export class DirectWebClient extends DirectClientBase {
     const baseConfig: DirectClientBaseConfig = {
       authClientId: config.authClientId,
       authServerUrl: config.authServerUrl,
-      userScope: config.userScope,
+      userRole: config.userRole,
       storagePrefix,
       logLevel: config.logLevel,
       loggerPrefix: 'DirectWebClient',
@@ -70,42 +72,74 @@ export class DirectWebClient extends DirectClientBase {
       return existingAuth;
     }
 
-    const result = await this.requestResourceAccess(options?.toolsetScopeIds, options?.version);
+    const userRole = options?.userRole ?? this.userRole;
+    const flowType = options?.flowType ?? 'popup';
 
-    if (isApiResultOperationError(result)) {
-      throw createOperationError(result.error.message, result.error.type);
+    // Step 1: Create access request
+    options?.onProgress?.('requesting');
+    const builder = new AccessRequestBuilder(this.authClientId)
+      .requestedRole(userRole)
+      .flowType(flowType);
+
+    if (options?.requested) {
+      builder.requested(options.requested);
+    }
+    if (flowType === 'redirect') {
+      const redirectUrl = options?.redirectUrl ?? this.redirectUri;
+      builder.redirectUrl(redirectUrl);
     }
 
-    if (isApiResultError(result)) {
-      const { message } = result.body.error;
-      throw createOperationError(message, 'auth_error');
+    const accessRequestBody = builder.build();
+    const accessRequestResult = await this.requestAccess(accessRequestBody);
+
+    if (isApiResultOperationError(accessRequestResult)) {
+      throw createOperationError(accessRequestResult.error.message, accessRequestResult.error.type);
     }
-
-    if (!isApiResultSuccess(result)) {
-      throw createOperationError(`Unexpected HTTP ${result.status}`, 'auth_error');
-    }
-
-    const resourceScope = result.body.scope;
-    localStorage.setItem(this.storageKeys.RESOURCE_SCOPE, resourceScope);
-
-    // Extract toolset scopes from response
-    const toolsets = result.body.toolsets || [];
-
-    // Validate requested toolset scope IDs are in response
-    const missingScopeIds = getMissingToolsetScopeIds(options?.toolsetScopeIds, toolsets);
-    if (missingScopeIds.length > 0) {
+    if (!isApiResultSuccess(accessRequestResult)) {
       throw createOperationError(
-        `toolsetScopeIds not received back from request-access call: [${missingScopeIds.join(', ')}], check developer console on configuring the toolset scopes correctly`,
+        `Access request failed: HTTP ${accessRequestResult.status}`,
         'auth_error'
       );
     }
 
-    // Only include scopes for requested toolset IDs (empty string if none requested)
-    const toolsetScopes = getRequestedToolsetScopes(options?.toolsetScopeIds, toolsets);
+    const { id: requestId, review_url: reviewUrl } = accessRequestResult.body;
+    options?.onProgress?.('reviewing');
 
-    const fullScope =
-      `openid profile email roles ${this.userScope} ${resourceScope} ${toolsetScopes}`.trim();
+    let accessRequestScope: string | null | undefined;
 
+    if (flowType === 'popup') {
+      // Popup flow: open review popup and poll
+      const pollFn = async () => {
+        const statusResult = await this.getAccessRequestStatus(requestId);
+        if (!isApiResultSuccess(statusResult)) return null;
+        const { status, access_request_scope } = statusResult.body;
+        if (status === 'approved')
+          return { approved: true, accessRequestScope: access_request_scope ?? undefined };
+        if (['denied', 'failed', 'expired'].includes(status)) return { approved: false };
+        return null; // still pending
+      };
+
+      const reviewResult = await openPopupReview(reviewUrl, pollFn, {
+        intervalMs: options?.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
+        timeoutMs: options?.pollTimeoutMs ?? DEFAULT_POLL_TIMEOUT_MS,
+      });
+
+      if (!reviewResult.approved) {
+        throw createOperationError('Access request was denied or expired', 'auth_error');
+      }
+      accessRequestScope = reviewResult.accessRequestScope;
+    } else {
+      // Redirect flow: store requestId and redirect
+      localStorage.setItem(this.storageKeys.ACCESS_REQUEST_ID, requestId);
+      window.location.href = reviewUrl;
+      return new Promise(() => {}); // never resolves
+    }
+
+    options?.onProgress?.('authenticating');
+    return this.performOAuthPkce(`openid profile email roles ${accessRequestScope ?? ''}`.trim());
+  }
+
+  protected async performOAuthPkce(scope: string): Promise<AuthState> {
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
     const state = generateCodeVerifier();
@@ -117,13 +151,12 @@ export class DirectWebClient extends DirectClientBase {
     authUrl.searchParams.set('client_id', this.authClientId);
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('redirect_uri', this.redirectUri);
-    authUrl.searchParams.set('scope', fullScope);
+    authUrl.searchParams.set('scope', scope);
     authUrl.searchParams.set('code_challenge', codeChallenge);
     authUrl.searchParams.set('code_challenge_method', 'S256');
     authUrl.searchParams.set('state', state);
 
     window.location.href = authUrl.toString();
-    // Note: This line is never reached due to redirect, but TypeScript requires a return
     throw new Error('Redirect initiated');
   }
 
@@ -146,6 +179,21 @@ export class DirectWebClient extends DirectClientBase {
 
     this.setAuthState(authState);
     return authState;
+  }
+
+  async handleAccessRequestCallback(requestId: string): Promise<AuthState> {
+    // Poll once to get the approved status
+    const statusResult = await this.getAccessRequestStatus(requestId);
+    if (!isApiResultSuccess(statusResult)) {
+      throw createOperationError('Failed to get access request status', 'auth_error');
+    }
+    const { status, access_request_scope } = statusResult.body;
+    if (status !== 'approved') {
+      throw createOperationError(`Access request is not approved: ${status}`, 'auth_error');
+    }
+    const scope = `openid profile email roles ${access_request_scope ?? ''}`.trim();
+    localStorage.removeItem(this.storageKeys.ACCESS_REQUEST_ID);
+    return this.performOAuthPkce(scope);
   }
 
   async logout(): Promise<AuthState> {
@@ -174,7 +222,6 @@ export class DirectWebClient extends DirectClientBase {
     localStorage.removeItem(this.storageKeys.ACCESS_TOKEN);
     localStorage.removeItem(this.storageKeys.REFRESH_TOKEN);
     localStorage.removeItem(this.storageKeys.EXPIRES_AT);
-    localStorage.removeItem(this.storageKeys.RESOURCE_SCOPE);
 
     const result: AuthState = {
       status: 'unauthenticated',

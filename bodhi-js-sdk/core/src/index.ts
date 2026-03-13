@@ -11,6 +11,12 @@
 // Re-export types
 export * from './types';
 
+// Re-export access request utilities
+export * from './access-request';
+
+// Re-export review manager
+export * from './review-manager';
+
 // Re-export constants
 export * from './constants';
 
@@ -31,9 +37,6 @@ export * from './onboarding';
 
 // Re-export oauth
 export * from './oauth';
-
-// Re-export toolset utilities
-export * from './toolset-utils';
 
 // Re-export direct client base
 export * from './direct-client-base';
