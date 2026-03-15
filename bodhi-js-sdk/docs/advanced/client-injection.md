@@ -42,7 +42,7 @@ npm install @bodhiapp/bodhi-js-react-core @bodhiapp/bodhi-js-ext
 
 ### Basic Pattern (Web)
 
-```tsx
+```typescript
 import { BodhiProvider } from '@bodhiapp/bodhi-js-react-core';
 import { WebUIClient } from '@bodhiapp/bodhi-js';
 
@@ -62,7 +62,7 @@ function App() {
 
 ### Basic Pattern (Extension)
 
-```tsx
+```typescript
 import { BodhiProvider } from '@bodhiapp/bodhi-js-react-core';
 import { ExtUIClient } from '@bodhiapp/bodhi-js-ext';
 
@@ -90,7 +90,7 @@ function ExtensionUI() {
 interface WebUIClientParams {
   redirectUri?: string; // OAuth redirect (default: window.location.origin + '/oauth/callback')
   authServerUrl?: string; // OAuth server (default: 'https://id.getbodhi.app')
-  userScope?: UserScope; // OAuth scope (default: UserScope.Standard)
+  userRole?: string; // OAuth scope (default: 'scope_user_user')
   basePath?: string; // Backend URL (default: 'http://localhost:1135')
   logLevel?: LogLevel; // Logging (default: LogLevel.Info)
   initParams?: {
@@ -106,7 +106,7 @@ interface WebUIClientParams {
 
 #### Custom Redirect URI
 
-```tsx
+```typescript
 import { WebUIClient } from '@bodhiapp/bodhi-js';
 
 const client = new WebUIClient('my-app', {
@@ -118,7 +118,7 @@ const client = new WebUIClient('my-app', {
 
 For multi-tenant apps or apps deployed to paths (e.g., GitHub Pages: `user.github.io/repo-name`), use `basePath` to create storage isolation:
 
-```tsx
+```typescript
 import { WebUIClient } from '@bodhiapp/bodhi-js';
 
 function createClientForTenant(tenantId: string) {
@@ -142,7 +142,7 @@ See [Multi-Tenant Patterns](./multi-tenant.md) for complete details.
 
 #### Custom Backend URL
 
-```tsx
+```typescript
 import { WebUIClient } from '@bodhiapp/bodhi-js';
 
 const client = new WebUIClient('my-app', {
@@ -152,7 +152,7 @@ const client = new WebUIClient('my-app', {
 
 #### Debug Logging
 
-```tsx
+```typescript
 import { WebUIClient, LogLevel } from '@bodhiapp/bodhi-js';
 
 const client = new WebUIClient('my-app', {
@@ -169,7 +169,7 @@ const client = new WebUIClient('my-app', {
 ```typescript
 interface ExtUIClientParams {
   authServerUrl?: string; // OAuth server (default: 'https://id.getbodhi.app')
-  userScope?: UserScope; // OAuth scope (default: UserScope.Standard)
+  userRole?: string; // OAuth scope (default: 'scope_user_user')
   basePath?: string; // Backend URL (default: 'http://localhost:1135')
   logLevel?: LogLevel; // Logging (default: LogLevel.Info)
   initParams?: {
@@ -187,7 +187,7 @@ interface ExtUIClientParams {
 
 #### Custom Retry Configuration
 
-```tsx
+```typescript
 import { ExtUIClient } from '@bodhiapp/bodhi-js-ext';
 
 const client = new ExtUIClient('my-extension', {
@@ -209,7 +209,7 @@ Even when using preset packages, you can override auto-client creation by passin
 
 ### Web Preset Override
 
-```tsx
+```typescript
 import { BodhiProvider, WebUIClient } from '@bodhiapp/bodhi-js-react';
 
 const customClient = new WebUIClient('my-app', {
@@ -223,7 +223,7 @@ const customClient = new WebUIClient('my-app', {
 
 ### Extension Preset Override
 
-```tsx
+```typescript
 import { BodhiProvider, ExtUIClient } from '@bodhiapp/bodhi-js-react-ext';
 
 const customClient = new ExtUIClient('my-extension', {
@@ -247,7 +247,7 @@ const customClient = new ExtUIClient('my-extension', {
 
 ### Mock Client for Unit Tests
 
-```tsx
+```typescript
 import { render } from '@testing-library/react';
 import { BodhiProvider } from '@bodhiapp/bodhi-js-react-core';
 import type { UIClient } from '@bodhiapp/bodhi-js-core';
@@ -273,7 +273,7 @@ function renderWithBodhi(component) {
 
 ### Integration Tests with Real Client
 
-```tsx
+```typescript
 import { BodhiProvider } from '@bodhiapp/bodhi-js-react-core';
 import { WebUIClient } from '@bodhiapp/bodhi-js';
 
@@ -296,7 +296,7 @@ render(
 
 ### Singleton Pattern (Recommended)
 
-```tsx
+```typescript
 import { WebUIClient } from '@bodhiapp/bodhi-js';
 
 // Create once, reuse everywhere
@@ -325,7 +325,7 @@ function App() {
 
 ### Dynamic Client Creation
 
-```tsx
+```typescript
 import { useState, useMemo } from 'react';
 import { WebUIClient } from '@bodhiapp/bodhi-js';
 import { BodhiProvider } from '@bodhiapp/bodhi-js-react-core';
@@ -354,17 +354,17 @@ function TenantApp({ tenantId }: { tenantId: string }) {
 
 ### Custom User Scope
 
-```tsx
-import { WebUIClient, UserScope } from '@bodhiapp/bodhi-js';
+```typescript
+import { WebUIClient } from '@bodhiapp/bodhi-js';
 
 const client = new WebUIClient('my-app', {
-  userScope: UserScope.Admin, // Request admin privileges
+  userRole: 'scope_user_power_user', // Request power user privileges
 });
 ```
 
 ### Enterprise OAuth Server
 
-```tsx
+```typescript
 import { ExtUIClient } from '@bodhiapp/bodhi-js-ext';
 
 const client = new ExtUIClient('corp-extension', {
@@ -385,12 +385,12 @@ const client = new ExtUIClient('corp-extension', {
 
 4. **Type Safety**: Import types from `@bodhiapp/bodhi-js-core` for strict typing:
 
-   ```tsx
+   ```typescript
    import type { UIClient, WebUIClientParams } from '@bodhiapp/bodhi-js';
    ```
 
 5. **Environment-Specific Config**: Use environment variables for different configurations:
-   ```tsx
+   ```typescript
    const client = new WebUIClient('my-app', {
      basePath: process.env.VITE_BODHI_BACKEND_URL,
      logLevel: process.env.NODE_ENV === 'development' ? LogLevel.Debug : LogLevel.Info,

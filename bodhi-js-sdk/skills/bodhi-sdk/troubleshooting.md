@@ -56,8 +56,22 @@
 
 ### Server status: 'tenant_selection'
 
-- Multi-tenant server — user needs to select a tenant
+`clientState.server.status === 'tenant_selection'`
+
+- Multi-tenant Bodhi server deployment — user needs to select a tenant before the server becomes `ready`
 - The setup wizard (`showSetup()`) handles tenant selection automatically
+- You can also detect this in code:
+
+```tsx
+const { clientState, showSetup } = useBodhi();
+
+if (clientState.server.status === 'tenant_selection') {
+  // Either call showSetup() or display a custom tenant selection UI
+  showSetup();
+}
+```
+
+- Check `clientState.server.deployment` — it will be `'multi_tenant'` for multi-tenant servers
 
 ## Authentication Issues
 

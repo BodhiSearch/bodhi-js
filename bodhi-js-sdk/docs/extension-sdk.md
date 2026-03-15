@@ -143,7 +143,7 @@ When using manual client creation, all fields are optional with sensible default
 ```typescript
 interface ExtUIClientParams {
   authServerUrl?: string; // OAuth server URL (default: 'https://id.getbodhi.app')
-  userScope?: UserScope; // User scope (default: UserScope.Standard)
+  userRole?: string; // User scope (default: 'scope_user_user')
   basePath?: string; // App base path (default: '/')
   logLevel?: LogLevel; // Logging level (default: LogLevel.Info)
   initParams?: {
@@ -169,7 +169,7 @@ For custom settings:
 
 ```typescript
 const client = new ExtUIClient('ext-client-id', {
-  userScope: 'scope_user_power_user',
+  userRole: 'scope_user_power_user',
   logLevel: 'debug',
   initParams: {
     extension: {
@@ -226,7 +226,7 @@ try {
 
 ### sendExtRequest
 
-Call extension-specific actions:
+An escape hatch for advanced use -- call extension-specific actions directly:
 
 ```typescript
 const { client } = useBodhi();
@@ -317,7 +317,11 @@ function ChatPopup() {
 
   const handleSubmit = async () => {
     setResponse('');
-    const stream = client.streamChat('gemma-3n-e4b-it', prompt);
+    const stream = client.stream('/v1/chat/completions', {
+      model: 'gemma-3n-e4b-it',
+      messages: [{ role: 'user', content: prompt }],
+      stream: true,
+    });
 
     for await (const chunk of stream) {
       const content = chunk.choices?.[0]?.delta?.content || '';
@@ -416,7 +420,7 @@ await client.login(); // Initiate OAuth login
 await client.logout(); // Clear auth state
 ```
 
-> **Important**: BodhiExtClient is a low-level client for advanced background script integration. For popup/options UI, use `ExtUIClient` instead, which provides the full API (sendApiRequest, stream, streamChat, etc.).
+> **Important**: BodhiExtClient is a low-level client for advanced background script integration. For popup/options UI, use `ExtUIClient` instead, which provides the full API (sendApiRequest, stream, etc.).
 
 ### Using ExtUIClient in Background Scripts
 
@@ -577,7 +581,7 @@ function Popup() {
 
 For SDK contributors or advanced extension integrations:
 
-- **Message Protocol** - See [Message Protocols (Internals)](./internals/message-protocols.md) for ext2ext protocol details, message types, discovery constants, and broadcast mechanisms.
+- **Message Protocol** - See [SDK Internals](./internals/sdk-internals.md) for ext2ext protocol details, message types, discovery constants, and broadcast mechanisms.
 - **State Serialization** - Extension state can be serialized to skip discovery on subsequent initializations (see internals documentation).
 
 ## Next Steps

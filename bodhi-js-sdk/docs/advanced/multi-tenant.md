@@ -13,6 +13,16 @@ Multi-tenant applications use dependency injection with `@bodhiapp/bodhi-js-reac
 - User preferences
 - Storage namespaces
 
+### Server-Side Multi-Tenant Awareness
+
+When the Bodhi server is running in multi-tenant mode and no tenant has been selected, `BackendServerState.status` will be `'tenant_selection'`. The connection is not fully ready until a tenant is chosen and the server transitions to `'ready'`.
+
+Key `BackendServerState` fields for multi-tenant:
+
+- **`status`**: Can be `'tenant_selection'` when tenant selection is pending
+- **`deployment`**: `'standalone'` or `'multi_tenant'` indicating the server's deployment mode
+- **`client_id`**: The active tenant's OAuth client_id (present once a tenant is selected)
+
 For full details on dependency injection, see [Client Injection](./client-injection.md).
 
 ## Multiple Provider Instances
@@ -70,7 +80,9 @@ const tenant2Client = new WebUIClient('tenant2-id', {
   basePath: '/tenant2',
 });
 
-// basePath automatically namespaces storage keys:
+// basePath automatically namespaces storage keys using the pattern:
+//   {basePath}:{facade-prefix}:{client-type}:{key}
+//
 // localStorage: /tenant1:bodhi-js-sdk:web:CONNECTION_MODE
 // localStorage: /tenant1:bodhi-js-sdk:web:EXTENSION_ID
 // localStorage: /tenant2:bodhi-js-sdk:web:CONNECTION_MODE

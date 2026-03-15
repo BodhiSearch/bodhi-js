@@ -109,7 +109,7 @@ After running the CLI, your `manifest.json` should include:
 
 **Quick example**:
 
-```tsx
+```typescript
 import { BodhiProvider, useBodhi } from '@bodhiapp/bodhi-js-react-ext';
 
 <BodhiProvider authClientId="my-extension">

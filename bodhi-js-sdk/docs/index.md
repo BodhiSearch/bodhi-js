@@ -121,6 +121,11 @@ Before integrating the SDK, ensure you have:
 - [Streaming](./streaming.md) - Real-time chat completions with AsyncGenerator
 - [Onboarding](./onboarding.md) - Setup wizard and user onboarding flow
 
+### Integration
+
+- [Getting Started](./integration/getting-started.md) - Step-by-step integration walkthrough
+- [Advanced](./integration/advanced.md) - Advanced integration patterns and customization
+
 ### Advanced Topics
 
 - [Client State Management](./client-state.md) - Connection modes, state types, and persistence
@@ -136,26 +141,21 @@ Before integrating the SDK, ensure you have:
 For most React web applications, your integration will follow this pattern:
 
 ```typescript
-// 1. Install packages
-// npm install @bodhiapp/bodhi-js @bodhiapp/bodhi-js-react
+// 1. Install package
+// npm install @bodhiapp/bodhi-js-react
 
-// 2. Create client instance
-import { WebUIClient } from '@bodhiapp/bodhi-js';
-
-const client = new WebUIClient('your-client-id');
-
-// 3. Wrap app with BodhiProvider
+// 2. Wrap app with BodhiProvider
 import { BodhiProvider } from '@bodhiapp/bodhi-js-react';
 
 function App() {
   return (
-    <BodhiProvider client={client}>
+    <BodhiProvider authClientId="your-client-id">
       <YourApp />
     </BodhiProvider>
   );
 }
 
-// 4. Use SDK in components
+// 3. Use SDK in components
 import { useBodhi } from '@bodhiapp/bodhi-js-react';
 
 function ChatComponent() {
@@ -188,6 +188,10 @@ Discriminated unions and type guards for compile-time safety and runtime reliabi
 ### 🧩 Setup Wizard
 
 Built-in onboarding modal guides users through extension installation and server configuration.
+
+### 🔌 MCP Support
+
+Model Context Protocol integration for connecting to MCP servers and using MCP tools within your application.
 
 ### 📦 Framework Agnostic
 

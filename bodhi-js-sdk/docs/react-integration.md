@@ -181,7 +181,7 @@ interface BodhiContext {
   auth: AuthState; // Authentication state
 
   // Auth functions
-  login: () => Promise<void>; // Initiate OAuth login
+  login: (options?: LoginOptions) => Promise<AuthState | void>; // Initiate OAuth login
   logout: () => Promise<void>; // Logout and clear tokens
   isAuthLoading: boolean; // Auth operation in progress
 
@@ -328,7 +328,7 @@ function LoginButton() {
   }
 
   return (
-    <button onClick={login} disabled={!canLogin}>
+    <button onClick={() => login()} disabled={!canLogin}>
       {isAuthLoading ? 'Logging in...' : 'Login'}
     </button>
   );
@@ -343,7 +343,7 @@ By default, `BodhiProvider` automatically handles OAuth redirects:
 
 ```typescript
 <BodhiProvider
-  client={client}
+  authClientId="your-client-id"
   handleCallback={true}      // Default
   basePath="/"               // callbackPath auto-computed as "/callback"
 >
@@ -352,7 +352,7 @@ By default, `BodhiProvider` automatically handles OAuth redirects:
 
 // With custom basePath
 <BodhiProvider
-  client={client}
+  authClientId="your-client-id"
   basePath="/myapp"
 >
   <App />
@@ -372,7 +372,7 @@ By default, `BodhiProvider` automatically handles OAuth redirects:
 If you need custom redirect logic:
 
 ```typescript
-<BodhiProvider client={client} handleCallback={false}>
+<BodhiProvider authClientId="your-client-id" handleCallback={false}>
   <App />
 </BodhiProvider>
 ```
@@ -443,7 +443,7 @@ If you're self-hosting the setup modal:
 
 ```typescript
 <BodhiProvider
-  client={client}
+  authClientId="your-client-id"
   modalHtmlPath="/custom/path/to/modal.html"
 >
   <App />
@@ -479,7 +479,7 @@ function ChatInterface() {
     return (
       <EmptyState
         title="Login Required"
-        action={<button onClick={login}>Login with OAuth</button>}
+        action={<button onClick={() => login()}>Login with OAuth</button>}
       />
     );
   }

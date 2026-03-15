@@ -149,7 +149,7 @@ function Chat() {
     return (
       <div>
         <p>Please login to continue</p>
-        <button onClick={login}>Login</button>
+        <button onClick={() => login()}>Login</button>
       </div>
     );
   }
@@ -206,7 +206,7 @@ export default Chat;
 
 **Built-in Callback Handler (Default)**:
 
-By default, BodhiProvider automatically handles OAuth callbacks when `handleCallback={true}` (default). The token exchange happens atomically without requiring additional setup. Your app will work without creating custom callback routes.
+By default, `BodhiProvider` (with `authClientId` prop) automatically handles OAuth callbacks. The token exchange happens atomically without requiring additional setup. Your app will work without creating custom callback routes.
 
 **Custom Callback Route (Optional)**:
 
@@ -292,6 +292,8 @@ const { client, isOverallReady, isAuthenticated, login, showSetup } = useBodhi()
 ```
 
 Access the SDK client and state from any component.
+
+**Login** accepts optional `LoginOptions` for advanced usage (e.g., `await login({ userRole: 'scope_user_power_user' })`). See [Authentication](./authentication.md) for details.
 
 ### 4. Streaming Chat (OpenAI-Style API)
 

@@ -355,20 +355,22 @@ class ErrorBoundary extends Component<Props, State> {
 
 ```typescript
 try {
-  const stream = client.streamChat('gemma-3n-e4b-it', prompt);
+  const stream = client.chat.completions.create({
+    model: 'gemma-3n-e4b-it',
+    messages: [{ role: 'user', content: prompt }],
+    stream: true,
+  });
 
   for await (const chunk of stream) {
     console.log(chunk.choices?.[0]?.delta?.content);
   }
 } catch (err) {
-  const apiResult = err as ApiResponseResult<unknown>;
-
-  if (isApiResultOperationError(apiResult)) {
-    setError(`Stream error: ${apiResult.error.message}`);
-  } else if (isApiResultError(apiResult)) {
-    setError(`HTTP ${apiResult.status}: ${apiResult.body.error.message}`);
-  } else if (err instanceof Error) {
-    setError(err.message);
+  if (err instanceof Error) {
+    // HTTP errors: "HTTP 404: ..." format
+    // Network errors: "Network error: ..." format
+    setError(`Stream error: ${err.message}`);
+  } else {
+    setError('Unknown error occurred');
   }
 }
 ```
@@ -376,10 +378,14 @@ try {
 ### Retry Failed Streams
 
 ```typescript
-async function streamWithRetry(prompt: string, maxRetries = 3) {
+async function* streamWithRetry(model: string, prompt: string, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const stream = client.streamChat('gemma-3n-e4b-it', prompt);
+      const stream = client.chat.completions.create({
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        stream: true,
+      });
 
       for await (const chunk of stream) {
         yield chunk;
@@ -590,12 +596,16 @@ if (isApiResultOperationError(result)) {
 
 ### Streaming Requests
 
-Streaming methods (`stream()`, `streamChat()`) throw `Error` objects directly:
+Streaming methods (`stream()`, `client.chat.completions.create({ stream: true })`) throw `Error` objects directly:
 
 ```typescript
 // Throws Error objects
 try {
-  const stream = client.streamChat(model, prompt);
+  const stream = client.chat.completions.create({
+    model,
+    messages: [{ role: 'user', content: prompt }],
+    stream: true,
+  });
   for await (const chunk of stream) {
     // Process...
   }
@@ -613,7 +623,11 @@ try {
 ```typescript
 // ChatSection.tsx pattern
 try {
-  const stream = client.streamChat(model, prompt, authenticated);
+  const stream = client.chat.completions.create({
+    model,
+    messages: [{ role: 'user', content: prompt }],
+    stream: true,
+  });
   for await (const chunk of stream) {
     const content = chunk.choices?.[0]?.delta?.content || '';
     setResponse(prev => prev + content);

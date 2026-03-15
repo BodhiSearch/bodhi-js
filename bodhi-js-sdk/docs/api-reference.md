@@ -44,7 +44,7 @@ new WebUIClient(
 interface WebClientConfig {
   redirectUri?: string; // OAuth redirect URI (auto-computed from basePath if omitted)
   authServerUrl?: string; // OAuth server URL (default: 'https://id.getbodhi.app/realms/bodhi')
-  userScope?: UserScope; // User scope (default: 'scope_user_user')
+  userRole?: UserScope; // User scope (default: 'scope_user_user')
   basePath?: string; // App base path (default: '/')
   logLevel?: LogLevel; // Logging level (default: 'warn')
   initParams?: {
@@ -183,6 +183,31 @@ for await (const model of client.models.list()) {
 }
 ```
 
+#### retrieve()
+
+```typescript
+async retrieve(modelId: string): Promise<Model>
+```
+
+Retrieve a specific model by ID.
+
+**Endpoint**: `GET /v1/models/{modelId}`
+
+**Parameters**:
+
+| Parameter | Type     | Description |
+| --------- | -------- | ----------- |
+| `modelId` | `string` | Model ID    |
+
+**Returns**: `Promise<Model>`
+
+**Example**:
+
+```typescript
+const model = await client.models.retrieve('llama-3.2');
+console.log(model.id, model.owned_by);
+```
+
 ### client.embeddings
 
 #### create()
@@ -211,15 +236,168 @@ const embedding = await client.embeddings.create({
 });
 ```
 
+### client.mcps
+
+#### list()
+
+```typescript
+async list(): Promise<ListMcpsResponse>
+```
+
+List available MCP servers.
+
+**Endpoint**: `GET /bodhi/v1/apps/mcps`
+
+**Returns**: `Promise<ListMcpsResponse>`
+
+**Example**:
+
+```typescript
+const { mcps } = await client.mcps.list();
+for (const mcp of mcps) {
+  console.log(mcp.id, mcp.tools_cache.length, 'tools');
+}
+```
+
+#### listTools()
+
+```typescript
+async listTools(mcpId: string): Promise<McpToolsResponse>
+```
+
+List tools for a specific MCP server.
+
+**Endpoint**: `GET /bodhi/v1/apps/mcps/{mcpId}/tools`
+
+**Returns**: `Promise<McpToolsResponse>`
+
+**Example**:
+
+```typescript
+const { tools } = await client.mcps.listTools('my-mcp-server');
+for (const tool of tools) {
+  console.log(tool.name, tool.description);
+}
+```
+
+#### refreshTools()
+
+```typescript
+async refreshTools(mcpId: string): Promise<McpToolsResponse>
+```
+
+Refresh the tool cache for a specific MCP server by re-discovering tools from the server.
+
+**Endpoint**: `POST /bodhi/v1/apps/mcps/{mcpId}/tools/refresh`
+
+**Returns**: `Promise<McpToolsResponse>`
+
+#### executeTool()
+
+```typescript
+async executeTool(
+  mcpId: string,
+  toolName: string,
+  params: Record<string, unknown>
+): Promise<unknown>
+```
+
+Execute a tool on an MCP server.
+
+**Endpoint**: `POST /bodhi/v1/apps/mcps/{mcpId}/tools/{toolName}/execute`
+
+**Parameters**:
+
+| Parameter  | Type                       | Description            |
+| ---------- | -------------------------- | ---------------------- |
+| `mcpId`    | `string`                   | MCP server ID          |
+| `toolName` | `string`                   | Tool name to execute   |
+| `params`   | `Record<string, unknown>`  | Tool execution params  |
+
+**Returns**: `Promise<unknown>`
+
+**Example**:
+
+```typescript
+const result = await client.mcps.executeTool(
+  'my-mcp-server',
+  'search',
+  { query: 'hello world' }
+);
+```
+
 ---
 
 #### login()
 
 ```typescript
-async login(): Promise<AuthState>
+async login(options?: LoginOptions): Promise<AuthState>
 ```
 
-Initiate OAuth login flow.
+Initiate OAuth login flow with optional configuration.
+
+**Parameters**:
+
+- `options?.userRole?: UserScope` - User scope for the login
+- `options?.requested?: RequestedResources` - Resources to request access to
+- `options?.flowType?: FlowType` - Login flow type
+- `options?.redirectUrl?: string` - Custom redirect URL
+- `options?.onProgress?: LoginProgressCallback` - Progress callback for login stages
+- `options?.pollIntervalMs?: number` - Poll interval in milliseconds
+- `options?.pollTimeoutMs?: number` - Poll timeout in milliseconds
+
+**Returns**: `Promise<AuthState>`
+
+#### requestAccess()
+
+```typescript
+async requestAccess(body: CreateAccessRequest): Promise<ApiResponseResult<CreateAccessRequestResponse>>
+```
+
+Request access to resources on behalf of the app.
+
+**Endpoint**: `POST /bodhi/v1/apps/request-access`
+
+**Returns**: `Promise<ApiResponseResult<CreateAccessRequestResponse>>`
+
+#### getAccessRequestStatus()
+
+```typescript
+async getAccessRequestStatus(requestId: string): Promise<ApiResponseResult<AccessRequestStatusResponse>>
+```
+
+Check the status of an access request.
+
+**Endpoint**: `GET /bodhi/v1/apps/access-requests/{requestId}?app_client_id=xxx`
+
+**Returns**: `Promise<ApiResponseResult<AccessRequestStatusResponse>>`
+
+#### pollAccessRequestStatus()
+
+```typescript
+async pollAccessRequestStatus(
+  requestId: string,
+  options?: { intervalMs?: number; timeoutMs?: number }
+): Promise<AccessRequestStatusResponse>
+```
+
+Poll an access request until it is approved, denied, failed, or expired.
+
+**Parameters**:
+
+- `requestId: string` - The access request ID
+- `options?.intervalMs?: number` - Poll interval in milliseconds
+- `options?.timeoutMs?: number` - Poll timeout in milliseconds
+
+**Returns**: `Promise<AccessRequestStatusResponse>`
+
+#### handleAccessRequestCallback() (IWebUIClient only)
+
+```typescript
+async handleAccessRequestCallback(requestId: string): Promise<AuthState>
+```
+
+Handle the callback when a user returns from the access request review URL redirect. Only available on `IWebUIClient` (web SDK).
 
 **Returns**: `Promise<AuthState>`
 
@@ -326,7 +504,7 @@ new ExtUIClient(
 ```typescript
 interface ExtUIClientConfig {
   authServerUrl?: string; // OAuth server URL (default: 'https://id.getbodhi.app/realms/bodhi')
-  userScope?: UserScope; // User scope (default: 'scope_user_user')
+  userRole?: UserScope; // User scope (default: 'scope_user_user')
   basePath?: string; // App base path (default: '/')
   logLevel?: LogLevel; // Logging level (default: 'warn')
   initParams?: {
@@ -569,9 +747,13 @@ interface BackendServerState {
   status: ServerStatus;
   version: string | null;
   error: OperationErrorResponse | null;
+  deployment?: DeploymentMode | null;
+  client_id?: string | null;
 }
 
-type ServerStatus = 'not-connected' | 'pending-extension-ready' | 'ready' | 'setup' | 'resource-admin' | 'error' | 'not-reachable';
+type DeploymentMode = 'standalone' | 'multi_tenant';
+
+type ServerStatus = 'not-connected' | 'pending-extension-ready' | 'ready' | 'setup' | 'resource_admin' | 'tenant_selection' | 'error' | 'not-reachable';
 ```
 
 ### AuthState
@@ -654,6 +836,81 @@ type ConnectionMode = 'direct' | 'extension';
 
 ```typescript
 type UserScope = 'scope_user_user' | 'scope_user_power_user';
+```
+
+### LoginOptions
+
+```typescript
+interface LoginOptions {
+  userRole?: UserScope;
+  requested?: RequestedResources;
+  flowType?: FlowType;
+  redirectUrl?: string;
+  onProgress?: LoginProgressCallback;
+  pollIntervalMs?: number;
+  pollTimeoutMs?: number;
+}
+
+type LoginProgressStage = 'requesting' | 'reviewing' | 'authenticating';
+type LoginProgressCallback = (stage: LoginProgressStage) => void;
+type FlowType = string;
+```
+
+### RequestedResources
+
+```typescript
+interface RequestedResources {
+  // Resources the app is requesting access to
+  [key: string]: unknown;
+}
+```
+
+### Access Request Types
+
+```typescript
+interface CreateAccessRequest {
+  // Body for POST /bodhi/v1/apps/request-access
+  [key: string]: unknown;
+}
+
+interface CreateAccessRequestResponse {
+  // Response from creating an access request
+  id: string;
+  review_url?: string;
+  [key: string]: unknown;
+}
+
+interface AccessRequestStatusResponse {
+  id: string;
+  status: AppAccessRequestStatus;
+  [key: string]: unknown;
+}
+
+type AppAccessRequestStatus = 'draft' | 'approved' | 'denied' | 'failed' | 'expired';
+```
+
+### MCP Types
+
+```typescript
+interface ListMcpsResponse {
+  mcps: Mcp[];
+}
+
+interface Mcp {
+  id: string;
+  tools_cache: McpTool[];
+  [key: string]: unknown;
+}
+
+interface McpToolsResponse {
+  tools: McpTool[];
+}
+
+interface McpTool {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}
 ```
 
 ### LogLevel
@@ -826,9 +1083,7 @@ For advanced customization and power user scenarios:
 
 For SDK contributors or custom SDK integrations:
 
-- **[State Management Internals](./internals/state-management.md)** - State factories, storage keys, serialization
-- **[Message Protocols](./internals/message-protocols.md)** - Extension-to-extension communication protocol
-- **[Modal Protocol](./internals/modal-protocol.md)** - Setup modal iframe message protocol
+- **[SDK Internals](./internals/sdk-internals.md)** - State factories, storage keys, serialization, ext2ext communication protocol, and setup modal iframe message protocol
 
 ---
 

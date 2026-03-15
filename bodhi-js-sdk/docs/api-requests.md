@@ -54,7 +54,7 @@ async function sendChat(model: string, prompt: string) {
 }
 
 // Streaming
-async function streamChat(model: string, prompt: string) {
+async function sendStreamingChat(model: string, prompt: string) {
   const stream = client.chat.completions.create({
     model,
     messages: [{ role: 'user', content: prompt }],
@@ -359,6 +359,25 @@ if (isApiResultSuccess(result)) {
 }
 ```
 
+### Retrieve a Model
+
+**Recommended (OpenAI-compatible):**
+
+```typescript
+const model = await client.models.retrieve('llama-3.2');
+console.log(model.id, model.owned_by);
+```
+
+**Low-level alternative:**
+
+```typescript
+const result = await client.sendApiRequest<void, Model>('GET', '/v1/models/llama-3.2');
+
+if (isApiResultSuccess(result)) {
+  console.log(result.body.id, result.body.owned_by);
+}
+```
+
 ### Ping Server
 
 ```typescript
@@ -366,6 +385,90 @@ const result = await client.sendApiRequest<void, { message: string }>('GET', '/p
 
 if (isApiResultSuccess(result)) {
   console.log('Server response:', result.body.message);
+}
+```
+
+## MCP API
+
+The SDK provides a namespaced API for interacting with MCP (Model Context Protocol) servers configured on the backend.
+
+### List MCPs
+
+```typescript
+const { mcps } = await client.mcps.list();
+for (const mcp of mcps) {
+  console.log(mcp.id, mcp.tools_cache.length, 'cached tools');
+}
+```
+
+Each `Mcp` object includes a `tools_cache` array with pre-loaded tools, so you can often avoid a separate `listTools()` call.
+
+### List Tools for an MCP
+
+```typescript
+const { tools } = await client.mcps.listTools('my-mcp-server');
+for (const tool of tools) {
+  console.log(tool.name, '-', tool.description);
+  console.log('Schema:', JSON.stringify(tool.input_schema));
+}
+```
+
+### Refresh Tools
+
+Re-discover tools from the MCP server and update the cache:
+
+```typescript
+const { tools } = await client.mcps.refreshTools('my-mcp-server');
+console.log('Refreshed tools:', tools.map(t => t.name));
+```
+
+### Execute a Tool
+
+```typescript
+const result = await client.mcps.executeTool(
+  'my-mcp-server',
+  'search',
+  { query: 'hello world' }
+);
+console.log('Tool result:', result);
+```
+
+### Complete MCP Example
+
+```typescript
+import { useBodhi } from '@bodhiapp/bodhi-js-react';
+
+function McpTools() {
+  const { client } = useBodhi();
+  const [tools, setTools] = useState<{ name: string; description: string }[]>([]);
+
+  const loadTools = async () => {
+    const { mcps } = await client.mcps.list();
+    if (mcps.length > 0) {
+      const { tools } = await client.mcps.listTools(mcps[0].id);
+      setTools(tools.map(t => ({ name: t.name, description: t.description })));
+    }
+  };
+
+  const executeTool = async (mcpId: string, toolName: string) => {
+    try {
+      const result = await client.mcps.executeTool(mcpId, toolName, {});
+      console.log('Result:', result);
+    } catch (err) {
+      console.error('Tool execution failed:', err);
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={loadTools}>Load Tools</button>
+      <ul>
+        {tools.map(t => (
+          <li key={t.name}>{t.name}: {t.description}</li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 ```
 

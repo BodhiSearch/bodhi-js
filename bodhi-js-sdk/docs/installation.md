@@ -55,7 +55,7 @@ npm install @bodhiapp/bodhi-js
 
 **Quick example**:
 
-```tsx
+```typescript
 import { BodhiProvider, useBodhi } from '@bodhiapp/bodhi-js-react';
 
 <BodhiProvider authClientId="my-app">

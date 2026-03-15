@@ -85,6 +85,26 @@ interface ClientContextState {
 }
 
 type ClientContextStatus = 'not-initialized' | 'initializing' | 'extension-not-found' | 'direct-not-connected' | 'ready';
+
+type DeploymentMode = 'standalone' | 'multi_tenant';
+
+interface BackendServerState {
+  status: ServerStatus;
+  version: string | null;
+  deployment?: DeploymentMode | null;
+  client_id?: string | null;
+  error: OperationErrorResponse | null;
+}
+
+type ServerStatus =
+  | 'not-connected'
+  | 'pending-extension-ready'
+  | 'ready'
+  | 'tenant_selection'
+  | 'setup'
+  | 'resource_admin'
+  | 'error'
+  | 'not-reachable';
 ```
 
 ## Client Status Values
@@ -99,7 +119,7 @@ Initial state before client creation:
   mode: null,
   extensionId: null,
   url: null,
-  server: { status: 'not-connected', version: null, error: null }
+  server: { status: 'not-connected', version: null, deployment: null, client_id: null, error: null }
 }
 ```
 
@@ -113,7 +133,7 @@ Client.init() in progress:
   mode: null,
   extensionId: null,
   url: null,
-  server: { status: 'not-connected', version: null, error: null }
+  server: { status: 'not-connected', version: null, deployment: null, client_id: null, error: null }
 }
 ```
 
@@ -127,7 +147,7 @@ Extension mode but extension not detected:
   mode: 'extension',
   extensionId: null,
   url: null,
-  server: { status: 'pending-extension-ready', version: null, error: null }
+  server: { status: 'pending-extension-ready', version: null, deployment: null, client_id: null, error: null }
 }
 ```
 
@@ -141,7 +161,7 @@ Direct mode but no server URL configured:
   mode: 'direct',
   extensionId: null,
   url: null,
-  server: { status: 'not-connected', version: null, error: null }
+  server: { status: 'not-connected', version: null, deployment: null, client_id: null, error: null }
 }
 ```
 
@@ -155,7 +175,7 @@ Client ready for API calls:
   mode: 'extension',  // or 'direct'
   extensionId: 'abc123',  // or null if direct mode
   url: null,  // or 'http://localhost:1135' if direct
-  server: { status: 'ready', version: '0.1.0', error: null }
+  server: { status: 'ready', version: '0.1.0', deployment: 'standalone', client_id: null, error: null }
 }
 ```
 
@@ -169,6 +189,8 @@ Initial state, no connection attempted:
 {
   status: 'not-connected',
   version: null,
+  deployment: null,
+  client_id: null,
   error: null
 }
 ```
@@ -181,6 +203,8 @@ Waiting for extension to initialize:
 {
   status: 'pending-extension-ready',
   version: null,
+  deployment: null,
+  client_id: null,
   error: null
 }
 ```
@@ -193,7 +217,26 @@ Server operational and ready:
 {
   status: 'ready',
   version: '0.1.0',
+  deployment: 'standalone',  // or 'multi_tenant'
+  client_id: null,           // or active tenant's OAuth client_id
   error: null
+}
+```
+
+### tenant_selection
+
+Server is running in multi-tenant mode and requires tenant selection before proceeding:
+
+```typescript
+{
+  status: 'tenant_selection',
+  version: '0.1.0',
+  deployment: 'multi_tenant',
+  client_id: null,
+  error: {
+    message: 'server requires tenant selection',
+    type: 'extension_error'
+  }
 }
 ```
 
@@ -205,6 +248,8 @@ Server needs initial configuration:
 {
   status: 'setup',
   version: '0.1.0',
+  deployment: 'standalone',
+  client_id: null,
   error: {
     message: 'server is not in ready state, configure to complete setup',
     type: 'extension_error'
@@ -212,14 +257,16 @@ Server needs initial configuration:
 }
 ```
 
-### resource-admin
+### resource_admin
 
 Server needs resource setup:
 
 ```typescript
 {
-  status: 'resource-admin',
+  status: 'resource_admin',
   version: '0.1.0',
+  deployment: 'standalone',
+  client_id: null,
   error: {
     message: 'server is not in ready state, configure to complete setup',
     type: 'extension_error'
@@ -235,6 +282,8 @@ Server returned an error:
 {
   status: 'error',
   version: '0.1.0',  // or 'unknown' if version couldn't be determined
+  deployment: null,
+  client_id: null,
   error: {
     message: 'Server error occurred',
     type: 'server_error'
@@ -250,6 +299,8 @@ Server not accessible (network error):
 {
   status: 'not-reachable',
   version: null,
+  deployment: null,
+  client_id: null,
   error: {
     message: 'Connection refused',
     type: 'network_error'
@@ -271,6 +322,10 @@ extension-not-found (if extension not detected)
 ready (if extension detected)
     ↓ (server check)
 ready + server: ready
+    OR
+ready + server: tenant_selection (multi-tenant, needs tenant selection)
+    OR
+ready + server: setup (needs configuration)
 ```
 
 ### Direct Mode Flow
@@ -285,6 +340,10 @@ direct-not-connected (if no URL)
 ready (if URL configured)
     ↓ (server check)
 ready + server: ready
+    OR
+ready + server: tenant_selection (multi-tenant, needs tenant selection)
+    OR
+ready + server: setup (needs configuration)
 ```
 
 ## Checking State

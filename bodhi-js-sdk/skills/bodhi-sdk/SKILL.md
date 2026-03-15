@@ -280,6 +280,18 @@ for await (const model of client.models.list()) {
 }
 ```
 
+## Embeddings
+
+Generate vector embeddings from text:
+
+```tsx
+const response = await client.embeddings.create({
+  model: 'nomic-embed-text-v1.5',
+  input: 'text to embed',
+});
+const embedding = response.data[0].embedding; // number[]
+```
+
 ## Error Handling
 
 ```tsx

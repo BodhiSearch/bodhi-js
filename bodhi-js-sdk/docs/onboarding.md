@@ -128,8 +128,9 @@ Confirms local LLM server is running:
 **Server States**:
 
 - `ready`: Server operational
+- `tenant_selection`: Server is multi-tenant and requires tenant selection before proceeding
 - `setup`: Server needs initial configuration
-- `resource-admin`: Server needs resource setup
+- `resource_admin`: Server needs resource setup
 - `unreachable`: Server not running or not accessible
 
 ### 4. LNA (Local Network Access) Permission
@@ -443,7 +444,7 @@ console.log('Preferred mode:', clientState.mode);
 
 ## Advanced: Custom Modal Implementation
 
-For SDK contributors or custom modal implementations, see the [Modal Protocol Internals](./internals/modal-protocol.md) documentation.
+For SDK contributors or custom modal implementations, see the [SDK Internals](./internals/sdk-internals.md) documentation.
 
 ## Auto-Detection Behavior
 
@@ -451,7 +452,7 @@ The setup wizard includes intelligent auto-detection:
 
 ### Automatic Server Installation Confirmation
 
-When the server becomes reachable (status: `ready`, `setup`, or `resource-admin`) from EITHER extension or direct connection, the wizard automatically marks server installation as confirmed.
+When the server becomes reachable (status: `ready`, `tenant_selection`, `setup`, or `resource_admin`) from EITHER extension or direct connection, the wizard automatically marks server installation as confirmed.
 
 ### Automatic Connection Mode Selection
 
@@ -470,7 +471,7 @@ The LNA (Local Network Access) state is derived from:
 
 - Direct server connectivity test results
 - User preferences (granted, skipped, denied)
-- Server reachability (ready, setup, resource-admin → 'granted')
+- Server reachability (ready, tenant_selection, setup, resource_admin → 'granted')
 
 This ensures the wizard accurately reflects actual connection state rather than static prompts.
 

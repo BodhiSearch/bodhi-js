@@ -69,7 +69,7 @@ client.chat.completions.create(
 ): Promise<CreateChatCompletionResponse>
 ```
 
-> **Note**: For custom streaming endpoints beyond chat completions, use the generic `stream()` method. See [Advanced Streaming Patterns](./advanced/streaming-internals.md#custom-stream-method).
+> **Note**: For custom streaming endpoints beyond chat completions, use the generic `stream()` method. See [Advanced Streaming Patterns](./advanced/streaming-internals.md).
 
 ### Parameters
 
