@@ -188,7 +188,7 @@ export class Toolsets extends APIResource {
   async list(): Promise<ListToolsetsResponse> {
     const result = await this.client.sendApiRequest<void, ListToolsetsResponse>(
       'GET',
-      '/bodhi/v1/toolsets',
+      '/bodhi/v1/apps/toolsets',
       undefined,
       undefined,
       true
@@ -209,7 +209,7 @@ export class Toolsets extends APIResource {
   ): Promise<unknown> {
     const result = await this.client.sendApiRequest<{ params: Record<string, unknown> }, unknown>(
       'POST',
-      `/bodhi/v1/toolsets/${toolsetId}/tools/${toolName}/execute`,
+      `/bodhi/v1/apps/toolsets/${toolsetId}/tools/${toolName}/execute`,
       { params },
       undefined,
       true
@@ -231,7 +231,7 @@ export class Mcps extends APIResource {
   async list(): Promise<ListMcpsResponse> {
     const result = await this.client.sendApiRequest<void, ListMcpsResponse>(
       'GET',
-      '/bodhi/v1/mcps',
+      '/bodhi/v1/apps/mcps',
       undefined,
       undefined,
       true
@@ -248,7 +248,7 @@ export class Mcps extends APIResource {
   async listTools(mcpId: string): Promise<McpToolsResponse> {
     const result = await this.client.sendApiRequest<void, McpToolsResponse>(
       'GET',
-      `/bodhi/v1/mcps/${mcpId}/tools`,
+      `/bodhi/v1/apps/mcps/${mcpId}/tools`,
       undefined,
       undefined,
       true
@@ -265,7 +265,7 @@ export class Mcps extends APIResource {
   async refreshTools(mcpId: string): Promise<McpToolsResponse> {
     const result = await this.client.sendApiRequest<void, McpToolsResponse>(
       'POST',
-      `/bodhi/v1/mcps/${mcpId}/tools/refresh`,
+      `/bodhi/v1/apps/mcps/${mcpId}/tools/refresh`,
       undefined,
       undefined,
       true
@@ -286,7 +286,7 @@ export class Mcps extends APIResource {
   ): Promise<unknown> {
     const result = await this.client.sendApiRequest<{ params: Record<string, unknown> }, unknown>(
       'POST',
-      `/bodhi/v1/mcps/${mcpId}/tools/${toolName}/execute`,
+      `/bodhi/v1/apps/mcps/${mcpId}/tools/${toolName}/execute`,
       { params },
       undefined,
       true

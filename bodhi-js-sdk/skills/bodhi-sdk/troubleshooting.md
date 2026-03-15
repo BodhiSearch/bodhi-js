@@ -57,7 +57,7 @@
 ### Server status: 'tenant_selection'
 
 - Multi-tenant server — user needs to select a tenant
-- See `bodhi-sdk-advanced` skill for multi-tenant patterns
+- The setup wizard (`showSetup()`) handles tenant selection automatically
 
 ## Authentication Issues
 

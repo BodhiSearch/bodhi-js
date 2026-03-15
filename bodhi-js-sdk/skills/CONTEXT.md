@@ -55,8 +55,6 @@
 - client.models.list() → AsyncGenerator<Model>
 - client.models.retrieve(modelId) → Promise<Model>
 - client.embeddings.create({ model, input }) → Promise<CreateEmbeddingResponse>
-- client.toolsets.list() → Promise<ListToolsetsResponse>
-- client.toolsets.executeTool(toolsetId, toolName, params) → Promise<unknown>
 - client.mcps.list() → Promise<ListMcpsResponse>
 - client.mcps.listTools(mcpId) → Promise<McpToolsResponse>
 - client.mcps.refreshTools(mcpId) → Promise<McpToolsResponse>
@@ -106,7 +104,7 @@
 
 - Default: http://localhost:1135
 - OpenAI-compatible: /v1/chat/completions (streaming SSE), /v1/models, /v1/embeddings
-- Bodhi-specific: /bodhi/v1/mcps/_ (MCP CRUD + tool discovery/execution), /bodhi/v1/toolsets/_, /bodhi/v1/info
+- Bodhi-specific: /bodhi/v1/apps/mcps/\* (MCP tool discovery/execution for external apps), /bodhi/v1/info
 - Server states: ready, setup, resource_admin, tenant_selection, not-reachable
 - Deployment: standalone (default) vs multi_tenant
 - Auth: OAuth 2.1 + PKCE, API tokens
@@ -134,21 +132,16 @@
 
 ## MCP Integration (VERIFIED: core/src/openai-client-compat.ts:227-299)
 
-- client.mcps.list() → Promise<ListMcpsResponse> — GET /bodhi/v1/mcps
-- client.mcps.listTools(mcpId) → Promise<McpToolsResponse> — GET /bodhi/v1/mcps/{id}/tools
-- client.mcps.refreshTools(mcpId) → Promise<McpToolsResponse> — POST /bodhi/v1/mcps/{id}/tools/refresh
-- client.mcps.executeTool(mcpId, toolName, params) → Promise<unknown> — POST /bodhi/v1/mcps/{id}/tools/{name}/execute
-
-## Toolset Integration (VERIFIED: core/src/openai-client-compat.ts:184-222)
-
-- client.toolsets.list() → Promise<ListToolsetsResponse> — GET /bodhi/v1/toolsets
-- client.toolsets.executeTool(toolsetId, toolName, params) → Promise<unknown> — POST /bodhi/v1/toolsets/{id}/tools/{name}/execute
+- client.mcps.list() → Promise<ListMcpsResponse> — GET /bodhi/v1/apps/mcps
+- client.mcps.listTools(mcpId) → Promise<McpToolsResponse> — GET /bodhi/v1/apps/mcps/{id}/tools
+- client.mcps.refreshTools(mcpId) → Promise<McpToolsResponse> — POST /bodhi/v1/apps/mcps/{id}/tools/refresh
+- client.mcps.executeTool(mcpId, toolName, params) → Promise<unknown> — POST /bodhi/v1/apps/mcps/{id}/tools/{name}/execute
 
 ## Key Source Directories
 
 - bodhi-js-sdk/docs/ (20+ comprehensive guide files)
 - bodhi-js-sdk/core/src/interface.ts (UIClient interface)
-- bodhi-js-sdk/core/src/openai-client-compat.ts (Chat, Models, Embeddings, Toolsets, Mcps)
+- bodhi-js-sdk/core/src/openai-client-compat.ts (Chat, Models, Embeddings, Mcps)
 - bodhi-js-sdk/core/src/types/ (ClientState, AuthState, ApiResponseResult)
 - bodhi-js-sdk/react-core/src/BodhiProvider.tsx (React provider)
 - bodhi-js-sdk/react-core/src/client-ctx.ts (useBodhi context)

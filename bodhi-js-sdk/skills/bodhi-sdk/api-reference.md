@@ -62,31 +62,19 @@ const result = await client.embeddings.create({
 // result.usage — { prompt_tokens, total_tokens }
 ```
 
-### client.toolsets
-
-```typescript
-// List available toolsets
-const toolsets = await client.toolsets.list();
-// toolsets — ListToolsetsResponse
-
-// Execute a tool
-const result = await client.toolsets.executeTool(
-  toolsetId: string,    // Toolset UUID
-  toolName: string,     // Tool name within toolset
-  params: Record<string, unknown>  // Tool parameters (auto-wrapped in { params: {...} })
-);
-```
-
 ### client.mcps
 
 ```typescript
-// List MCP servers
-const mcps = await client.mcps.list();
-// mcps — ListMcpsResponse
+// List MCP servers (returns ListMcpsResponse with .mcps array)
+// Each Mcp object includes tools_cache: McpTool[] with pre-loaded tools
+const { mcps } = await client.mcps.list();
 
-// List tools for an MCP server
-const tools = await client.mcps.listTools(mcpId: string);
-// tools — McpToolsResponse
+// Access tools directly from tools_cache (no separate API call needed)
+const tools = mcps[0].tools_cache ?? [];
+// McpTool fields: name, description, input_schema (not "parameters")
+
+// List tools for an MCP server (returns McpToolsResponse with .tools array)
+const { tools } = await client.mcps.listTools(mcpId: string);
 
 // Refresh tool list (re-discovers tools from MCP server)
 const refreshed = await client.mcps.refreshTools(mcpId: string);
@@ -128,10 +116,25 @@ const stream = client.stream<RequestBody, ChunkType>(
 ## Auth Methods
 
 ```typescript
-// Initiate OAuth login (creates access request + review + OAuth in one flow)
+// Login — creates access request, opens user consent, then OAuth + PKCE
+// This is the primary entry point. See SKILL.md for the full login flow explanation.
 await client.login(options?: LoginOptions);
-// LoginOptions: { userRole?, requested?, flowType?, redirectUrl?, onProgress?, pollIntervalMs?, pollTimeoutMs? }
-// See bodhi-sdk-advanced skill for full access request flow details
+
+// LoginOptions — all fields optional:
+interface LoginOptions {
+  userRole?: UserScope;               // 'scope_user_user' | 'scope_user_power_user'
+  requested?: RequestedResources;     // MCPs your app needs
+  flowType?: FlowType;                // 'popup' (default) | 'redirect'
+  redirectUrl?: string;               // Return URL for redirect flow
+  onProgress?: LoginProgressCallback; // (stage: 'requesting'|'reviewing'|'authenticating') => void
+  pollIntervalMs?: number;            // Polling interval, default: 2000ms
+  pollTimeoutMs?: number;             // Polling timeout, default: 300000ms (5min)
+}
+
+// RequestedResources — what your app needs access to:
+interface RequestedResources {
+  mcp_servers?: Array<{ url: string }>;
+}
 
 // Logout and clear tokens
 await client.logout();
@@ -140,14 +143,18 @@ await client.logout();
 const auth = await client.getAuthState();
 // auth: { status, user, accessToken, error }
 
-// Request access (for access-controlled servers)
+// Low-level access request methods (login() wraps these automatically):
 const result = await client.requestAccess(body: CreateAccessRequest);
-
-// Poll for access approval
 const status = await client.pollAccessRequestStatus(
   requestId: string,
   options?: { intervalMs?: number, timeoutMs?: number }
 );
+
+// For web apps using redirect flow — handle return from review page:
+import { isWebUIClient } from '@bodhiapp/bodhi-js-react';
+if (isWebUIClient(client)) {
+  await client.handleAccessRequestCallback(requestId);
+}
 ```
 
 ## Connection Mode Methods
@@ -241,16 +248,16 @@ import { isAuthenticated } from '@bodhiapp/bodhi-js-react';
 
 ## Endpoints Reference
 
-| Method | Endpoint                                     | SDK Method                       |
-| ------ | -------------------------------------------- | -------------------------------- |
-| POST   | /v1/chat/completions                         | client.chat.completions.create() |
-| GET    | /v1/models                                   | client.models.list()             |
-| GET    | /v1/models/{id}                              | client.models.retrieve(id)       |
-| POST   | /v1/embeddings                               | client.embeddings.create()       |
-| GET    | /bodhi/v1/toolsets                           | client.toolsets.list()           |
-| POST   | /bodhi/v1/toolsets/{id}/tools/{name}/execute | client.toolsets.executeTool()    |
-| GET    | /bodhi/v1/mcps                               | client.mcps.list()               |
-| GET    | /bodhi/v1/mcps/{id}/tools                    | client.mcps.listTools()          |
-| POST   | /bodhi/v1/mcps/{id}/tools/refresh            | client.mcps.refreshTools()       |
-| POST   | /bodhi/v1/mcps/{id}/tools/{name}/execute     | client.mcps.executeTool()        |
-| GET    | /bodhi/v1/info                               | client.getServerState()          |
+| Method | Endpoint                                      | SDK Method                       |
+| ------ | --------------------------------------------- | -------------------------------- |
+| POST   | /v1/chat/completions                          | client.chat.completions.create() |
+| GET    | /v1/models                                    | client.models.list()             |
+| GET    | /v1/models/{id}                               | client.models.retrieve(id)       |
+| POST   | /v1/embeddings                                | client.embeddings.create()       |
+| GET    | /bodhi/v1/apps/mcps                           | client.mcps.list()               |
+| GET    | /bodhi/v1/apps/mcps/{id}/tools                | client.mcps.listTools()          |
+| POST   | /bodhi/v1/apps/mcps/{id}/tools/refresh        | client.mcps.refreshTools()       |
+| POST   | /bodhi/v1/apps/mcps/{id}/tools/{name}/execute | client.mcps.executeTool()        |
+| POST   | /bodhi/v1/apps/request-access                 | client.requestAccess()           |
+| GET    | /bodhi/v1/apps/access-requests/{id}           | client.getAccessRequestStatus()  |
+| GET    | /bodhi/v1/info                                | client.getServerState()          |

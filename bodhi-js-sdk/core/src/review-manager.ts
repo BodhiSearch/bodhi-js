@@ -50,7 +50,7 @@ export async function openPopupReview(
           resolve(result);
           return;
         }
-      } catch (_e) {
+      } catch {
         // poll errors are non-fatal, keep polling
       }
 
@@ -64,7 +64,7 @@ export async function openPopupReview(
             resolve(finalResult);
             return;
           }
-        } catch (_e) {
+        } catch {
           // ignore
         }
         cleanup();

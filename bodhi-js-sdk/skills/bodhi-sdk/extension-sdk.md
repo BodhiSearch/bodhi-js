@@ -1,15 +1,6 @@
----
-name: bodhi-sdk-extension
-description: >
-  Build Chrome extensions with bodhi-js-sdk extension packages. Use for @bodhiapp/bodhi-js-ext,
-  @bodhiapp/bodhi-js-react-ext, chrome.runtime messaging, chrome.identity auth, or extension-specific patterns.
-disable-model-invocation: true
-allowed-tools: Read, Grep, Glob, Edit, Write, Bash(npm:*), Bash(npx:*)
----
-
 # Bodhi JS SDK — Chrome Extension Development
 
-Guide for building Chrome extensions that connect to Bodhi App using the extension-specific SDK packages. These packages use `chrome.runtime` messaging and `chrome.identity` for auth instead of the web SDK's `window.bodhiext` and browser redirects.
+Guide for building Chrome extensions that connect to Bodhi App using extension-specific SDK packages. These use `chrome.runtime` messaging and `chrome.identity` for auth instead of the web SDK's `window.bodhiext` and browser redirects.
 
 ## Package Selection
 
@@ -49,11 +40,23 @@ import { useBodhi } from '@bodhiapp/bodhi-js-react-ext';
 function ExtensionContent() {
   const { client, isOverallReady, isAuthenticated, login } = useBodhi();
 
-  // Same useBodhi() API as web — see bodhi-sdk skill for full hook reference
+  // Same useBodhi() API and login flow as web — see main skill
   // Key difference: auth uses chrome.identity, not browser redirects
 
   if (!isOverallReady) return <div>Connecting to Bodhi...</div>;
-  if (!isAuthenticated) return <button onClick={() => login()}>Login</button>;
+  if (!isAuthenticated) {
+    return (
+      <button
+        onClick={() =>
+          login({
+            requested: { mcp_servers: [{ url: 'https://mcp.exa.ai/mcp' }] },
+          })
+        }
+      >
+        Login
+      </button>
+    );
+  }
 
   return <ChatUI />;
 }
@@ -73,30 +76,26 @@ function ExtensionContent() {
 
 ### Three-Client Architecture
 
-The extension SDK uses three internal client types (the `ExtUIClient` facade manages them):
+The extension SDK uses three internal client types (ExtUIClient facade manages them):
 
-1. **BodhiExtClient** — Communicates with the bodhi-browser-ext extension via `chrome.runtime.sendMessage()` to the Bodhi Browser extension ID
-2. **ExtClient** — Communicates with your own extension's background script via internal `chrome.runtime` messaging
+1. **BodhiExtClient** — `chrome.runtime.sendMessage()` to the Bodhi Browser extension
+2. **ExtClient** — Internal `chrome.runtime` messaging within your extension
 3. **DirectExtClient** — Direct HTTP fallback (same as web direct mode)
-
-`ExtUIClient` wraps these and switches between them based on connection mode, just like `WebUIClient` does on the web side.
 
 ### Auth via chrome.identity
 
 ```typescript
-// Extension OAuth uses popup-based auth (no redirect)
+// Happens automatically when you call login() — no config needed beyond authClientId
 chrome.identity.launchWebAuthFlow(
   {
     url: authorizationUrl,
     interactive: true,
   },
   redirectUrl => {
-    // Extract code from redirectUrl, exchange for tokens
+    /* extract code, exchange for tokens */
   }
 );
 ```
-
-This happens automatically when you call `login()` — no configuration needed beyond `authClientId`.
 
 ### Manifest v3 Permissions
 
@@ -110,8 +109,6 @@ Your extension's `manifest.json` needs:
   }
 }
 ```
-
-The `identity` permission enables `chrome.identity.launchWebAuthFlow()`. The `storage` permission enables `chrome.storage.session` for token persistence.
 
 ## Vanilla JS Extension
 
@@ -127,7 +124,7 @@ const client = new ExtUIClient('your-client-id', {
 
 await client.init();
 
-// Same client API as web — chat, models, embeddings, etc.
+// Same client API as web — chat, models, embeddings, MCPs
 const stream = client.chat.completions.create({
   model: 'gemma-3n-e4b-it',
   messages: [{ role: 'user', content: 'Hello' }],
@@ -141,41 +138,25 @@ for await (const chunk of stream) {
 
 ## Extension ↔ Extension Communication (ext2ext)
 
-If your extension needs to communicate with the Bodhi Browser extension directly (not through the SDK facade):
+Direct messaging to the Bodhi Browser extension:
 
 ```typescript
 import { BodhiExtClient } from '@bodhiapp/bodhi-js-ext';
 
-// Direct messaging to bodhi-browser-ext
 const extClient = new BodhiExtClient();
 await extClient.init();
-
-// Send extension-to-extension request
 const result = await extClient.sendExtRequest('ping', {});
 ```
 
-## Key Differences in State
-
-Extension mode adds `extensionId` to the client state:
-
-```tsx
-const { clientState } = useBodhi();
-
-if (clientState.mode === 'extension') {
-  console.log('Connected to Bodhi Browser:', clientState.extensionId);
-}
-```
-
-## Debugging Extension SDK
+## Debugging
 
 - Console prefix: `[Bodhi/Ext]` for extension SDK logs
 - Use `logLevel: 'debug'` in client config or BodhiProvider
-- Inspect extension service worker: `chrome://extensions` → Details → Inspect views
-- Check `chrome.storage.session` for token state: DevTools → Application → Session Storage
+- Inspect service worker: `chrome://extensions` → Details → Inspect views
+- Check `chrome.storage.session` for token state
 
 ## Key Source Files
 
 - `bodhi-js-sdk/ext/src/` — ExtUIClient, BodhiExtClient, ExtClient, DirectExtClient
 - `bodhi-js-sdk/react-ext/src/` — Extension BodhiProvider preset
-- `bodhi-js-sdk/ext/CLAUDE.md` — Extension package architecture details
-- `bodhi-js-sdk/react-ext/CLAUDE.md` — React extension bindings details
+- `bodhi-js-sdk/ext/CLAUDE.md` — Extension package architecture
