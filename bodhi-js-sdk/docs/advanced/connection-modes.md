@@ -18,7 +18,6 @@ INITIAL STATE
 │           │       └─ server check
 │           │           ├─ ready + server: 'ready' ✅
 │           │           ├─ ready + server: 'setup'
-│           │           ├─ ready + server: 'tenant_selection'
 │           │           ├─ ready + server: 'resource_admin'
 │           │           ├─ ready + server: 'error'
 │           │           └─ ready + server: 'not-reachable'
@@ -40,7 +39,6 @@ INITIAL STATE
 │           │       └─ server check
 │           │           ├─ ready + server: 'ready' ✅
 │           │           ├─ ready + server: 'setup'
-│           │           ├─ ready + server: 'tenant_selection'
 │           │           ├─ ready + server: 'resource_admin'
 │           │           ├─ ready + server: 'error'
 │           │           └─ ready + server: 'not-reachable'
@@ -49,8 +47,6 @@ INITIAL STATE
 │               └─ direct-not-connected
 │                   └─ server: 'not-connected'
 ```
-
-> **Note**: In multi-tenant mode, the server may return `'tenant_selection'` status when no tenant has been selected yet. The connection is not fully ready until a tenant is selected and the server transitions to `'ready'`. See [Multi-Tenant Patterns](./multi-tenant.md) for details.
 
 ### Mode Switching Transitions
 
@@ -64,6 +60,7 @@ Extension Mode                 Direct Mode
 ```
 
 **Mode switching requirements**:
+
 - `setConnectionMode('direct' | 'extension')` requires the client to be initialized (`isClientInitialized()` returns `true`), but does not require the server to be ready.
 - `testExtensionConnectivity(timeoutMs?)` returns an `ExtensionState` indicating whether the extension is reachable.
 - `testDirectConnectivity(serverUrl?)` returns a `DirectState` indicating whether the server is reachable at the given URL.

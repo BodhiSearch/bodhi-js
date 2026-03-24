@@ -12,13 +12,14 @@ import type {
   AccessRequestStatusResponse,
   CreateAccessRequest,
   CreateAccessRequestResponse,
+  PingResponse,
 } from '@bodhiapp/ts-client';
+import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
 import type { IConnectionClient, IExtensionClient } from './interface';
 import { Logger } from './logger';
 import { BodhiClientUserPrefsManager } from './storage';
 import { Chat, Models, Embeddings, Toolsets, Mcps } from './openai-client-compat';
 import type {
-  ApiResponseResult,
   AuthState,
   BackendServerState,
   ClientState,
@@ -368,7 +369,7 @@ export abstract class BaseFacadeClient<
     body?: TReq,
     headers?: Record<string, string>,
     authenticated?: boolean
-  ): Promise<ApiResponseResult<TRes>> {
+  ): Promise<ApiResponse<TRes>> {
     if (this.isNotSetOrDirect()) {
       return this.directClient.sendApiRequest(method, endpoint, body, headers, authenticated);
     }
@@ -400,18 +401,14 @@ export abstract class BaseFacadeClient<
     return this.extClient.getAuthState();
   }
 
-  requestAccess(
-    body: CreateAccessRequest
-  ): Promise<ApiResponseResult<CreateAccessRequestResponse>> {
+  requestAccess(body: CreateAccessRequest): Promise<ApiResponse<CreateAccessRequestResponse>> {
     if (this.isNotSetOrDirect()) {
       return this.directClient.requestAccess(body);
     }
     return this.extClient.requestAccess(body);
   }
 
-  getAccessRequestStatus(
-    requestId: string
-  ): Promise<ApiResponseResult<AccessRequestStatusResponse>> {
+  getAccessRequestStatus(requestId: string): Promise<ApiResponse<AccessRequestStatusResponse>> {
     if (this.isNotSetOrDirect()) {
       return this.directClient.getAccessRequestStatus(requestId);
     }
@@ -432,7 +429,7 @@ export abstract class BaseFacadeClient<
   // API Convenience
   // ============================================================================
 
-  pingApi(): Promise<ApiResponseResult<{ message: string }>> {
+  pingApi(): Promise<ApiResponse<PingResponse>> {
     if (this.isNotSetOrDirect()) {
       return this.directClient.pingApi();
     }

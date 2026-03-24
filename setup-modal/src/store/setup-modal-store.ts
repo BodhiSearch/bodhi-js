@@ -51,7 +51,7 @@ export const useSetupModalStore = create<SetupModalStore>((set, get) => ({
     if (!channel) {
       channel = new MessageChannel(window.parent, {
         debug: import.meta.env.DEV,
-        timeout: 30000, // 30 second timeout for requests
+        timeout: 1000, // 1 second timeout for requests
       });
       set({ channel });
     }

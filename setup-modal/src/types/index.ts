@@ -24,7 +24,6 @@ export {
   SERVER_UNEXPECTED_ERROR,
   SERVER_IN_SETUP_STATUS,
   SERVER_IN_ADMIN_STATUS,
-  SERVER_IN_TENANT_SELECTION_STATUS,
 } from './server';
 
 // LNA types
@@ -41,7 +40,6 @@ export type {
   LnaServerStateReady,
   LnaServerStateSetup,
   LnaServerStateResourceAdmin,
-  LnaServerStateTenantSelection,
   LnaServerStateError,
   LnaServerState,
 } from './lna';
@@ -78,7 +76,6 @@ export {
   isLnaServerStateReady,
   isLnaServerStateSetup,
   isLnaServerStateResourceAdmin,
-  isLnaServerStateTenantSelection,
   isLnaServerStateError,
   isSupportedBrowser,
   isNotSupportedBrowser,

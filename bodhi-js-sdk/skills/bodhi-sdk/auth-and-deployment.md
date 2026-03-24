@@ -155,16 +155,6 @@ Isolate storage and routing per tenant using `basePath`:
 
 Each `basePath` gets its own isolated storage (connection preferences, auth tokens). The OAuth callback URL is derived as `{origin}{basePath}/callback`.
 
-When connecting to a multi-tenant Bodhi server, the server may return a `tenant_selection` status, indicating the user needs to select a tenant:
-
-```tsx
-const { clientState } = useBodhi();
-
-if (clientState.server.status === 'tenant_selection') {
-  // Show tenant selection UI or call showSetup()
-}
-```
-
 ### OAuth Redirect URI for GitHub Pages
 
 Register the callback URL with the full base path:

@@ -8,7 +8,6 @@ import {
   createMockState,
   createReadyExtensionState,
   createReadyServerState,
-  createTenantSelectionServerState,
   createUnsupportedPlatformState,
 } from '@/test/mock-factories';
 import { describe, expect, test } from 'vitest';
@@ -206,16 +205,6 @@ describe('Step Logic Selectors', () => {
   test('selectDeterminedStep returns EXTENSION_SETUP when extension not ready', () => {
     const mockState = createMockState({
       extension: createExtensionNotInstalledState().extension,
-      userConfirmations: { serverInstall: true },
-    });
-    const state = createStoreState(mockState);
-    expect(selectDeterminedStep(state)).toBe(SetupStep.EXTENSION_SETUP);
-  });
-
-  test('selectDeterminedStep returns EXTENSION_SETUP when server in tenant-selection status', () => {
-    const mockState = createMockState({
-      extension: createReadyExtensionState(),
-      server: createTenantSelectionServerState(),
       userConfirmations: { serverInstall: true },
     });
     const state = createStoreState(mockState);

@@ -5,8 +5,7 @@
  * Used primarily by inject.ts to create the window.bodhiext API surface.
  */
 
-import type { OpenAiApiError, PingResponse, CreateChatCompletionRequest, CreateChatCompletionResponse, CreateChatCompletionStreamResponse } from '@bodhiapp/ts-client';
-import { isOperationErrorStructure } from './protocol';
+import type { AppStatus, OpenAiApiError, PingResponse, CreateChatCompletionRequest, CreateChatCompletionResponse, CreateChatCompletionStreamResponse } from '@bodhiapp/ts-client';
 
 //-----------------------------------------------------------------------------------
 // HTTP RESPONSE TYPES
@@ -40,7 +39,7 @@ export interface StreamChunk {
  */
 export interface ServerStateInfo {
   /** Current application status */
-  status: 'setup' | 'ready' | 'resource_admin' | 'tenant_selection' | 'error' | 'unreachable';
+  status: AppStatus | 'error' | 'unreachable';
   /** Application version */
   version?: string;
   /** Server URL (added by extension) */
@@ -52,59 +51,6 @@ export interface ServerStateInfo {
     code?: string;
     param?: string;
   };
-}
-
-//-----------------------------------------------------------------------------------
-// ERROR TYPES (Thrown by extension)
-//-----------------------------------------------------------------------------------
-
-/**
- * API error thrown when server returns HTTP 4xx/5xx
- * Used for streaming responses (non-streaming returns ApiResponse)
- */
-export interface ApiError extends Error {
-  response: {
-    status: number;
-    body: OpenAiApiError;
-    headers?: Record<string, string>;
-  };
-}
-
-/**
- * Operation error thrown when HTTP request couldn't complete
- * (network unreachable, timeout, extension error)
- */
-export interface OperationError extends Error {
-  error: {
-    message: string;
-    type: string; // Relaxed: any string allowed for custom error types
-  };
-}
-
-/**
- * Union of all extension-thrown errors
- */
-export type ExtensionError = ApiError | OperationError;
-
-/**
- * Type guard: API error (has response field)
- */
-export function isApiError(err: unknown): err is ApiError {
-  return (
-    err instanceof Error &&
-    'response' in err &&
-    typeof (err as ApiError).response === 'object' &&
-    (err as ApiError).response !== null &&
-    typeof (err as ApiError).response.status === 'number' &&
-    'body' in (err as ApiError).response
-  );
-}
-
-/**
- * Type guard: Operation error (has error field, no response)
- */
-export function isOperationError(err: unknown): err is OperationError {
-  return err instanceof Error && 'error' in err && !('response' in err) && isOperationErrorStructure((err as OperationError).error);
 }
 
 //-----------------------------------------------------------------------------------
@@ -132,7 +78,7 @@ export interface ChatCompletionsApi {
    * Create a chat completion
    *
    * Non-streaming: Returns ApiResponse - caller checks status for success/error
-   * Streaming: Yields chunks via AsyncIterable - throws ApiError or OperationError on error
+   * Streaming: Yields chunks via AsyncIterable - throws BodhiApiError or BodhiError on error
    *
    * @param params - Chat completion parameters
    * @returns Non-streaming: Promise<ApiResponse<CreateChatCompletionResponse>>, Streaming: AsyncIterable<CreateChatCompletionStreamResponse>

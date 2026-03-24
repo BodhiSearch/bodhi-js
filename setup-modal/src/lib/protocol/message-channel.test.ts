@@ -97,9 +97,9 @@ describe('MessageChannel', () => {
       const promise = channel.request('modal:ready', undefined);
 
       // Advance time past timeout
-      vi.advanceTimersByTime(31000);
+      vi.advanceTimersByTime(1100);
 
-      await expect(promise).rejects.toThrow('Request timeout after 30000ms: modal:ready');
+      await expect(promise).rejects.toThrow('Request timeout after 1000ms: modal:ready');
     });
 
     it('should reject on error response', async () => {

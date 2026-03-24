@@ -14,8 +14,7 @@ import {
   createStoragePrefixWithBasePath,
   generateCodeChallenge,
   generateCodeVerifier,
-  isApiResultOperationError,
-  isApiResultSuccess,
+  unwrapResponse,
   type AuthState,
   type DirectClientBaseConfig,
   type LoginOptions,
@@ -83,19 +82,10 @@ export class DirectExtClient extends DirectClientBase {
     }
 
     const accessRequestBody = builder.build();
+    // sendApiRequest throws BodhiError on operational errors
     const accessRequestResult = await this.requestAccess(accessRequestBody);
 
-    if (isApiResultOperationError(accessRequestResult)) {
-      throw createOperationError(accessRequestResult.error.message, accessRequestResult.error.type);
-    }
-    if (!isApiResultSuccess(accessRequestResult)) {
-      throw createOperationError(
-        `Access request failed: HTTP ${accessRequestResult.status}`,
-        'auth_error'
-      );
-    }
-
-    const { id: requestId, review_url: reviewUrl } = accessRequestResult.body;
+    const { id: requestId, review_url: reviewUrl } = unwrapResponse(accessRequestResult);
     options?.onProgress?.('reviewing');
 
     // Open review URL in a new tab
@@ -108,7 +98,7 @@ export class DirectExtClient extends DirectClientBase {
     });
 
     if (statusResponse.status !== 'approved') {
-      throw createOperationError(`Access request ${statusResponse.status}`, 'auth_error');
+      throw createOperationError('auth_error', `Access request ${statusResponse.status}`);
     }
 
     const accessRequestScope = statusResponse.access_request_scope;
@@ -154,7 +144,7 @@ export class DirectExtClient extends DirectClientBase {
               this.storageKeys.CODE_VERIFIER,
               this.storageKeys.STATE,
             ]);
-            reject(createOperationError('No redirect URL received', 'oauth-error'));
+            reject(createOperationError('oauth_error', 'No redirect URL received'));
             return;
           }
           try {
@@ -167,7 +157,7 @@ export class DirectExtClient extends DirectClientBase {
                 this.storageKeys.CODE_VERIFIER,
                 this.storageKeys.STATE,
               ]);
-              reject(createOperationError('State mismatch', 'oauth-error'));
+              reject(createOperationError('oauth_error', 'State mismatch'));
               return;
             }
             if (!code) {
@@ -175,13 +165,13 @@ export class DirectExtClient extends DirectClientBase {
                 this.storageKeys.CODE_VERIFIER,
                 this.storageKeys.STATE,
               ]);
-              reject(createOperationError('No authorization code', 'oauth-error'));
+              reject(createOperationError('oauth_error', 'No authorization code'));
               return;
             }
             await this.exchangeCodeForTokens(code);
             const authState = await this.getAuthState();
             if (authState.status !== 'authenticated') {
-              throw createOperationError('Login failed', 'oauth-error');
+              throw createOperationError('oauth_error', 'Login failed');
             }
             this.setAuthState(authState);
             await chrome.storage.session.remove([

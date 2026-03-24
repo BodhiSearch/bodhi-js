@@ -54,24 +54,19 @@
 - Server requires admin to approve user access
 - Use `client.requestAccess()` and `client.pollAccessRequestStatus()` to request and wait for approval
 
-### Server status: 'tenant_selection'
+### All Server Status Values
 
-`clientState.server.status === 'tenant_selection'`
+For reference, `clientState.server.status` can be:
 
-- Multi-tenant Bodhi server deployment — user needs to select a tenant before the server becomes `ready`
-- The setup wizard (`showSetup()`) handles tenant selection automatically
-- You can also detect this in code:
-
-```tsx
-const { clientState, showSetup } = useBodhi();
-
-if (clientState.server.status === 'tenant_selection') {
-  // Either call showSetup() or display a custom tenant selection UI
-  showSetup();
-}
-```
-
-- Check `clientState.server.deployment` — it will be `'multi_tenant'` for multi-tenant servers
+| Status                      | Meaning                   | `isServerReady` | Login works? |
+| --------------------------- | ------------------------- | --------------- | ------------ |
+| `'not-connected'`           | Not yet configured        | `false`         | No           |
+| `'pending-extension-ready'` | Waiting for extension     | `false`         | No           |
+| `'ready'`                   | Server operational        | `true`          | Yes          |
+| `'setup'`                   | Needs initial setup       | `false`         | No           |
+| `'resource_admin'`          | Needs admin approval      | `false`         | No           |
+| `'error'`                   | Server error              | `false`         | No           |
+| `'not-reachable'`           | Network error / wrong URL | `false`         | No           |
 
 ## Authentication Issues
 

@@ -48,6 +48,19 @@ export async function testServerConnectivity(
       };
     }
 
+    // Try to parse error body as OpenAI API error format { error: { message, type, code?, param? } }
+    try {
+      const errorBody = await response.json();
+      if (errorBody?.error?.message && errorBody?.error?.type) {
+        return {
+          success: false,
+          error: errorBody.error,
+        };
+      }
+    } catch {
+      // JSON parse failed, fall through to generic error
+    }
+
     return {
       success: false,
       error: {
@@ -72,10 +85,12 @@ import type {
   CreateAccessRequest,
   CreateAccessRequestResponse,
   DeploymentMode,
+  PingResponse,
   UserScope,
 } from '@bodhiapp/ts-client';
+import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
+import { BodhiError, BodhiApiError } from '@bodhiapp/bodhi-browser-types';
 import { DEFAULT_API_TIMEOUT_MS } from './constants';
-import { createOperationError } from './errors';
 import { pollAccessRequestUntilResolved } from './access-request';
 import type { IDirectClient } from './interface';
 import { Logger } from './logger';
@@ -89,7 +104,6 @@ import {
 } from './oauth';
 import { createStorageKeys, type StorageKeys } from './storage';
 import {
-  type ApiResponseResult,
   type AuthState,
   type BackendServerState,
   type ClientState,
@@ -217,12 +231,7 @@ export abstract class DirectClientBase implements IDirectClient {
             deployment: connectivity.serverInfo.deployment ?? null,
             client_id: connectivity.serverInfo.client_id ?? null,
           };
-        } else if (
-          status === 'setup' ||
-          status === 'resource_admin' ||
-          status === 'tenant_selection' ||
-          status === 'error'
-        ) {
+        } else if (status === 'setup' || status === 'resource_admin' || status === 'error') {
           serverState = backendServerNotReady(
             status,
             version,
@@ -276,9 +285,9 @@ export abstract class DirectClientBase implements IDirectClient {
    */
   private ensureInitialized(): void {
     if (!this.serverUrl) {
-      throw createOperationError(
-        'DirectClient not initialized. Call init(serverUrl) first.',
-        'not-initialized'
+      throw new BodhiError(
+        'not_initialized',
+        'DirectClient not initialized. Call init(serverUrl) first.'
       );
     }
   }
@@ -293,14 +302,9 @@ export abstract class DirectClientBase implements IDirectClient {
     body?: TReq,
     headers?: Record<string, string>,
     authenticated: boolean = true
-  ): Promise<ApiResponseResult<TRes>> {
+  ): Promise<ApiResponse<TRes>> {
     if (!this.serverUrl) {
-      return {
-        error: {
-          message: 'Client not initialized - connection failed',
-          type: 'not-initialized',
-        },
-      };
+      throw new BodhiError('not_initialized', 'Client not initialized - connection failed');
     }
     const url = `${this.serverUrl}${endpoint}`;
     this.logger.debug(`${method} ${url}`);
@@ -347,24 +351,17 @@ export abstract class DirectClientBase implements IDirectClient {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       // Check if error is from abort controller timeout
       if (error instanceof Error && error.name === 'AbortError') {
-        return {
-          error: {
-            message: `[bodhi-js-sdk/direct] network timeout: api request not completed within configured/default timeout of ${this.apiTimeoutMs}ms`,
-            type: 'network_error',
-          },
-        };
+        throw new BodhiError(
+          'timeout_error',
+          `[bodhi-js-sdk/direct] network timeout: api request not completed within configured/default timeout of ${this.apiTimeoutMs}ms`
+        );
       }
-      return {
-        error: {
-          message: `Network error: ${errorMessage}`,
-          type: 'network_error',
-        },
-      };
+      throw new BodhiError('network_error', `Network error: ${errorMessage}`);
     }
   }
 
-  async pingApi(): Promise<ApiResponseResult<{ message: string }>> {
-    return this.sendApiRequest<void, { message: string }>('GET', '/ping', undefined, {}, false);
+  async pingApi(): Promise<ApiResponse<PingResponse>> {
+    return this.sendApiRequest<void, PingResponse>('GET', '/ping', undefined, {}, false);
   }
 
   /**
@@ -401,8 +398,6 @@ export abstract class DirectClientBase implements IDirectClient {
           error: { message: 'Resource admin required', type: 'extension_error' },
           ...baseFields,
         };
-      case 'tenant_selection':
-        return { status: 'tenant_selection', version: info.version, error: null, ...baseFields };
       case 'error':
         return {
           status: 'error',
@@ -431,7 +426,7 @@ export abstract class DirectClientBase implements IDirectClient {
     authenticated: boolean = true
   ): AsyncGenerator<TRes> {
     if (!this.serverUrl) {
-      throw createOperationError('Client not initialized - connection failed', 'not-initialized');
+      throw new BodhiError('not_initialized', 'Client not initialized - connection failed');
     }
     const url = `${this.serverUrl}${endpoint}`;
     this.logger.debug(`Stream ${method} ${url}`);
@@ -449,18 +444,32 @@ export abstract class DirectClientBase implements IDirectClient {
       }
     }
 
-    const response = await fetch(url, {
-      method,
-      headers: fetchHeaders,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method,
+        headers: fetchHeaders,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new BodhiError('network_error', `Network error: ${errorMessage}`);
+    }
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+      // Try to parse error body as OpenAI API error format
+      let errorBody: any;
+      try {
+        errorBody = await response.json();
+      } catch {
+        errorBody = { error: { message: `HTTP ${response.status}`, type: 'api_error' } };
+      }
+      const message = errorBody?.error?.message || `HTTP ${response.status}`;
+      throw new BodhiApiError(response.status, errorBody, message);
     }
 
     if (!response.body) {
-      throw new Error('Response body is null');
+      throw new BodhiError('network_error', 'Response body is null');
     }
 
     const reader = response.body.getReader();
@@ -564,7 +573,7 @@ export abstract class DirectClientBase implements IDirectClient {
 
   async requestAccess(
     body: CreateAccessRequest
-  ): Promise<ApiResponseResult<CreateAccessRequestResponse>> {
+  ): Promise<ApiResponse<CreateAccessRequestResponse>> {
     return this.sendApiRequest<CreateAccessRequest, CreateAccessRequestResponse>(
       'POST',
       '/bodhi/v1/apps/request-access',
@@ -576,7 +585,7 @@ export abstract class DirectClientBase implements IDirectClient {
 
   async getAccessRequestStatus(
     requestId: string
-  ): Promise<ApiResponseResult<AccessRequestStatusResponse>> {
+  ): Promise<ApiResponse<AccessRequestStatusResponse>> {
     return this.sendApiRequest<void, AccessRequestStatusResponse>(
       'GET',
       `/bodhi/v1/apps/access-requests/${requestId}?app_client_id=${encodeURIComponent(this.authClientId)}`,
@@ -699,9 +708,9 @@ export abstract class DirectClientBase implements IDirectClient {
 
     // Refresh failed (temp issue) - throw error (don't clear tokens)
     this.logger.warn('Token refresh failed, keeping tokens for manual retry');
-    throw createOperationError(
-      'Access token expired and unable to refresh. Try logging out and logging in again.',
-      'token_refresh_failed'
+    throw new BodhiError(
+      'auth_error',
+      'Access token expired and unable to refresh. Try logging out and logging in again.'
     );
   }
 

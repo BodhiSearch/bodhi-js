@@ -19,8 +19,8 @@ import type {
   ListMcpsResponse,
   McpToolsResponse,
 } from '@bodhiapp/ts-client';
-import type { ApiResponseResult } from './types';
-import { createOperationError } from './errors';
+import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
+import { unwrapResponse } from '@bodhiapp/bodhi-browser-types';
 
 /**
  * Minimal client interface required by resource classes
@@ -32,7 +32,7 @@ export interface ResourceClient {
     body?: TReq,
     headers?: Record<string, string>,
     authenticated?: boolean
-  ): Promise<ApiResponseResult<TRes>>;
+  ): Promise<ApiResponse<TRes>>;
 
   stream<TReq = unknown, TRes = unknown>(
     method: string,
@@ -89,12 +89,7 @@ export class Completions extends APIResource {
         CreateChatCompletionRequest,
         CreateChatCompletionResponse
       >('POST', '/v1/chat/completions', body, undefined, true)
-      .then((result) => {
-        if ('error' in result) {
-          throw createOperationError(result.error.message, result.error.type);
-        }
-        return result.body as CreateChatCompletionResponse;
-      });
+      .then((result) => unwrapResponse(result));
   }
 }
 
@@ -127,11 +122,7 @@ export class Models extends APIResource {
       true
     );
 
-    if ('error' in result) {
-      throw createOperationError(result.error.message, result.error.type);
-    }
-
-    const response = result.body as ListModelsResponse;
+    const response = unwrapResponse(result);
     for (const model of response.data) {
       yield model;
     }
@@ -149,11 +140,7 @@ export class Models extends APIResource {
       true
     );
 
-    if ('error' in result) {
-      throw createOperationError(result.error.message, result.error.type);
-    }
-
-    return result.body as Model;
+    return unwrapResponse(result);
   }
 }
 
@@ -170,11 +157,7 @@ export class Embeddings extends APIResource {
       CreateEmbeddingResponse
     >('POST', '/v1/embeddings', body, undefined, true);
 
-    if ('error' in result) {
-      throw createOperationError(result.error.message, result.error.type);
-    }
-
-    return result.body as CreateEmbeddingResponse;
+    return unwrapResponse(result);
   }
 }
 
@@ -193,10 +176,7 @@ export class Toolsets extends APIResource {
       undefined,
       true
     );
-    if ('error' in result) {
-      throw createOperationError(result.error.message, result.error.type);
-    }
-    return result.body as ListToolsetsResponse;
+    return unwrapResponse(result);
   }
 
   /**
@@ -214,10 +194,7 @@ export class Toolsets extends APIResource {
       undefined,
       true
     );
-    if ('error' in result) {
-      throw createOperationError(result.error.message, result.error.type);
-    }
-    return result.body;
+    return unwrapResponse(result);
   }
 }
 
@@ -236,10 +213,7 @@ export class Mcps extends APIResource {
       undefined,
       true
     );
-    if ('error' in result) {
-      throw createOperationError(result.error.message, result.error.type);
-    }
-    return result.body as ListMcpsResponse;
+    return unwrapResponse(result);
   }
 
   /**
@@ -253,10 +227,7 @@ export class Mcps extends APIResource {
       undefined,
       true
     );
-    if ('error' in result) {
-      throw createOperationError(result.error.message, result.error.type);
-    }
-    return result.body as McpToolsResponse;
+    return unwrapResponse(result);
   }
 
   /**
@@ -270,10 +241,7 @@ export class Mcps extends APIResource {
       undefined,
       true
     );
-    if ('error' in result) {
-      throw createOperationError(result.error.message, result.error.type);
-    }
-    return result.body as McpToolsResponse;
+    return unwrapResponse(result);
   }
 
   /**
@@ -291,9 +259,6 @@ export class Mcps extends APIResource {
       undefined,
       true
     );
-    if ('error' in result) {
-      throw createOperationError(result.error.message, result.error.type);
-    }
-    return result.body;
+    return unwrapResponse(result);
   }
 }

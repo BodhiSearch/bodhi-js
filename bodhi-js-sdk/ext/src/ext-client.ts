@@ -4,6 +4,7 @@ import type {
   AccessRequestStatusResponse,
   CreateAccessRequest,
   CreateAccessRequestResponse,
+  PingResponse,
 } from '@bodhiapp/ts-client';
 import {
   INITIAL_AUTH_STATE,
@@ -12,20 +13,18 @@ import {
   Logger,
   NOOP_STATE_CALLBACK,
   PENDING_EXTENSION_READY,
-  createApiError,
   createExtensionStateNotFound,
   createExtensionStateNotInitialized,
   createOperationError,
-  isApiResultOperationError,
-  isApiResultSuccess,
   isAuthError,
   pollAccessRequestUntilResolved,
+  BodhiError,
+  BodhiApiError,
   Chat,
   Models,
   Embeddings,
   Toolsets,
   Mcps,
-  type ApiResponseResult,
   type AuthState,
   type BackendServerState,
   type ClientState,
@@ -36,7 +35,8 @@ import {
   type ServerInfoResponse,
   type StateChangeCallback,
 } from '@bodhiapp/bodhi-js-core';
-import { isApiSuccessResponse, isExtError, isOperationError } from '@bodhiapp/bodhi-browser-types';
+import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
+import { isApiSuccessResponse, isExtError } from '@bodhiapp/bodhi-browser-types';
 import {
   DEFAULT_API_TIMEOUT_MS,
   DISCOVERY_TIMEOUT_MS,
@@ -314,13 +314,13 @@ export class ExtClient implements IExtensionClient {
       } as ExtClientRequestMessage)) as ExtClientResponseMessage;
 
       if (!response) {
-        throw createOperationError('No response from background script', 'extension_error');
+        throw createOperationError('extension_error', 'No response from background script');
       }
 
       if (response.type !== EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_RESPONSE) {
         throw createOperationError(
-          'Invalid response type from background script',
-          'extension_error'
+          'extension_error',
+          'Invalid response type from background script'
         );
       }
 
@@ -328,17 +328,17 @@ export class ExtClient implements IExtensionClient {
       const res = response.response;
       if (isExtError(res)) {
         const errorType = res.error.type || 'extension_error';
-        throw createOperationError(res.error.message, errorType);
+        throw createOperationError(errorType, res.error.message);
       }
 
       return res as TRes;
     } catch (err) {
-      if (isOperationError(err)) {
+      if (err instanceof BodhiError) {
         throw err;
       }
       throw createOperationError(
-        err instanceof Error ? err.message : 'Unknown error occurred',
-        'extension_error'
+        'extension_error',
+        err instanceof Error ? err.message : 'Unknown error occurred'
       );
     }
   }
@@ -372,7 +372,8 @@ export class ExtClient implements IExtensionClient {
   }
 
   /**
-   * Send an API message and convert to protocol-agnostic ApiResponseResult
+   * Send an API message and return ApiResponse
+   * @throws BodhiError on operational errors (network, timeout, extension-level)
    */
   public async sendApiRequest<TReq = void, TRes = unknown>(
     method: string,
@@ -380,7 +381,7 @@ export class ExtClient implements IExtensionClient {
     body?: TReq,
     headers?: Record<string, string>,
     authenticated?: boolean
-  ): Promise<ApiResponseResult<TRes>> {
+  ): Promise<ApiResponse<TRes>> {
     try {
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(
@@ -401,22 +402,15 @@ export class ExtClient implements IExtensionClient {
 
       if (isExtClientApiError(extResponse)) {
         const errorType = extResponse.error.type || 'extension_error';
-        return {
-          error: {
-            message: extResponse.error.message,
-            type: errorType,
-          },
-        };
+        throw new BodhiError(errorType, extResponse.error.message);
       }
       return extResponse.response;
     } catch (error) {
+      if (error instanceof BodhiError) {
+        throw error;
+      }
       const errorMessage = error instanceof Error ? error.message : String(error);
-      return {
-        error: {
-          message: errorMessage,
-          type: 'network_error',
-        },
-      };
+      throw new BodhiError('network_error', errorMessage);
     }
   }
 
@@ -444,12 +438,12 @@ export class ExtClient implements IExtensionClient {
             const authState = await this.getAuthState();
             if (isAuthError(authState)) {
               reject(
-                createOperationError(`Login failed: ${authState.error?.message}`, 'auth-error')
+                createOperationError('auth_error', `Login failed: ${authState.error?.message}`)
               );
               return;
             }
             if (authState.status !== 'authenticated') {
-              reject(createOperationError('Login failed: User is not logged in', 'auth-error'));
+              reject(createOperationError('auth_error', 'Login failed: User is not logged in'));
               return;
             }
             this.setAuthState(authState);
@@ -508,8 +502,8 @@ export class ExtClient implements IExtensionClient {
   /**
    * Ping bodhi-browser-ext API via /ping endpoint
    */
-  async pingApi(): Promise<ApiResponseResult<{ message: string }>> {
-    return this.sendApiRequest<void, { message: string }>('GET', '/ping');
+  async pingApi(): Promise<ApiResponse<PingResponse>> {
+    return this.sendApiRequest<void, PingResponse>('GET', '/ping');
   }
 
   /**
@@ -517,17 +511,21 @@ export class ExtClient implements IExtensionClient {
    * Calls /bodhi/v1/info and returns structured server state
    */
   async getServerState(): Promise<BackendServerState> {
-    const result = await this.sendApiRequest<void, ServerInfoResponse>('GET', '/bodhi/v1/info');
-
-    if (isApiResultOperationError(result)) {
+    let result: ApiResponse<ServerInfoResponse>;
+    try {
+      result = await this.sendApiRequest<void, ServerInfoResponse>('GET', '/bodhi/v1/info');
+    } catch (error) {
+      // BodhiError from sendApiRequest (network, timeout, extension-level)
+      const errorMessage = error instanceof Error ? error.message : 'Connection failed';
+      const errorType = error instanceof BodhiError ? error.code : 'extension_error';
       return {
         status: 'not-reachable',
         version: null,
-        error: result.error,
+        error: { message: errorMessage, type: errorType },
       };
     }
 
-    if (!isApiResultSuccess(result)) {
+    if (result.status >= 400) {
       return {
         status: 'not-reachable',
         version: null,
@@ -535,7 +533,7 @@ export class ExtClient implements IExtensionClient {
       };
     }
 
-    const body = result.body;
+    const body = result.body as ServerInfoResponse;
 
     const version = body.version || 'unknown';
     const baseFields = { deployment: body.deployment ?? null, client_id: body.client_id ?? null };
@@ -560,8 +558,6 @@ export class ExtClient implements IExtensionClient {
             : { message: 'Resource admin required', type: 'extension_error' },
           ...baseFields,
         };
-      case 'tenant_selection':
-        return { status: 'tenant_selection', version, error: null, ...baseFields };
       case 'error':
         return {
           status: 'error',
@@ -622,9 +618,9 @@ export class ExtClient implements IExtensionClient {
                 error: JSON.stringify((message as ExtClientStreamErrorMessage).error),
               });
               controller.error(
-                createOperationError(
-                  (message as ExtClientStreamErrorMessage).error.message,
-                  'extension_error'
+                new BodhiError(
+                  'extension_error',
+                  (message as ExtClientStreamErrorMessage).error.message
                 )
               );
               port.disconnect();
@@ -637,10 +633,10 @@ export class ExtClient implements IExtensionClient {
                 error: apiErr.response.body?.error,
               });
               controller.error(
-                createApiError(
-                  apiErr.response.body?.error?.message || 'API error',
+                new BodhiApiError(
                   apiErr.response.status,
-                  apiErr.response.body
+                  apiErr.response.body,
+                  apiErr.response.body?.error?.message || 'API error'
                 )
               );
               port.disconnect();
@@ -661,9 +657,7 @@ export class ExtClient implements IExtensionClient {
         port.onDisconnect.addListener(() => {
           this.logger.debug('Port disconnected', { requestId });
           try {
-            controller.error(
-              createOperationError('Connection closed unexpectedly', 'extension_error')
-            );
+            controller.error(new BodhiError('connection_closed', 'Connection closed unexpectedly'));
           } catch {
             // Controller already closed
           }
@@ -723,7 +717,7 @@ export class ExtClient implements IExtensionClient {
 
   async requestAccess(
     body: CreateAccessRequest
-  ): Promise<ApiResponseResult<CreateAccessRequestResponse>> {
+  ): Promise<ApiResponse<CreateAccessRequestResponse>> {
     return this.sendApiRequest<CreateAccessRequest, CreateAccessRequestResponse>(
       'POST',
       '/bodhi/v1/apps/request-access',
@@ -735,7 +729,7 @@ export class ExtClient implements IExtensionClient {
 
   async getAccessRequestStatus(
     requestId: string
-  ): Promise<ApiResponseResult<AccessRequestStatusResponse>> {
+  ): Promise<ApiResponse<AccessRequestStatusResponse>> {
     return this.sendApiRequest<void, AccessRequestStatusResponse>(
       'GET',
       `/bodhi/v1/apps/access-requests/${requestId}?app_client_id=${encodeURIComponent(this.authClientId)}`,

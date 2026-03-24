@@ -1,45 +1,40 @@
 /**
  * Error factory functions for creating throwable error instances
  *
- * These implementations are specific to bodhi-js-sdk/core.
- * The type definitions come from bodhi-browser-ext types.
+ * These create BodhiError and BodhiApiError instances from bodhi-browser-ext types.
+ * Parameter order matches the constructor signatures.
  */
 
-import type { ApiError, OperationError } from '@bodhiapp/bodhi-browser-types';
+import { BodhiError, BodhiApiError } from '@bodhiapp/bodhi-browser-types';
+import type { BodhiErrorCode } from '@bodhiapp/bodhi-browser-types';
+import type { OpenAiApiError } from '@bodhiapp/ts-client';
 
 /**
  * Create API error (HTTP 4xx/5xx from server)
- * Thrown for streaming responses when server returns error
+ * Extracts Error.message from body.error.message automatically.
  *
- * @param message - Error message
  * @param status - HTTP status code
- * @param body - Error body from server
+ * @param body - Error body from server (OpenAI error format)
  * @param headers - Optional response headers
- * @returns ApiError instance
+ * @returns BodhiApiError instance
  */
 export const createApiError = (
-  message: string,
   status: number,
-
-  body: any,
+  body: OpenAiApiError,
   headers?: Record<string, string>
-): ApiError => {
-  const error = new Error(message) as ApiError;
-
-  error.response = { status, body: body as any, headers };
-  return error;
+): BodhiApiError => {
+  const message = body?.error?.message || `HTTP ${status}`;
+  return new BodhiApiError(status, body, message, headers);
 };
 
 /**
  * Create operation error (network/extension level)
  * Thrown when HTTP request couldn't complete
  *
+ * @param code - Error code (network_error, timeout_error, etc.)
  * @param message - Error message
- * @param type - Error type (network_error, timeout_error, etc.)
- * @returns OperationError instance
+ * @returns BodhiError instance
  */
-export const createOperationError = (message: string, type: string): OperationError => {
-  const error = new Error(message) as OperationError;
-  error.error = { message, type };
-  return error;
+export const createOperationError = (code: string, message: string): BodhiError => {
+  return new BodhiError(code as BodhiErrorCode, message);
 };

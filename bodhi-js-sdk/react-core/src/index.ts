@@ -40,20 +40,20 @@ export {
 } from './client-ctx';
 
 // Re-exported types from core (internal monorepo package)
-export type { ApiResponseResult, ClientState, LogLevel } from '@bodhiapp/bodhi-js-core';
+export type { ClientState, LogLevel } from '@bodhiapp/bodhi-js-core';
 
 // Re-exported utilities from core
-export {
-  isApiResultError,
-  isApiResultOperationError,
-  isApiResultSuccess,
-  isDirectState,
-  isExtensionState,
-  isWebUIClient,
-} from '@bodhiapp/bodhi-js-core';
+export { isDirectState, isExtensionState, isWebUIClient } from '@bodhiapp/bodhi-js-core';
 
-// Error factories from core
-export { createApiError, createOperationError } from '@bodhiapp/bodhi-js-core';
+// Error classes and utilities from core
+export {
+  BodhiError,
+  BodhiApiError,
+  unwrapResponse,
+  createApiError,
+  createOperationError,
+} from '@bodhiapp/bodhi-js-core';
+export type { BodhiErrorCode } from '@bodhiapp/bodhi-js-core';
 
 // Types (for type annotations)
 export type { AuthState, UIClient, LoginOptions, UserScope } from '@bodhiapp/bodhi-js-core';
@@ -66,8 +66,8 @@ export {
   isClientReady,
 } from '@bodhiapp/bodhi-js-core';
 
-// Error types and guards (from bodhi-browser/types via core)
-export { isOperationError, type OperationError } from '@bodhiapp/bodhi-js-core';
+// ApiResponse type (from bodhi-browser/types via core)
+export type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
 
 // Re-export build info
 export { BUILD_MODE as REACT_CORE_BUILD_MODE } from './build-info';

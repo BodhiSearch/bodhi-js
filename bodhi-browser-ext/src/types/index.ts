@@ -9,9 +9,9 @@
 // PUBLIC API TYPES (window.bodhiext)
 //-----------------------------------------------------------------------------------
 
-export type { ApiResponse, StreamChunk, ServerStateInfo, ApiError, OperationError, ExtensionError, ChatCompletionsApi, ChatApi, BodhiExtPublicApi } from './bodhiext';
+export type { ApiResponse, StreamChunk, ServerStateInfo, ChatCompletionsApi, ChatApi, BodhiExtPublicApi } from './bodhiext';
 
-export { isApiError, isOperationError } from './bodhiext';
+export { BodhiError, BodhiApiError, unwrapResponse, type BodhiErrorCode } from './errors';
 
 //-----------------------------------------------------------------------------------
 // INTERNAL PROTOCOL TYPES

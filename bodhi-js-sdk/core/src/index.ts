@@ -2,7 +2,7 @@
  * @bodhiapp/bodhi-js-core - Minimal shared types and interfaces
  *
  * This package contains the minimal shared code between ext and web SDKs:
- * - Types (ApiResponseResult, ClientState, UserInfo, etc.)
+ * - Types (ClientState, UserInfo, BodhiError, etc.)
  * - Error factories (createApiError, createOperationError)
  * - Logger (centralized logging)
  * - UIClient interface (base interface)
@@ -47,8 +47,7 @@ export * from './facade-client-base';
 // Re-export OpenAI-compatible resources
 export * from './openai-client-compat';
 
-// Re-export error types from bodhi-browser (for type encapsulation)
-export { isOperationError, type OperationError } from '@bodhiapp/bodhi-browser-types';
+// Note: BodhiError, BodhiApiError, unwrapResponse, BodhiErrorCode are re-exported via ./types
 
 // Re-export build info
 export { BUILD_MODE as CORE_BUILD_MODE } from './build-info';

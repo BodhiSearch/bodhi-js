@@ -308,22 +308,18 @@ Execute a tool on an MCP server.
 
 **Parameters**:
 
-| Parameter  | Type                       | Description            |
-| ---------- | -------------------------- | ---------------------- |
-| `mcpId`    | `string`                   | MCP server ID          |
-| `toolName` | `string`                   | Tool name to execute   |
-| `params`   | `Record<string, unknown>`  | Tool execution params  |
+| Parameter  | Type                      | Description           |
+| ---------- | ------------------------- | --------------------- |
+| `mcpId`    | `string`                  | MCP server ID         |
+| `toolName` | `string`                  | Tool name to execute  |
+| `params`   | `Record<string, unknown>` | Tool execution params |
 
 **Returns**: `Promise<unknown>`
 
 **Example**:
 
 ```typescript
-const result = await client.mcps.executeTool(
-  'my-mcp-server',
-  'search',
-  { query: 'hello world' }
-);
+const result = await client.mcps.executeTool('my-mcp-server', 'search', { query: 'hello world' });
 ```
 
 ---
@@ -753,7 +749,7 @@ interface BackendServerState {
 
 type DeploymentMode = 'standalone' | 'multi_tenant';
 
-type ServerStatus = 'not-connected' | 'pending-extension-ready' | 'ready' | 'setup' | 'resource_admin' | 'tenant_selection' | 'error' | 'not-reachable';
+type ServerStatus = 'not-connected' | 'pending-extension-ready' | 'ready' | 'setup' | 'resource_admin' | 'error' | 'not-reachable';
 ```
 
 ### AuthState

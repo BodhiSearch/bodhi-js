@@ -9,7 +9,6 @@ import {
   createUnreachableServerState,
   createSetupServerState,
   createResourceAdminServerState,
-  createTenantSelectionServerState,
 } from '@/test/mock-factories';
 import { render, screen } from '@/test/test-utils';
 import userEvent from '@testing-library/user-event';
@@ -294,18 +293,6 @@ describe('ExtensionSetup - Accordion UI', () => {
 
       expect(screen.getByText('Server requires admin approval.')).toBeInTheDocument();
       expect(screen.getByText('Open Admin Panel →')).toBeInTheDocument();
-    });
-
-    test('should show tenant selection link for server in tenant-selection state', () => {
-      const state = createMockState({
-        extension: createReadyExtensionState(),
-        server: createTenantSelectionServerState(),
-      });
-      useSetupModalStore.setState({ setupState: state });
-      render(<ExtensionSetup />);
-
-      expect(screen.getByText('Server requires tenant selection.')).toBeInTheDocument();
-      expect(screen.getByText('Select Tenant →')).toBeInTheDocument();
     });
   });
 

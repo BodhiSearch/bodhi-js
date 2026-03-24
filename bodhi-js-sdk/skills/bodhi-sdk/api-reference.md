@@ -238,7 +238,7 @@ import { isAuthenticated } from '@bodhiapp/bodhi-js-react';
 ```typescript
 {
   status: 'not-connected' | 'pending-extension-ready' | 'ready' | 'setup'
-        | 'resource_admin' | 'tenant_selection' | 'error' | 'not-reachable';
+        | 'resource_admin' | 'error' | 'not-reachable';
   version: string | null;
   error: { message: string; type: string } | null;
   deployment?: 'standalone' | 'multi_tenant' | null;

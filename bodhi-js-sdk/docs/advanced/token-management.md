@@ -25,14 +25,14 @@ The SDK stores tokens automatically based on platform with specific key prefixes
 import { STORAGE_PREFIXES } from '@bodhiapp/bodhi-js-core';
 
 // Facade-level prefixes (user prefs)
-console.log(STORAGE_PREFIXES.WEB);        // 'bodhi-js-sdk:web:'
-console.log(STORAGE_PREFIXES.EXT);        // 'bodhi-js-sdk:ext:'
+console.log(STORAGE_PREFIXES.WEB); // 'bodhi-js-sdk:web:'
+console.log(STORAGE_PREFIXES.EXT); // 'bodhi-js-sdk:ext:'
 
 // Internal client prefixes (OAuth tokens)
 console.log(STORAGE_PREFIXES.WEB_DIRECT); // 'bodhi-js-sdk:web:direct:'
-console.log(STORAGE_PREFIXES.WEB_EXT);    // 'bodhi-js-sdk:web:ext:'
+console.log(STORAGE_PREFIXES.WEB_EXT); // 'bodhi-js-sdk:web:ext:'
 console.log(STORAGE_PREFIXES.EXT_DIRECT); // 'bodhi-js-sdk:ext:direct:'
-console.log(STORAGE_PREFIXES.EXT_EXT);    // 'bodhi-js-sdk:ext:ext:'
+console.log(STORAGE_PREFIXES.EXT_EXT); // 'bodhi-js-sdk:ext:ext:'
 ```
 
 ### Storage Key Generation
@@ -61,9 +61,7 @@ const keys = createStorageKeys(prefix);
 
 ```typescript
 // Storage keys (web direct mode, basePath='/')
-const keys = createStorageKeys(
-  createStoragePrefixWithBasePath('/', STORAGE_PREFIXES.WEB_DIRECT)
-);
+const keys = createStorageKeys(createStoragePrefixWithBasePath('/', STORAGE_PREFIXES.WEB_DIRECT));
 
 // Store token
 localStorage.setItem(keys.ACCESS_TOKEN, accessToken);
@@ -78,9 +76,7 @@ const expiresAt = parseInt(localStorage.getItem(keys.EXPIRES_AT) || '0');
 
 ```typescript
 // Storage keys (extension direct mode)
-const keys = createStorageKeys(
-  createStoragePrefixWithBasePath('/', STORAGE_PREFIXES.EXT_DIRECT)
-);
+const keys = createStorageKeys(createStoragePrefixWithBasePath('/', STORAGE_PREFIXES.EXT_DIRECT));
 
 // Store token (async)
 await chrome.storage.session.set({
@@ -110,7 +106,7 @@ const endpoints = createOAuthEndpoints(authServerUrl);
 try {
   const tokens = await refreshAccessToken(
     endpoints.token, // Token endpoint URL
-    refreshToken,    // Current refresh token
+    refreshToken, // Current refresh token
     'your-client-id' // OAuth client ID
   );
 
@@ -132,22 +128,17 @@ The function returns `RefreshTokenResponse` with snake_case fields (OAuth 2.0 st
 
 ```typescript
 interface RefreshTokenResponse {
-  access_token: string;    // New JWT access token
-  refresh_token?: string;  // New refresh token (if rotated)
-  id_token?: string;       // New ID token with user claims
-  expires_in: number;      // Seconds until access token expires
+  access_token: string; // New JWT access token
+  refresh_token?: string; // New refresh token (if rotated)
+  id_token?: string; // New ID token with user claims
+  expires_in: number; // Seconds until access token expires
 }
 ```
 
 ### Implementing Custom Refresh Logic
 
 ```typescript
-async function ensureValidToken(
-  accessToken: string,
-  refreshToken: string,
-  expiresAt: number,
-  clientId: string
-): Promise<string> {
+async function ensureValidToken(accessToken: string, refreshToken: string, expiresAt: number, clientId: string): Promise<string> {
   // Check if token expired (5 second buffer, matching SDK behavior)
   if (Date.now() < expiresAt - 5000) {
     return accessToken; // Still valid
@@ -158,9 +149,7 @@ async function ensureValidToken(
   const tokens = await refreshAccessToken(endpoints.token, refreshToken, clientId);
 
   // Store new tokens
-  const keys = createStorageKeys(
-    createStoragePrefixWithBasePath('/', STORAGE_PREFIXES.WEB_DIRECT)
-  );
+  const keys = createStorageKeys(createStoragePrefixWithBasePath('/', STORAGE_PREFIXES.WEB_DIRECT));
   localStorage.setItem(keys.ACCESS_TOKEN, tokens.access_token);
   localStorage.setItem(keys.EXPIRES_AT, String(Date.now() + tokens.expires_in * 1000));
 
@@ -400,8 +389,8 @@ console.log(endpoints);
 ```typescript
 interface OAuthEndpoints {
   authorize: string; // Authorization endpoint
-  token: string;     // Token endpoint
-  revoke: string;    // Token revocation endpoint
+  token: string; // Token endpoint
+  revoke: string; // Token revocation endpoint
 }
 ```
 
@@ -496,14 +485,12 @@ interface BackendServerState {
 
 ```typescript
 // DO use the SDK's namespaced storage keys
-const keys = createStorageKeys(
-  createStoragePrefixWithBasePath('/', STORAGE_PREFIXES.WEB_DIRECT)
-);
+const keys = createStorageKeys(createStoragePrefixWithBasePath('/', STORAGE_PREFIXES.WEB_DIRECT));
 localStorage.setItem(keys.ACCESS_TOKEN, token); // Same-origin protected
 
 // DON'T expose tokens
-console.log('Token:', accessToken);          // Never log tokens
-const url = `/api?token=${accessToken}`;     // Never in URLs
+console.log('Token:', accessToken); // Never log tokens
+const url = `/api?token=${accessToken}`; // Never in URLs
 ```
 
 ### 2. Refresh Before Expiry

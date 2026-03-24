@@ -3,7 +3,7 @@
  */
 
 import type { OperationErrorResponse } from '@bodhiapp/bodhi-browser-types';
-import type { DeploymentMode } from '@bodhiapp/ts-client';
+import type { AppStatus, DeploymentMode } from '@bodhiapp/ts-client';
 
 // ============================================================================
 // Serialization Types
@@ -60,7 +60,6 @@ export type ServerStatus =
   | 'ready' // Server operational
   | 'setup' // Server needs initial setup
   | 'resource_admin' // Server needs resource/admin config
-  | 'tenant_selection' // Multi-tenant: tenant selection required
   | 'error' // Server error
   | 'not-reachable'; // Network error/wrong URL
 
@@ -101,7 +100,7 @@ export const BACKEND_SERVER_NOT_CONNECTED: BackendServerState = {
  * Raw response from /bodhi/v1/info endpoint
  */
 export interface ServerInfoResponse {
-  status: 'setup' | 'ready' | 'resource_admin' | 'tenant_selection' | 'error';
+  status: AppStatus | 'error';
   version?: string;
   error?: OperationErrorResponse;
   deployment?: DeploymentMode;
@@ -117,7 +116,7 @@ export function isServerReady(state: BackendServerState): boolean {
 // --- Factory Functions ---
 
 export function backendServerNotReady(
-  status: 'setup' | 'resource_admin' | 'tenant_selection' | 'error',
+  status: Exclude<AppStatus, 'ready'> | 'error',
   version: string = 'unknown',
   error: OperationErrorResponse = SERVER_ERROR_CODES.SERVER_NOT_READY,
   deployment?: DeploymentMode,

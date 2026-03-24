@@ -96,15 +96,7 @@ interface BackendServerState {
   error: OperationErrorResponse | null;
 }
 
-type ServerStatus =
-  | 'not-connected'
-  | 'pending-extension-ready'
-  | 'ready'
-  | 'tenant_selection'
-  | 'setup'
-  | 'resource_admin'
-  | 'error'
-  | 'not-reachable';
+type ServerStatus = 'not-connected' | 'pending-extension-ready' | 'ready' | 'setup' | 'resource_admin' | 'error' | 'not-reachable';
 ```
 
 ## Client Status Values
@@ -223,23 +215,6 @@ Server operational and ready:
 }
 ```
 
-### tenant_selection
-
-Server is running in multi-tenant mode and requires tenant selection before proceeding:
-
-```typescript
-{
-  status: 'tenant_selection',
-  version: '0.1.0',
-  deployment: 'multi_tenant',
-  client_id: null,
-  error: {
-    message: 'server requires tenant selection',
-    type: 'extension_error'
-  }
-}
-```
-
 ### setup
 
 Server needs initial configuration:
@@ -323,8 +298,6 @@ ready (if extension detected)
     ↓ (server check)
 ready + server: ready
     OR
-ready + server: tenant_selection (multi-tenant, needs tenant selection)
-    OR
 ready + server: setup (needs configuration)
 ```
 
@@ -340,8 +313,6 @@ direct-not-connected (if no URL)
 ready (if URL configured)
     ↓ (server check)
 ready + server: ready
-    OR
-ready + server: tenant_selection (multi-tenant, needs tenant selection)
     OR
 ready + server: setup (needs configuration)
 ```

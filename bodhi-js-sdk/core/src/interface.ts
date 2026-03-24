@@ -2,9 +2,10 @@ import type {
   AccessRequestStatusResponse,
   CreateAccessRequest,
   CreateAccessRequestResponse,
+  PingResponse,
 } from '@bodhiapp/ts-client';
+import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
 import type {
-  ApiResponseResult,
   AuthState,
   BackendServerState,
   ClientState,
@@ -71,7 +72,8 @@ export interface IConnectionClient<IParams = unknown, SerialState = unknown> {
   /**
    * Send API request to local server
    * @param authenticated - If true, injects access token automatically
-   * @returns ApiResponseResult with response or operation error
+   * @returns ApiResponse with body and status
+   * @throws BodhiError on operational errors (network, timeout, not initialized)
    */
   sendApiRequest<TReq = void, TRes = unknown>(
     method: string,
@@ -79,13 +81,14 @@ export interface IConnectionClient<IParams = unknown, SerialState = unknown> {
     body?: TReq,
     headers?: Record<string, string>,
     authenticated?: boolean
-  ): Promise<ApiResponseResult<TRes>>;
+  ): Promise<ApiResponse<TRes>>;
 
   /**
    * Ping API endpoint
-   * @returns ApiResponseResult with ping response
+   * @returns ApiResponse with ping response
+   * @throws BodhiError on operational errors
    */
-  pingApi(): Promise<ApiResponseResult<{ message: string }>>;
+  pingApi(): Promise<ApiResponse<PingResponse>>;
 
   /**
    * Get backend server state
@@ -141,16 +144,16 @@ export interface IConnectionClient<IParams = unknown, SerialState = unknown> {
   /**
    * Request access for this app (draft → review flow)
    * POST /bodhi/v1/apps/request-access
+   * @throws BodhiError on operational errors
    */
-  requestAccess(body: CreateAccessRequest): Promise<ApiResponseResult<CreateAccessRequestResponse>>;
+  requestAccess(body: CreateAccessRequest): Promise<ApiResponse<CreateAccessRequestResponse>>;
 
   /**
    * Get status of an access request
    * GET /bodhi/v1/apps/access-requests/{id}?app_client_id=xxx
+   * @throws BodhiError on operational errors
    */
-  getAccessRequestStatus(
-    requestId: string
-  ): Promise<ApiResponseResult<AccessRequestStatusResponse>>;
+  getAccessRequestStatus(requestId: string): Promise<ApiResponse<AccessRequestStatusResponse>>;
 
   /**
    * Poll access request until approved/denied/failed/expired

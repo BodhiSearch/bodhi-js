@@ -77,7 +77,7 @@ function App() {
 import { useBodhi } from '@bodhiapp/bodhi-js-react';
 
 function MainContent() {
-  const { client, isOverallReady, isAuthenticated, login, showSetup } = useBodhi();
+  const { isOverallReady, isAuthenticated, login, showSetup } = useBodhi();
 
   if (!isOverallReady) return <button onClick={showSetup}>Setup Required</button>;
 
@@ -141,7 +141,7 @@ const stream = client.chat.completions.create({
 ```tsx
 const {
   client, // SDK client — all API calls go through this
-  isOverallReady, // Client + server ready (use as main gate)
+  isOverallReady, // Client + server ready (use as main gate) — see caveat below
   isReady, // Client connected (extension or direct)
   isServerReady, // Server responding with status 'ready'
   isInitializing, // client.init() in progress

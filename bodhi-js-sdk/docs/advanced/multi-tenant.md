@@ -15,11 +15,10 @@ Multi-tenant applications use dependency injection with `@bodhiapp/bodhi-js-reac
 
 ### Server-Side Multi-Tenant Awareness
 
-When the Bodhi server is running in multi-tenant mode and no tenant has been selected, `BackendServerState.status` will be `'tenant_selection'`. The connection is not fully ready until a tenant is chosen and the server transitions to `'ready'`.
+Multi-tenant Bodhi servers return `'ready'` for unauthenticated `/bodhi/v1/info` calls. Tenant selection is handled through the server's dashboard when accessed with authentication.
 
 Key `BackendServerState` fields for multi-tenant:
 
-- **`status`**: Can be `'tenant_selection'` when tenant selection is pending
 - **`deployment`**: `'standalone'` or `'multi_tenant'` indicating the server's deployment mode
 - **`client_id`**: The active tenant's OAuth client_id (present once a tenant is selected)
 

@@ -7,8 +7,9 @@ import type {
   ToolsetTypeRequest,
   UserScope,
 } from '@bodhiapp/ts-client';
+import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
+import { BodhiError, unwrapResponse } from '@bodhiapp/bodhi-browser-types';
 import { createOperationError } from './errors';
-import { isApiResultOperationError, isApiResultSuccess, type ApiResponseResult } from './types/api';
 
 export const DEFAULT_POLL_INTERVAL_MS = 2000;
 export const DEFAULT_POLL_TIMEOUT_MS = 300_000;
@@ -17,14 +18,14 @@ export const DEFAULT_POLL_TIMEOUT_MS = 300_000;
  * Shared polling logic for access request status.
  * Polls until approved, denied, failed, or expired.
  *
- * @param getStatusFn - Function that fetches the current status
+ * @param getStatusFn - Function that fetches the current status (throws BodhiError on operational errors)
  * @param requestId - The access request ID to poll
  * @param options - Polling interval and timeout configuration
  * @returns The approved AccessRequestStatusResponse
- * @throws OperationError on denial, failure, expiry, timeout, or fetch error
+ * @throws BodhiError on denial, failure, expiry, timeout, or fetch error
  */
 export function pollAccessRequestUntilResolved(
-  getStatusFn: (requestId: string) => Promise<ApiResponseResult<AccessRequestStatusResponse>>,
+  getStatusFn: (requestId: string) => Promise<ApiResponse<AccessRequestStatusResponse>>,
   requestId: string,
   options?: { intervalMs?: number; timeoutMs?: number }
 ): Promise<AccessRequestStatusResponse> {
@@ -35,32 +36,33 @@ export function pollAccessRequestUntilResolved(
   return new Promise((resolve, reject) => {
     const check = async () => {
       if (Date.now() - startTime >= timeoutMs) {
-        reject(new Error('Access request polling timed out'));
+        reject(createOperationError('timeout_error', 'Access request polling timed out'));
         return;
       }
 
-      const result = await getStatusFn(requestId);
-      if (isApiResultOperationError(result)) {
-        reject(createOperationError(result.error.message, result.error.type));
-        return;
-      }
-      if (!isApiResultSuccess(result)) {
-        reject(createOperationError(`Unexpected HTTP ${result.status}`, 'auth_error'));
-        return;
-      }
+      try {
+        const result = await getStatusFn(requestId);
+        const body = unwrapResponse(result);
+        const status = body.status;
+        if (status === 'approved') {
+          resolve(body);
+          return;
+        }
+        if (status === 'denied' || status === 'failed' || status === 'expired') {
+          reject(createOperationError('auth_error', `Access request ${status}`));
+          return;
+        }
 
-      const status = result.body.status;
-      if (status === 'approved') {
-        resolve(result.body);
-        return;
+        // Still draft/pending - continue polling
+        setTimeout(check, intervalMs);
+      } catch (error) {
+        // BodhiError from getStatusFn (network, timeout, etc.) - reject immediately
+        if (error instanceof BodhiError) {
+          reject(error);
+          return;
+        }
+        reject(error);
       }
-      if (status === 'denied' || status === 'failed' || status === 'expired') {
-        reject(createOperationError(`Access request ${status}`, 'auth_error'));
-        return;
-      }
-
-      // Still draft/pending - continue polling
-      setTimeout(check, intervalMs);
     };
 
     check();

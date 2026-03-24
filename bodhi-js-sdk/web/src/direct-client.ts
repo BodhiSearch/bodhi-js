@@ -11,11 +11,10 @@ import {
   DirectClientBase,
   STORAGE_PREFIXES,
   createOperationError,
+  unwrapResponse,
   createStoragePrefixWithBasePath,
   generateCodeChallenge,
   generateCodeVerifier,
-  isApiResultOperationError,
-  isApiResultSuccess,
   openPopupReview,
   type AuthState,
   type DirectClientBaseConfig,
@@ -23,7 +22,11 @@ import {
   type LogLevel,
   type StateChangeCallback,
 } from '@bodhiapp/bodhi-js-core';
-import type { UserScope } from '@bodhiapp/ts-client';
+import type {
+  AccessRequestStatusResponse,
+  CreateAccessRequestResponse,
+  UserScope,
+} from '@bodhiapp/ts-client';
 
 /**
  * Configuration for DirectWebClient
@@ -92,17 +95,7 @@ export class DirectWebClient extends DirectClientBase {
     const accessRequestBody = builder.build();
     const accessRequestResult = await this.requestAccess(accessRequestBody);
 
-    if (isApiResultOperationError(accessRequestResult)) {
-      throw createOperationError(accessRequestResult.error.message, accessRequestResult.error.type);
-    }
-    if (!isApiResultSuccess(accessRequestResult)) {
-      throw createOperationError(
-        `Access request failed: HTTP ${accessRequestResult.status}`,
-        'auth_error'
-      );
-    }
-
-    const { id: requestId, review_url: reviewUrl } = accessRequestResult.body;
+    const { id: requestId, review_url: reviewUrl } = unwrapResponse(accessRequestResult);
     options?.onProgress?.('reviewing');
 
     let accessRequestScope: string | null | undefined;
@@ -111,8 +104,8 @@ export class DirectWebClient extends DirectClientBase {
       // Popup flow: open review popup and poll
       const pollFn = async () => {
         const statusResult = await this.getAccessRequestStatus(requestId);
-        if (!isApiResultSuccess(statusResult)) return null;
-        const { status, access_request_scope } = statusResult.body;
+        if (statusResult.status >= 400) return null;
+        const { status, access_request_scope } = statusResult.body as AccessRequestStatusResponse;
         if (status === 'approved')
           return { approved: true, accessRequestScope: access_request_scope ?? undefined };
         if (['denied', 'failed', 'expired'].includes(status)) return { approved: false };
@@ -125,7 +118,7 @@ export class DirectWebClient extends DirectClientBase {
       });
 
       if (!reviewResult.approved) {
-        throw createOperationError('Access request was denied or expired', 'auth_error');
+        throw createOperationError('auth_error', 'Access request was denied or expired');
       }
       accessRequestScope = reviewResult.accessRequestScope;
     } else {
@@ -184,12 +177,9 @@ export class DirectWebClient extends DirectClientBase {
   async handleAccessRequestCallback(requestId: string): Promise<AuthState> {
     // Poll once to get the approved status
     const statusResult = await this.getAccessRequestStatus(requestId);
-    if (!isApiResultSuccess(statusResult)) {
-      throw createOperationError('Failed to get access request status', 'auth_error');
-    }
-    const { status, access_request_scope } = statusResult.body;
+    const { status, access_request_scope } = unwrapResponse(statusResult);
     if (status !== 'approved') {
-      throw createOperationError(`Access request is not approved: ${status}`, 'auth_error');
+      throw createOperationError('auth_error', `Access request is not approved: ${status}`);
     }
     const scope = `openid profile email roles ${access_request_scope ?? ''}`.trim();
     localStorage.removeItem(this.storageKeys.ACCESS_REQUEST_ID);

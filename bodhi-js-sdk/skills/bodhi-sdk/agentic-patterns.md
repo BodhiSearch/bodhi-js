@@ -411,6 +411,80 @@ export function AgenticChat() {
 }
 ```
 
+## Practical Insights (from building real apps)
+
+These are lessons learned from building agentic chat apps with the SDK.
+
+### MCP tools_cache Nullability
+
+The SDK's MCP objects have nullable fields that need normalization. When mapping `tools_cache` to your local types:
+
+```tsx
+const infos = rawMcps.map(m => ({
+  id: m.id,
+  slug: m.slug,
+  name: m.name,
+  tools_cache: (m.tools_cache ?? []).map(t => ({
+    name: t.name,
+    description: t.description ?? '', // can be null
+    input_schema: (t.input_schema ?? { type: 'object', properties: {} }) as Record<string, unknown>,
+  })),
+}));
+```
+
+### Agent Loop Iteration Cap
+
+Always cap the agent loop to prevent runaway tool-call cycles. 25 iterations is a reasonable limit:
+
+```tsx
+let iterations = 0;
+while (iterations < 25) {
+  iterations++;
+  // ... stream, check tool calls, execute, loop
+}
+```
+
+### Separating UI Messages from LLM Conversation
+
+The LLM needs raw `{role, content, tool_calls, tool_call_id}` format. The UI needs richer types (tool status, MCP display names, streaming state). Keep two data structures:
+
+1. **`AgenticMessage[]`** — UI-facing, with `ToolCallInfo` objects tracking status per tool call
+2. **`conversation[]`** — raw format built from AgenticMessage for each LLM call
+
+A `buildConversation(messages)` function converts UI messages to LLM format, always prepending the system prompt.
+
+### Tool Call Status Tracking
+
+Track each tool call through states for UI visualization:
+
+```
+pending → executing → completed | error
+```
+
+Update the assistant message's `tool_calls` array immutably as each tool progresses. This lets the UI show inline status cards that update in real-time.
+
+### AbortController for Cleanup
+
+Always use `AbortController` with a `useRef` for streaming:
+
+- Abort on component unmount
+- Abort on "new chat" / clear
+- Abort previous request when user sends a new message
+- Check `signal.aborted` before every `await` and state update in the loop
+
+### TypeScript: Passing Tools to chat.completions.create
+
+The SDK's `chat.completions.create()` type expects OpenAI-compatible tool format, but the TypeScript types may not align perfectly. Cast via `unknown` if needed:
+
+```tsx
+const stream = client.chat.completions.create({
+  model,
+  messages: conversation,
+  tools: chatTools.length > 0 ? (chatTools as unknown as ChatCompletionRequestMessage[]) : undefined,
+  stream: true,
+} as Parameters<typeof client.chat.completions.create>[0]);
+```
+
 ## Refreshing MCP Tools
 
 MCP servers can update their tool list. Refresh the cached tools:

@@ -55,11 +55,10 @@ import {
   DEFAULT_POLL_TIMEOUT_MS,
   pollAccessRequestUntilResolved,
   Logger,
+  BodhiError,
   createOperationError,
-  isApiResultOperationError,
-  isApiResultSuccess,
+  unwrapResponse,
   refreshAccessToken,
-  type ApiResponseResult,
   type AuthState,
   type DiscoveryResult,
   type LoginOptions,
@@ -786,20 +785,7 @@ export class BodhiExtClient {
       const accessRequestBody = builder.build();
       const accessRequestResult = await this.requestAccess(accessRequestBody);
 
-      if (isApiResultOperationError(accessRequestResult)) {
-        throw createOperationError(
-          accessRequestResult.error.message,
-          accessRequestResult.error.type
-        );
-      }
-      if (!isApiResultSuccess(accessRequestResult)) {
-        throw createOperationError(
-          `Access request failed: HTTP ${accessRequestResult.status}`,
-          'auth_error'
-        );
-      }
-
-      const { id: requestId, review_url: reviewUrl } = accessRequestResult.body;
+      const { id: requestId, review_url: reviewUrl } = unwrapResponse(accessRequestResult);
 
       // Open review URL in a new tab
       await chrome.tabs.create({ url: reviewUrl });
@@ -811,7 +797,7 @@ export class BodhiExtClient {
       });
 
       if (statusResponse.status !== 'approved') {
-        throw createOperationError(`Access request ${statusResponse.status}`, 'auth_error');
+        throw createOperationError('auth_error', `Access request ${statusResponse.status}`);
       }
 
       const accessRequestScope = statusResponse.access_request_scope;
@@ -934,49 +920,21 @@ export class BodhiExtClient {
 
   async requestAccess(
     body: CreateAccessRequest
-  ): Promise<ApiResponseResult<CreateAccessRequestResponse>> {
-    try {
-      const response = await this.sendApiRequest<CreateAccessRequest, CreateAccessRequestResponse>(
-        'POST',
-        '/bodhi/v1/apps/request-access',
-        body
-      );
-      return {
-        body: response.body as CreateAccessRequestResponse,
-        status: response.status,
-        headers: response.headers,
-      };
-    } catch (err) {
-      return {
-        error: {
-          message: err instanceof Error ? err.message : String(err),
-          type: 'extension_error',
-        },
-      };
-    }
+  ): Promise<ApiResponse<CreateAccessRequestResponse>> {
+    return this.sendApiRequest<CreateAccessRequest, CreateAccessRequestResponse>(
+      'POST',
+      '/bodhi/v1/apps/request-access',
+      body
+    );
   }
 
   async getAccessRequestStatus(
     requestId: string
-  ): Promise<ApiResponseResult<AccessRequestStatusResponse>> {
-    try {
-      const response = await this.sendApiRequest<void, AccessRequestStatusResponse>(
-        'GET',
-        `/bodhi/v1/apps/access-requests/${requestId}?app_client_id=${encodeURIComponent(this.authClientId)}`
-      );
-      return {
-        body: response.body as AccessRequestStatusResponse,
-        status: response.status,
-        headers: response.headers,
-      };
-    } catch (err) {
-      return {
-        error: {
-          message: err instanceof Error ? err.message : String(err),
-          type: 'extension_error',
-        },
-      };
-    }
+  ): Promise<ApiResponse<AccessRequestStatusResponse>> {
+    return this.sendApiRequest<void, AccessRequestStatusResponse>(
+      'GET',
+      `/bodhi/v1/apps/access-requests/${requestId}?app_client_id=${encodeURIComponent(this.authClientId)}`
+    );
   }
 
   async pollAccessRequestStatus(
@@ -1025,7 +983,7 @@ export class BodhiExtClient {
 
           if (!redirectUrl) {
             await chrome.storage.session.remove(['codeVerifier', 'state']);
-            reject(createOperationError('No redirect URL received', 'oauth-error'));
+            reject(createOperationError('oauth_error', 'No redirect URL received'));
             return;
           }
 
@@ -1037,13 +995,13 @@ export class BodhiExtClient {
             const { state: savedState } = await chrome.storage.session.get('state');
             if (returnedState !== savedState) {
               await chrome.storage.session.remove(['codeVerifier', 'state']);
-              reject(createOperationError('State mismatch', 'oauth-error'));
+              reject(createOperationError('oauth_error', 'State mismatch'));
               return;
             }
 
             if (!code) {
               await chrome.storage.session.remove(['codeVerifier', 'state']);
-              reject(createOperationError('No authorization code', 'oauth-error'));
+              reject(createOperationError('oauth_error', 'No authorization code'));
               return;
             }
 
@@ -1052,7 +1010,7 @@ export class BodhiExtClient {
 
             const authStateResult = await this.getAuthState();
             if (authStateResult.status !== 'authenticated') {
-              throw createOperationError('Login failed', 'oauth-error');
+              throw createOperationError('oauth_error', 'Login failed');
             }
             resolve(authStateResult);
           } catch (error) {
@@ -1108,7 +1066,10 @@ export class BodhiExtClient {
     headers?: Record<string, string>
   ): Promise<ApiResponse<TRes>> {
     if (!this.extensionId) {
-      throw new Error(this.createErrorClientNotInitialized({ type: 'api', method, endpoint }));
+      throw new BodhiError(
+        'not_initialized',
+        this.createErrorClientNotInitialized({ type: 'api', method, endpoint })
+      );
     }
 
     this.logger.debug(
@@ -1138,7 +1099,12 @@ export class BodhiExtClient {
               `[BodhiExtClient] Chrome runtime error for request ${requestId}:`,
               chrome.runtime.lastError
             );
-            reject(new Error(chrome.runtime.lastError.message));
+            reject(
+              new BodhiError(
+                'extension_error',
+                chrome.runtime.lastError.message ?? 'Chrome runtime error'
+              )
+            );
             return;
           }
 
@@ -1146,14 +1112,16 @@ export class BodhiExtClient {
 
           if (!response) {
             this.logger.error(`[BodhiExtClient] No response received for request ${requestId}`);
-            reject(new Error('No response from extension'));
+            reject(new BodhiError('extension_error', 'No response from extension'));
             return;
           }
 
           if (response.type === MESSAGE_TYPES.API_RESPONSE && response.requestId === requestId) {
             if ('error' in response) {
               this.logger.error(`[BodhiExtClient] API error for ${requestId}:`, response.error);
-              reject(new Error(response.error.message));
+              reject(
+                new BodhiError(response.error.type || 'extension_error', response.error.message)
+              );
             } else {
               this.logger.debug(`[BodhiExtClient] ✓ Valid API_RESPONSE for ${requestId}`);
               resolve(response.response as ApiResponse<TRes>);
@@ -1163,7 +1131,7 @@ export class BodhiExtClient {
               `[BodhiExtClient] Invalid response format for ${requestId}:`,
               response
             );
-            reject(new Error('Invalid response format'));
+            reject(new BodhiError('extension_error', 'Invalid response format'));
           }
         });
       } catch (error) {
@@ -1184,7 +1152,10 @@ export class BodhiExtClient {
     params?: TParams
   ): Promise<ExtResponseMessage> {
     if (!this.extensionId) {
-      throw new Error(this.createErrorClientNotInitialized({ type: 'ext', action, params }));
+      throw new BodhiError(
+        'not_initialized',
+        this.createErrorClientNotInitialized({ type: 'ext', action, params })
+      );
     }
 
     this.logger.debug(
@@ -1232,7 +1203,7 @@ export class BodhiExtClient {
               `[BodhiExtClient] Invalid response format for ${requestId}:`,
               response
             );
-            reject(new Error('Invalid response format'));
+            reject(new BodhiError('extension_error', 'Invalid response format'));
           }
         });
       } catch (error) {
@@ -1545,8 +1516,8 @@ export class BodhiExtClient {
     // Refresh failed (temp issue) - throw error (don't clear tokens)
     this.logger.warn('Token refresh failed, keeping tokens for manual retry');
     throw createOperationError(
-      'Access token expired and unable to refresh. Try logging out and logging in again.',
-      'token_refresh_failed'
+      'auth_error',
+      'Access token expired and unable to refresh. Try logging out and logging in again.'
     );
   }
 

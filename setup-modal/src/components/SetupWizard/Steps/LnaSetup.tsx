@@ -1,4 +1,4 @@
-import { DEFAULT_SERVER_URL, getServerSetupUrl, getServerAdminUrl, getServerTenantSelectionUrl } from '@/lib/constants';
+import { DEFAULT_SERVER_URL, getServerSetupUrl, getServerAdminUrl } from '@/lib/constants';
 import { isValidUrl, getUrlValidationError } from '@/lib/url-validation';
 import { AlertCircle, AlertTriangle, CheckCircle2, ExternalLink, Loader2, RefreshCw, SkipForward, Wifi, XCircle } from 'lucide-react';
 import { useSetupModalStore } from '@/store/setup-modal-store';
@@ -132,8 +132,6 @@ export function LnaSetup() {
         return 'Setup Required';
       case 'resource_admin':
         return 'Admin Required';
-      case 'tenant_selection':
-        return 'Tenant Selection Required';
       case 'error':
         return 'Error';
       default:
@@ -334,30 +332,6 @@ export function LnaSetup() {
                 data-testid="lna-server-admin-link"
               >
                 Configure resources
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-          </>
-        )}
-
-        {lnaServer.status === 'tenant_selection' && (
-          <>
-            <div className="flex items-start text-amber-600">
-              <AlertTriangle className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="font-medium">Server requires tenant selection</p>
-              </div>
-            </div>
-            <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-              <p className="text-sm text-blue-800 mb-2">Select a tenant to continue.</p>
-              <a
-                href={getServerTenantSelectionUrl(lna.serverUrl)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
-                data-testid="lna-server-tenant-selection-link"
-              >
-                Select tenant
                 <ExternalLink className="w-3 h-3" />
               </a>
             </div>

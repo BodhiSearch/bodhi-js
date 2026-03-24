@@ -39,7 +39,7 @@ const { login } = useBodhi();
 await login({
   userRole: 'scope_user_power_user',
   requested: { mcp_servers: [{ url: 'http://localhost:3000/mcp' }] },
-  onProgress: (stage) => setLoginStage(stage),
+  onProgress: stage => setLoginStage(stage),
   flowType: 'redirect',
 });
 ```
@@ -58,13 +58,13 @@ await login({
 
 ```typescript
 interface LoginOptions {
-  userRole?: UserScope;              // 'scope_user_user' (default) | 'scope_user_power_user'
-  requested?: RequestedResources;    // Resources to request access to
-  flowType?: FlowType;              // 'redirect' | 'popup'
-  redirectUrl?: string;             // Custom redirect URL for OAuth callback
+  userRole?: UserScope; // 'scope_user_user' (default) | 'scope_user_power_user'
+  requested?: RequestedResources; // Resources to request access to
+  flowType?: FlowType; // 'redirect' | 'popup'
+  redirectUrl?: string; // Custom redirect URL for OAuth callback
   onProgress?: LoginProgressCallback; // Progress stage callback
-  pollIntervalMs?: number;          // default 2000ms
-  pollTimeoutMs?: number;           // default 300000ms (5 min)
+  pollIntervalMs?: number; // default 2000ms
+  pollTimeoutMs?: number; // default 300000ms (5 min)
 }
 
 type LoginProgressStage = 'requesting' | 'reviewing' | 'authenticating';
@@ -86,7 +86,7 @@ Use `onProgress` to track login progress and update your UI:
 const [stage, setStage] = useState<string>('');
 
 await login({
-  onProgress: (stage) => {
+  onProgress: stage => {
     setStage(stage);
     // 'requesting'     - Creating access request
     // 'reviewing'      - Waiting for admin approval
@@ -124,8 +124,8 @@ const body = builder.build();
 
 ```typescript
 await login({
-  pollIntervalMs: 3000,   // Poll every 3 seconds (default: 2000)
-  pollTimeoutMs: 600000,  // Wait up to 10 minutes (default: 300000)
+  pollIntervalMs: 3000, // Poll every 3 seconds (default: 2000)
+  pollTimeoutMs: 600000, // Wait up to 10 minutes (default: 300000)
 });
 ```
 
@@ -182,29 +182,29 @@ The SDK provides a flat `AuthState` interface for tracking authentication status
 
 ```typescript
 interface AuthState {
-  status: AuthStatus;         // Current auth status
-  user: UserInfo | null;      // User details (when authenticated)
+  status: AuthStatus; // Current auth status
+  user: UserInfo | null; // User details (when authenticated)
   accessToken: string | null; // JWT access token (when authenticated)
-  error: AuthError | null;    // Error details (when status === 'error')
+  error: AuthError | null; // Error details (when status === 'error')
 }
 
 type AuthStatus =
-  | 'idle'              // Initial state
-  | 'loading'           // Auth operation in progress
-  | 'authenticated'     // Successfully authenticated
-  | 'unauthenticated'   // Not authenticated
-  | 'error';            // Auth error occurred
+  | 'idle' // Initial state
+  | 'loading' // Auth operation in progress
+  | 'authenticated' // Successfully authenticated
+  | 'unauthenticated' // Not authenticated
+  | 'error'; // Auth error occurred
 ```
 
 ### UserInfo
 
 ```typescript
 interface UserInfo {
-  sub: string;                // Subject (user ID)
-  email: string;              // Email address
-  name: string;               // Full name
-  given_name: string;         // First name
-  family_name: string;        // Last name
+  sub: string; // Subject (user ID)
+  email: string; // Email address
+  name: string; // Full name
+  given_name: string; // First name
+  family_name: string; // Last name
   preferred_username: string; // Username
 }
 ```
@@ -213,7 +213,7 @@ interface UserInfo {
 
 ```typescript
 interface AuthError {
-  code: string;    // Error code (e.g., 'invalid_grant')
+  code: string; // Error code (e.g., 'invalid_grant')
   message: string; // Human-readable error message
 }
 ```
@@ -301,7 +301,7 @@ Always call `logout()` rather than clearing storage manually -- the SDK ensures 
 Monitor auth and client state changes programmatically:
 
 ```typescript
-client.setStateCallback((change) => {
+client.setStateCallback(change => {
   if (change.type === 'auth-state') {
     console.log('Auth state changed:', change.state);
   }
@@ -314,9 +314,7 @@ client.setStateCallback((change) => {
 The callback receives a discriminated union:
 
 ```typescript
-type StateChange =
-  | { type: 'client-state'; state: ClientState }
-  | { type: 'auth-state'; state: AuthState };
+type StateChange = { type: 'client-state'; state: ClientState } | { type: 'auth-state'; state: AuthState };
 
 type StateChangeCallback = (change: StateChange) => void;
 ```

@@ -2,6 +2,7 @@ import type {
   AccessRequestStatusResponse,
   CreateAccessRequest,
   CreateAccessRequestResponse,
+  PingResponse,
   UserScope,
 } from '@bodhiapp/ts-client';
 import {
@@ -18,7 +19,6 @@ import {
   SERVER_ERROR_CODES,
   STORAGE_PREFIXES,
   backendServerNotReady,
-  createApiError,
   createOAuthEndpoints,
   createOperationError,
   createStorageKeys,
@@ -26,16 +26,16 @@ import {
   extractUserInfo,
   generateCodeChallenge,
   generateCodeVerifier,
-  isApiResultOperationError,
-  isApiResultSuccess,
   openPopupReview,
   refreshAccessToken,
+  BodhiError,
+  BodhiApiError,
+  unwrapResponse,
   Chat,
   Models,
   Embeddings,
   Toolsets,
   Mcps,
-  type ApiResponseResult,
   type AuthState,
   type BackendServerState,
   type ClientState,
@@ -50,7 +50,11 @@ import {
   type StateChangeCallback,
   type StorageKeys,
 } from '@bodhiapp/bodhi-js-core';
-import { type BodhiExtPublicApi, type StreamChunk } from '@bodhiapp/bodhi-browser-types';
+import {
+  type ApiResponse,
+  type BodhiExtPublicApi,
+  type StreamChunk,
+} from '@bodhiapp/bodhi-browser-types';
 import { DEFAULT_API_TIMEOUT_MS, POLL_INTERVAL, POLL_TIMEOUT } from './constants';
 
 // Empty object type for future-proofing
@@ -147,7 +151,7 @@ export class WindowBodhiextClient implements IExtensionClient {
 
   /**
    * Ensure bodhiext is available, attempting to acquire it if not already set
-   * @throws OperationError if client not initialized
+   * @throws BodhiError if client not initialized
    */
   private ensureBodhiext(): void {
     if (!this.bodhiext && window.bodhiext) {
@@ -155,7 +159,7 @@ export class WindowBodhiextClient implements IExtensionClient {
       this.bodhiext = window.bodhiext;
     }
     if (!this.bodhiext) {
-      throw createOperationError('Client not initialized', 'extension_error');
+      throw createOperationError('not_initialized', 'Client not initialized');
     }
   }
 
@@ -173,7 +177,7 @@ export class WindowBodhiextClient implements IExtensionClient {
 
   /**
    * Send API message via window.bodhiext.sendApiRequest
-   * Converts ApiResponse to ApiResponseResult
+   * @throws BodhiError on operational errors (extension not ready, auth, network, timeout)
    */
   async sendApiRequest<TReq = void, TRes = unknown>(
     method: string,
@@ -181,23 +185,15 @@ export class WindowBodhiextClient implements IExtensionClient {
     body?: TReq,
     headers?: Record<string, string>,
     authenticated?: boolean
-  ): Promise<ApiResponseResult<TRes>> {
-    try {
-      this.ensureBodhiext();
-    } catch (err) {
-      return {
-        error: {
-          message: err instanceof Error ? err.message : String(err),
-          type: 'extension_error',
-        },
-      };
-    }
+  ): Promise<ApiResponse<TRes>> {
+    this.ensureBodhiext();
     try {
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(
           () =>
             reject(
-              new Error(
+              new BodhiError(
+                'timeout_error',
                 `[bodhi-js-sdk/web] network timeout: api request not completed within configured/default timeout of ${this.apiTimeoutMs}ms`
               )
             ),
@@ -212,12 +208,7 @@ export class WindowBodhiextClient implements IExtensionClient {
         if (authenticated) {
           const accessToken = await this._getAccessTokenRaw();
           if (!accessToken) {
-            return {
-              error: {
-                message: 'Not authenticated. Please log in first.',
-                type: 'extension_error',
-              },
-            };
+            throw new BodhiError('auth_error', 'Not authenticated. Please log in first.');
           }
           requestHeaders = {
             ...requestHeaders,
@@ -230,15 +221,27 @@ export class WindowBodhiextClient implements IExtensionClient {
 
       return await Promise.race([apiPromise, timeoutPromise]);
     } catch (e) {
-      const errorObj = (e as { error?: { message?: string; type?: string } })?.error;
-      const message = errorObj?.message ?? (e instanceof Error ? e.message : String(e));
-      const errorType = errorObj?.type || 'network_error';
-      return {
-        error: {
-          message,
-          type: errorType,
-        },
-      };
+      // Same-bundle errors (e.g., SDK's own timeout BodhiError)
+      if (e instanceof BodhiApiError) throw e;
+      if (e instanceof BodhiError) throw e;
+      // Cross-bundle: inject.ts errors use different class instances.
+      // Use name discriminant + field duck-typing to reconstruct.
+      if (e instanceof Error) {
+        const err = e as unknown as Record<string, unknown>;
+        if (e.name === 'BodhiApiError' && typeof err.status === 'number' && err.body != null) {
+          throw new BodhiApiError(
+            err.status as number,
+            err.body as any,
+            e.message,
+            err.headers as Record<string, string> | undefined
+          );
+        }
+        if (e.name === 'BodhiError' && typeof err.code === 'string') {
+          throw new BodhiError(err.code as string, e.message);
+        }
+        throw new BodhiError('network_error', e.message);
+      }
+      throw new BodhiError('network_error', String(e));
     }
   }
 
@@ -377,17 +380,7 @@ export class WindowBodhiextClient implements IExtensionClient {
     const accessRequestBody = builder.build();
     const accessRequestResult = await this.requestAccess(accessRequestBody);
 
-    if (isApiResultOperationError(accessRequestResult)) {
-      throw createOperationError(accessRequestResult.error.message, accessRequestResult.error.type);
-    }
-    if (!isApiResultSuccess(accessRequestResult)) {
-      throw createOperationError(
-        `Access request failed: HTTP ${accessRequestResult.status}`,
-        'auth_error'
-      );
-    }
-
-    const { id: requestId, review_url: reviewUrl } = accessRequestResult.body;
+    const { id: requestId, review_url: reviewUrl } = unwrapResponse(accessRequestResult);
     options?.onProgress?.('reviewing');
 
     let accessRequestScope: string | null | undefined;
@@ -396,8 +389,8 @@ export class WindowBodhiextClient implements IExtensionClient {
       // Popup flow: open review popup and poll
       const pollFn = async () => {
         const statusResult = await this.getAccessRequestStatus(requestId);
-        if (!isApiResultSuccess(statusResult)) return null;
-        const { status, access_request_scope } = statusResult.body;
+        if (statusResult.status >= 400) return null;
+        const { status, access_request_scope } = statusResult.body as AccessRequestStatusResponse;
         if (status === 'approved')
           return { approved: true, accessRequestScope: access_request_scope ?? undefined };
         if (['denied', 'failed', 'expired'].includes(status)) return { approved: false };
@@ -410,7 +403,7 @@ export class WindowBodhiextClient implements IExtensionClient {
       });
 
       if (!reviewResult.approved) {
-        throw createOperationError('Access request was denied or expired', 'auth_error');
+        throw createOperationError('auth_error', 'Access request was denied or expired');
       }
       accessRequestScope = reviewResult.accessRequestScope;
     } else {
@@ -660,8 +653,8 @@ export class WindowBodhiextClient implements IExtensionClient {
     // Refresh failed (temp issue) - throw error (don't clear tokens)
     this.logger.warn('Token refresh failed, keeping tokens for manual retry');
     throw createOperationError(
-      'Access token expired and unable to refresh. Try logging out and logging in again.',
-      'token_refresh_failed'
+      'auth_error',
+      'Access token expired and unable to refresh. Try logging out and logging in again.'
     );
   }
 
@@ -689,8 +682,8 @@ export class WindowBodhiextClient implements IExtensionClient {
   /**
    * Ping API
    */
-  async pingApi(): Promise<ApiResponseResult<{ message: string }>> {
-    return this.sendApiRequest<void, { message: string }>('GET', '/ping');
+  async pingApi(): Promise<ApiResponse<PingResponse>> {
+    return this.sendApiRequest<void, PingResponse>('GET', '/ping');
   }
 
   /**
@@ -698,58 +691,56 @@ export class WindowBodhiextClient implements IExtensionClient {
    * Calls /bodhi/v1/info and returns structured server state
    */
   async getServerState(): Promise<BackendServerState> {
-    const result = await this.sendApiRequest<void, ServerInfoResponse>('GET', '/bodhi/v1/info');
+    try {
+      const result = await this.sendApiRequest<void, ServerInfoResponse>('GET', '/bodhi/v1/info');
 
-    if (isApiResultOperationError(result)) {
-      return BACKEND_SERVER_NOT_REACHABLE;
-    }
-
-    if (!isApiResultSuccess(result)) {
-      return BACKEND_SERVER_NOT_REACHABLE;
-    }
-
-    const body = result.body;
-
-    const version = body.version || 'unknown';
-    switch (body.status) {
-      case 'ready':
-        return {
-          status: 'ready',
-          version,
-          error: null,
-          deployment: body.deployment ?? null,
-          client_id: body.client_id ?? null,
-        };
-      case 'setup':
-        return backendServerNotReady('setup', version, undefined, body.deployment, body.client_id);
-      case 'resource_admin':
-        return backendServerNotReady(
-          'resource_admin',
-          version,
-          undefined,
-          body.deployment,
-          body.client_id
-        );
-      case 'tenant_selection':
-        return {
-          status: 'tenant_selection',
-          version,
-          error: null,
-          deployment: body.deployment ?? null,
-          client_id: body.client_id ?? null,
-        };
-      case 'error':
-        return backendServerNotReady(
-          'error',
-          version,
-          body.error
-            ? { message: body.error.message, type: body.error.type }
-            : SERVER_ERROR_CODES.SERVER_NOT_READY,
-          body.deployment,
-          body.client_id
-        );
-      default:
+      if (result.status >= 400) {
         return BACKEND_SERVER_NOT_REACHABLE;
+      }
+
+      const body = result.body as ServerInfoResponse;
+
+      const version = body.version || 'unknown';
+      switch (body.status) {
+        case 'ready':
+          return {
+            status: 'ready',
+            version,
+            error: null,
+            deployment: body.deployment ?? null,
+            client_id: body.client_id ?? null,
+          };
+        case 'setup':
+          return backendServerNotReady(
+            'setup',
+            version,
+            undefined,
+            body.deployment,
+            body.client_id
+          );
+        case 'resource_admin':
+          return backendServerNotReady(
+            'resource_admin',
+            version,
+            undefined,
+            body.deployment,
+            body.client_id
+          );
+        case 'error':
+          return backendServerNotReady(
+            'error',
+            version,
+            body.error
+              ? { message: body.error.message, type: body.error.type }
+              : SERVER_ERROR_CODES.SERVER_NOT_READY,
+            body.deployment,
+            body.client_id
+          );
+        default:
+          return BACKEND_SERVER_NOT_REACHABLE;
+      }
+    } catch {
+      return BACKEND_SERVER_NOT_REACHABLE;
     }
   }
 
@@ -770,7 +761,7 @@ export class WindowBodhiextClient implements IExtensionClient {
     if (authenticated) {
       const accessToken = await this._getAccessTokenRaw();
       if (!accessToken) {
-        throw createOperationError('Not authenticated. Please log in first.', 'auth_error');
+        throw createOperationError('auth_error', 'Not authenticated. Please log in first.');
       }
       requestHeaders = {
         ...requestHeaders,
@@ -790,19 +781,25 @@ export class WindowBodhiextClient implements IExtensionClient {
         yield (value as StreamChunk).body as TRes;
       }
     } catch (err) {
-      // Convert discriminated error types to ConnectionError/ApiError
+      // Same-bundle errors
+      if (err instanceof BodhiApiError) throw err;
+      if (err instanceof BodhiError) throw err;
+      // Cross-bundle: inject.ts creates errors in IIFE context.
+      // Use name discriminant + field duck-typing to reconstruct.
       if (err instanceof Error) {
-        // Check for 'response' field = API error
-        if ('response' in err) {
-          const apiErr = err as Error & { response: { status: number; body: any } };
-          throw createApiError(err.message, apiErr.response.status, apiErr.response.body);
+        const e = err as unknown as Record<string, unknown>;
+        if (err.name === 'BodhiApiError' && typeof e.status === 'number' && e.body != null) {
+          throw new BodhiApiError(
+            e.status as number,
+            e.body as any,
+            err.message,
+            e.headers as Record<string, string> | undefined
+          );
         }
-        // Check for 'error' field = network/extension error
-        if ('error' in err) {
-          throw createOperationError(err.message, 'extension_error');
+        if (err.name === 'BodhiError' && typeof e.code === 'string') {
+          throw new BodhiError(e.code as string, err.message);
         }
-        // Fallback for other errors
-        throw createOperationError(err.message, 'extension_error');
+        throw new BodhiError('extension_error', err.message);
       }
       throw err;
     } finally {
@@ -840,7 +837,7 @@ export class WindowBodhiextClient implements IExtensionClient {
 
   async requestAccess(
     body: CreateAccessRequest
-  ): Promise<ApiResponseResult<CreateAccessRequestResponse>> {
+  ): Promise<ApiResponse<CreateAccessRequestResponse>> {
     return this.sendApiRequest<CreateAccessRequest, CreateAccessRequestResponse>(
       'POST',
       '/bodhi/v1/apps/request-access',
@@ -852,7 +849,7 @@ export class WindowBodhiextClient implements IExtensionClient {
 
   async getAccessRequestStatus(
     requestId: string
-  ): Promise<ApiResponseResult<AccessRequestStatusResponse>> {
+  ): Promise<ApiResponse<AccessRequestStatusResponse>> {
     return this.sendApiRequest<void, AccessRequestStatusResponse>(
       'GET',
       `/bodhi/v1/apps/access-requests/${requestId}?app_client_id=${encodeURIComponent(this.authClientId)}`,
@@ -899,12 +896,9 @@ export class WindowBodhiextClient implements IExtensionClient {
   async handleAccessRequestCallback(requestId: string): Promise<AuthState> {
     // Poll once to get the approved status
     const statusResult = await this.getAccessRequestStatus(requestId);
-    if (!isApiResultSuccess(statusResult)) {
-      throw createOperationError('Failed to get access request status', 'auth_error');
-    }
-    const { status, access_request_scope } = statusResult.body;
+    const { status, access_request_scope } = unwrapResponse(statusResult);
     if (status !== 'approved') {
-      throw createOperationError(`Access request is not approved: ${status}`, 'auth_error');
+      throw createOperationError('auth_error', `Access request is not approved: ${status}`);
     }
     const scope = `openid profile email roles ${access_request_scope ?? ''}`.trim();
     localStorage.removeItem(this.storageKeys.ACCESS_REQUEST_ID);

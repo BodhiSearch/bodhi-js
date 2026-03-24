@@ -419,17 +419,16 @@ Re-discover tools from the MCP server and update the cache:
 
 ```typescript
 const { tools } = await client.mcps.refreshTools('my-mcp-server');
-console.log('Refreshed tools:', tools.map(t => t.name));
+console.log(
+  'Refreshed tools:',
+  tools.map(t => t.name)
+);
 ```
 
 ### Execute a Tool
 
 ```typescript
-const result = await client.mcps.executeTool(
-  'my-mcp-server',
-  'search',
-  { query: 'hello world' }
-);
+const result = await client.mcps.executeTool('my-mcp-server', 'search', { query: 'hello world' });
 console.log('Tool result:', result);
 ```
 

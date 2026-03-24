@@ -2,11 +2,11 @@
  * Shared types used by both ext2ext and web2ext clients
  */
 
-// Export new SDK-level types
-export { isApiResultError, isApiResultOperationError, isApiResultSuccess } from './api';
-export type { ApiResponseResult } from './api';
+// Re-export error classes and utilities from bodhi-browser-ext types
+export { BodhiError, BodhiApiError, unwrapResponse } from '@bodhiapp/bodhi-browser-types';
+export type { BodhiErrorCode } from '@bodhiapp/bodhi-browser-types';
 
-// Export our own error factory functions
+// Export error factory functions (backward compatibility wrappers)
 export { createApiError, createOperationError } from '../errors';
 
 export {

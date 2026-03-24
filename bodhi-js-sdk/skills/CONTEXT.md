@@ -62,9 +62,9 @@
 
 ### Generic API (core/src/interface.ts)
 
-- sendApiRequest<TReq, TRes>(method, endpoint, body?, headers?, authenticated?) → Promise<ApiResponseResult<TRes>>
+- sendApiRequest<TReq, TRes>(method, endpoint, body?, headers?, authenticated?) → Promise<ApiResponse<TRes>> (throws BodhiError on operational errors)
 - stream<TReq, TRes>(method, endpoint, body?, headers?, authenticated?) → AsyncGenerator<TRes>
-- pingApi() → Promise<ApiResponseResult<{ message: string }>>
+- pingApi() → Promise<ApiResponse<PingResponse>>
 - getServerState() → Promise<BackendServerState>
 
 ### Auth methods (core/src/interface.ts)
@@ -72,8 +72,8 @@
 - login(options?: LoginOptions) → Promise<AuthState>
 - logout() → Promise<AuthState>
 - getAuthState() → Promise<AuthState>
-- requestAccess(body: CreateAccessRequest) → Promise<ApiResponseResult<CreateAccessRequestResponse>>
-- getAccessRequestStatus(requestId) → Promise<ApiResponseResult<AccessRequestStatusResponse>>
+- requestAccess(body: CreateAccessRequest) → Promise<ApiResponse<CreateAccessRequestResponse>>
+- getAccessRequestStatus(requestId) → Promise<ApiResponse<AccessRequestStatusResponse>>
 - pollAccessRequestStatus(requestId, options?) → Promise<AccessRequestStatusResponse>
 
 ### UIClient facade methods (core/src/interface.ts)
@@ -95,8 +95,10 @@
 - ClientState = ExtensionState | DirectState (core/src/types/client-state.ts)
 - AuthState: { status, user, accessToken, error } (core/src/types/auth.ts)
 - BackendServerState: { status, version, error, deployment?, client_id? }
-- ApiResponseResult<T> = success { body, status, headers? } | error { error: { message, type } }
-- Type guards: isApiResultSuccess, isApiResultError, isApiResultOperationError, isAuthenticated, isWebUIClient
+- ApiResponse<T> = { body: T, status: number, headers?: Record<string, string> }
+- Error classes: BodhiError (operational), BodhiApiError extends BodhiError (HTTP 4xx/5xx) — use instanceof
+- Utilities: unwrapResponse(response) returns body or throws BodhiApiError
+- Type guards: isAuthenticated, isWebUIClient
 
 ### BodhiBadge component (react-core/src/BodhiBadge.tsx)
 
@@ -105,7 +107,7 @@
 - Default: http://localhost:1135
 - OpenAI-compatible: /v1/chat/completions (streaming SSE), /v1/models, /v1/embeddings
 - Bodhi-specific: /bodhi/v1/apps/mcps/\* (MCP tool discovery/execution for external apps), /bodhi/v1/info
-- Server states: ready, setup, resource_admin, tenant_selection, not-reachable
+- Server states: ready, setup, resource_admin, not-reachable
 - Deployment: standalone (default) vs multi_tenant
 - Auth: OAuth 2.1 + PKCE, API tokens
 
@@ -128,7 +130,7 @@
 - Error handling: type guards (isApiResultSuccess, isApiResultOperationError)
 - Conditional rendering: isOverallReady -> isAuthenticated -> app content
 - GitHub Pages: basePath in Vite config + BodhiProvider, 404.html hack for SPA routing
-- Multi-tenant: server returns deployment mode, SDK handles tenant selection
+- Multi-tenant: server returns deployment mode in BackendServerState
 
 ## MCP Integration (VERIFIED: core/src/openai-client-compat.ts:227-299)
 

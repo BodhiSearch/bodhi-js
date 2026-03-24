@@ -8,7 +8,6 @@ import {
   createLnaServerReadyState,
   createLnaServerResourceAdminState,
   createLnaServerSetupState,
-  createLnaServerTenantSelectionState,
   createLnaSkippedState,
   createLnaUnreachableState,
   createLnaUnsupportedState,
@@ -22,7 +21,6 @@ import {
   createSetupServerState,
   createSupportedBrowser,
   createSupportedOS,
-  createTenantSelectionServerState,
   createUnreachableExtensionState,
   createUnreachableServerState,
   createUnsupportedExtensionState,
@@ -35,7 +33,6 @@ import {
   isLnaServerStateReady,
   isLnaServerStateResourceAdmin,
   isLnaServerStateSetup,
-  isLnaServerStateTenantSelection,
   isLnaStateDenied,
   isLnaStateGranted,
   isLnaStatePrompt,
@@ -76,14 +73,12 @@ describe('Server Type Guards', () => {
     expect(isServerStateReady(state)).toBe(true);
   });
 
-  test('isServerStateReachable returns true for setup/resource-admin/tenant-selection states', () => {
+  test('isServerStateReachable returns true for setup/resource-admin states', () => {
     const setup = createSetupServerState();
     const resourceAdmin = createResourceAdminServerState();
-    const tenantSelection = createTenantSelectionServerState();
 
     expect(isServerStateReachable(setup)).toBe(true);
     expect(isServerStateReachable(resourceAdmin)).toBe(true);
-    expect(isServerStateReachable(tenantSelection)).toBe(true);
   });
 
   test('isServerStatePending returns true for pending state', () => {
@@ -148,11 +143,6 @@ describe('LNA Server Type Guards', () => {
   test('isLnaServerStateResourceAdmin returns true for resource-admin state', () => {
     const state = createLnaServerResourceAdminState();
     expect(isLnaServerStateResourceAdmin(state)).toBe(true);
-  });
-
-  test('isLnaServerStateTenantSelection returns true for tenant-selection state', () => {
-    const state = createLnaServerTenantSelectionState();
-    expect(isLnaServerStateTenantSelection(state)).toBe(true);
   });
 
   test('isLnaServerStateError returns true for error state', () => {

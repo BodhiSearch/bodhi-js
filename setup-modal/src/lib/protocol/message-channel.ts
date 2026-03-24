@@ -15,7 +15,7 @@ import { MessageBuilder } from './message-builder';
  * Configuration options for MessageChannel
  */
 export interface MessageChannelOptions {
-  /** Timeout in ms for request/response (default: 30000) */
+  /** Timeout in ms for request/response (default: 1000) */
   timeout?: number;
   /** Expected origin for validation (if null, validates on first message) */
   expectedOrigin?: string | null;
@@ -60,7 +60,7 @@ export class MessageChannel {
     options: MessageChannelOptions = {}
   ) {
     this.options = {
-      timeout: options.timeout ?? 30000,
+      timeout: options.timeout ?? 1000,
       expectedOrigin: options.expectedOrigin ?? null,
       debug: options.debug ?? false,
     };

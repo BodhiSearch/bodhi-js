@@ -65,11 +65,6 @@ export interface LnaServerStateResourceAdmin {
   version: string;
 }
 
-export interface LnaServerStateTenantSelection {
-  status: 'tenant_selection';
-  version: string;
-}
-
 export interface LnaServerStateError {
   status: 'error';
   error: {
@@ -77,4 +72,4 @@ export interface LnaServerStateError {
   };
 }
 
-export type LnaServerState = LnaServerStatePending | LnaServerStateReady | LnaServerStateSetup | LnaServerStateResourceAdmin | LnaServerStateTenantSelection | LnaServerStateError;
+export type LnaServerState = LnaServerStatePending | LnaServerStateReady | LnaServerStateSetup | LnaServerStateResourceAdmin | LnaServerStateError;

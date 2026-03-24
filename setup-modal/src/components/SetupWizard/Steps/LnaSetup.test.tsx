@@ -10,7 +10,6 @@ import {
   createLnaServerReadyState,
   createLnaServerSetupState,
   createLnaServerResourceAdminState,
-  createLnaServerTenantSelectionState,
   createLnaServerErrorState,
 } from '@/test/mock-factories';
 import { render, screen } from '@/test/test-utils';
@@ -231,12 +230,6 @@ describe('LnaSetup - Accordion UI', () => {
         lna: createLnaGrantedState(),
         lnaServer: createLnaServerResourceAdminState(),
         expectedLabel: 'Admin Required',
-      },
-      {
-        name: 'Tenant Selection Required when server is tenant-selection',
-        lna: createLnaGrantedState(),
-        lnaServer: createLnaServerTenantSelectionState(),
-        expectedLabel: 'Tenant Selection Required',
       },
       {
         name: 'Error when server has error',
@@ -673,20 +666,6 @@ describe('LnaSetup - Server Content States', () => {
     const link = screen.getByTestId('lna-server-admin-link');
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute('href', 'http://localhost:1135/admin');
-  });
-
-  test('should show tenant selection link for server in tenant-selection state', () => {
-    const state = createMockState({
-      lna: createLnaGrantedState('http://localhost:1135'),
-      lnaServer: createLnaServerTenantSelectionState(),
-    });
-    useSetupModalStore.setState({ setupState: state });
-    render(<LnaSetup />);
-
-    expect(screen.getByText(/Server requires tenant selection/)).toBeInTheDocument();
-    const link = screen.getByTestId('lna-server-tenant-selection-link');
-    expect(link).toBeInTheDocument();
-    expect(link).toHaveAttribute('href', 'http://localhost:1135/tenant-selection');
   });
 
   test('should show error message and troubleshooting for server error', () => {
