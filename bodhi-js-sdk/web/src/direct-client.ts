@@ -10,7 +10,7 @@ import {
   DEFAULT_POLL_TIMEOUT_MS,
   DirectClientBase,
   STORAGE_PREFIXES,
-  createOperationError,
+  throwAccessRequestDenialError,
   unwrapResponse,
   createStoragePrefixWithBasePath,
   generateCodeChallenge,
@@ -22,11 +22,7 @@ import {
   type LogLevel,
   type StateChangeCallback,
 } from '@bodhiapp/bodhi-js-core';
-import type {
-  AccessRequestStatusResponse,
-  CreateAccessRequestResponse,
-  UserScope,
-} from '@bodhiapp/ts-client';
+import type { AccessRequestStatusResponse, UserScope } from '@bodhiapp/ts-client';
 
 /**
  * Configuration for DirectWebClient
@@ -108,7 +104,7 @@ export class DirectWebClient extends DirectClientBase {
         const { status, access_request_scope } = statusResult.body as AccessRequestStatusResponse;
         if (status === 'approved')
           return { approved: true, accessRequestScope: access_request_scope ?? undefined };
-        if (['denied', 'failed', 'expired'].includes(status)) return { approved: false };
+        if (['denied', 'failed', 'expired'].includes(status)) return { approved: false, status };
         return null; // still pending
       };
 
@@ -118,7 +114,7 @@ export class DirectWebClient extends DirectClientBase {
       });
 
       if (!reviewResult.approved) {
-        throw createOperationError('auth_error', 'Access request was denied or expired');
+        throwAccessRequestDenialError(reviewResult.status ?? 'unknown');
       }
       accessRequestScope = reviewResult.accessRequestScope;
     } else {
@@ -175,14 +171,12 @@ export class DirectWebClient extends DirectClientBase {
   }
 
   async handleAccessRequestCallback(requestId: string): Promise<AuthState> {
-    // Poll once to get the approved status
     const statusResult = await this.getAccessRequestStatus(requestId);
     const { status, access_request_scope } = unwrapResponse(statusResult);
-    if (status !== 'approved') {
-      throw createOperationError('auth_error', `Access request is not approved: ${status}`);
-    }
-    const scope = `openid profile email roles ${access_request_scope ?? ''}`.trim();
+    // Clean up localStorage on ALL paths (not just success)
     localStorage.removeItem(this.storageKeys.ACCESS_REQUEST_ID);
+    if (status !== 'approved') throwAccessRequestDenialError(status);
+    const scope = `openid profile email roles ${access_request_scope ?? ''}`.trim();
     return this.performOAuthPkce(scope);
   }
 

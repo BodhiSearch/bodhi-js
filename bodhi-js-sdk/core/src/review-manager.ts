@@ -1,6 +1,7 @@
 export interface ReviewResult {
   approved: boolean;
   accessRequestScope?: string;
+  status?: string;
 }
 
 export interface PollOptions {

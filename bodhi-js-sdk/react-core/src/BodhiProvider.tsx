@@ -1,4 +1,5 @@
 import {
+  BodhiError,
   INITIAL_AUTH_STATE,
   Logger,
   NOOP_STATE_CALLBACK,
@@ -80,11 +81,27 @@ export function BodhiProvider({
   const callbackPath = userCallbackPath ?? `${normalizedBasePath}/callback`;
   const logger = useMemo(() => new Logger('BodhiProvider', logLevel), [logLevel]);
   const callbackProcessedRef = useRef(false);
+  const authErrorRef = useRef(false);
   const initAttemptedRef = useRef(false);
   const [clientState, setClientState] = useState<ClientContextState>(INITIAL_CLIENT_CONTEXT_STATE);
   const [auth, setAuth] = useState<AuthState>(INITIAL_AUTH_STATE);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [setupState, setSetupState] = useState<SetupState>('ready');
+
+  const setAuthError = useCallback((code: string, message: string) => {
+    authErrorRef.current = true;
+    setAuth({
+      status: 'error',
+      user: null,
+      accessToken: null,
+      error: { code, message },
+    });
+    setIsAuthLoading(false);
+  }, []);
+
+  const clearAuthError = useCallback(() => {
+    authErrorRef.current = false;
+  }, []);
 
   // Set callback for state changes
   useEffect(() => {
@@ -94,8 +111,12 @@ export function BodhiProvider({
           setClientState(clientStateToContextState(change.state));
           break;
         case 'auth-state':
-          setAuth(change.state);
-          setIsAuthLoading(false);
+          // Don't override error state set by callback handler
+          // (async init refresh may emit unauthenticated after callback error)
+          if (!authErrorRef.current) {
+            setAuth(change.state);
+            setIsAuthLoading(false);
+          }
           break;
       }
     };
@@ -139,8 +160,15 @@ export function BodhiProvider({
   );
 
   /**
-   * Auto-init on mount, then handle OAuth callback if present
+   * Auto-init on mount, then handle callbacks if present
    * Sequencing ensures connectionMode is restored before callback routing
+   *
+   * Callback flow (redirect login):
+   *   1. Access request callback: ?bodhi_flow=access_request&id=<requestId>
+   *      → polls status → approved → performOAuthPkce (page navigates away)
+   *      → or denied/expired/failed → sets auth error state
+   *   2. OAuth callback: ?code=<code>&state=<state>
+   *      → exchanges code for tokens → authenticated
    */
   useEffect(() => {
     // Only auto-init once on mount
@@ -151,41 +179,59 @@ export function BodhiProvider({
       // Step 1: Initialize client (restores connectionMode from storage)
       await init();
 
-      // Step 2: Handle OAuth callback if present
+      // Step 2: Handle callbacks if present
       if (!handleCallback) return;
 
       const url = new URL(window.location.href);
       if (url.pathname !== callbackPath) return;
+      if (callbackProcessedRef.current) return;
+      if (!isWebUIClient(client)) return;
 
+      // Step 2a: Handle access request callback (redirect flow)
+      // Detected by bodhi_flow=access_request marker (set by SDK in redirect URL)
+      const bodhiFlow = url.searchParams.get('bodhi_flow');
+      if (bodhiFlow === 'access_request') {
+        const accessRequestId = url.searchParams.get('id');
+        if (!accessRequestId) {
+          logger.warn('Access request callback marker present but no id parameter');
+          window.history.replaceState({}, '', basePath);
+          return;
+        }
+        callbackProcessedRef.current = true;
+        setIsAuthLoading(true);
+        try {
+          await client.handleAccessRequestCallback(accessRequestId);
+          // handleAccessRequestCallback calls performOAuthPkce which navigates away
+        } catch (error: unknown) {
+          logger.error('Access request callback failed:', error);
+          const bodhiError = error instanceof BodhiError ? error : null;
+          setAuthError(
+            bodhiError?.code ?? 'access_request_callback_failed',
+            error instanceof Error ? error.message : 'Access request callback failed'
+          );
+          window.history.replaceState({}, '', basePath);
+        }
+        return;
+      }
+
+      // Step 2b: Handle OAuth callback (code exchange)
       const code = url.searchParams.get('code');
       const state = url.searchParams.get('state');
       if (!code || !state) return;
-      if (callbackProcessedRef.current) return;
 
       callbackProcessedRef.current = true;
-
-      if (isWebUIClient(client)) {
-        setIsAuthLoading(true);
-        client
-          .handleOAuthCallback(code, state)
-          .then(() => {
-            // Auth state updated automatically via callback
-            window.history.replaceState({}, '', basePath);
-          })
-          .catch((error: unknown) => {
-            logger.error('OAuth callback failed:', error);
-            setAuth({
-              status: 'error',
-              user: null,
-              accessToken: null,
-              error: {
-                message: error instanceof Error ? error.message : 'OAuth callback failed',
-                code: 'OAUTH_CALLBACK_FAILED',
-              },
-            });
-            setIsAuthLoading(false);
-            window.history.replaceState({}, '', basePath);
-          });
+      setIsAuthLoading(true);
+      try {
+        await client.handleOAuthCallback(code, state);
+        window.history.replaceState({}, '', basePath);
+      } catch (error: unknown) {
+        logger.error('OAuth callback failed:', error);
+        const bodhiError = error instanceof BodhiError ? error : null;
+        setAuthError(
+          bodhiError?.code ?? 'oauth_callback_failed',
+          error instanceof Error ? error.message : 'OAuth callback failed'
+        );
+        window.history.replaceState({}, '', basePath);
       }
     };
 
@@ -194,6 +240,7 @@ export function BodhiProvider({
 
   const login = useCallback(
     async (options?: LoginOptions): Promise<AuthState | void> => {
+      clearAuthError();
       setIsAuthLoading(true);
       try {
         // Defensively extract only valid LoginOptions properties
@@ -214,13 +261,14 @@ export function BodhiProvider({
         await client.login(loginOptions);
         // Auth state updated automatically via callback
       } catch (err) {
+        const bodhiError = err instanceof BodhiError ? err : null;
         const errorState: AuthState = {
           status: 'error',
           user: null,
           accessToken: null,
           error: {
             message: err instanceof Error ? err.message : 'Login failed',
-            code: 'LOGIN_FAILED',
+            code: bodhiError?.code ?? 'login_failed',
           },
         };
         setAuth(errorState);
@@ -228,25 +276,17 @@ export function BodhiProvider({
         return errorState;
       }
     },
-    [client]
+    [client, clearAuthError]
   );
 
   const logout = useCallback(async () => {
+    clearAuthError();
     try {
       await client.logout();
-      // Auth state updated automatically via callback
     } catch (err) {
-      setAuth({
-        status: 'error',
-        user: null,
-        accessToken: null,
-        error: {
-          message: err instanceof Error ? err.message : 'Logout failed',
-          code: 'LOGOUT_FAILED',
-        },
-      });
+      setAuthError('logout_failed', err instanceof Error ? err.message : 'Logout failed');
     }
-  }, [client]);
+  }, [client, setAuthError, clearAuthError]);
 
   const contextValue: BodhiContext = useMemo(() => {
     const isReady = clientState.status === 'ready';

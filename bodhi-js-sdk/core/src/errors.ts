@@ -38,3 +38,17 @@ export const createApiError = (
 export const createOperationError = (code: string, message: string): BodhiError => {
   return new BodhiError(code as BodhiErrorCode, message);
 };
+
+/**
+ * Throw an appropriate BodhiError for access request denial/failure
+ *
+ * @param status - The access request status (denied, expired, or other)
+ * @throws BodhiError always
+ */
+export function throwAccessRequestDenialError(status: string): never {
+  if (status === 'denied')
+    throw createOperationError('access_request_denied', 'Access request was denied');
+  if (status === 'expired')
+    throw createOperationError('access_request_expired', 'Access request expired');
+  throw createOperationError('access_request_failed', `Access request failed: ${status}`);
+}

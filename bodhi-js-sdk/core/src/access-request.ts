@@ -9,7 +9,7 @@ import type {
 } from '@bodhiapp/ts-client';
 import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
 import { BodhiError, unwrapResponse } from '@bodhiapp/bodhi-browser-types';
-import { createOperationError } from './errors';
+import { createOperationError, throwAccessRequestDenialError } from './errors';
 
 export const DEFAULT_POLL_INTERVAL_MS = 2000;
 export const DEFAULT_POLL_TIMEOUT_MS = 300_000;
@@ -48,9 +48,8 @@ export function pollAccessRequestUntilResolved(
           resolve(body);
           return;
         }
-        if (status === 'denied' || status === 'failed' || status === 'expired') {
-          reject(createOperationError('auth_error', `Access request ${status}`));
-          return;
+        if (status === 'denied' || status === 'expired' || status === 'failed') {
+          throwAccessRequestDenialError(status);
         }
 
         // Still draft/pending - continue polling
@@ -114,6 +113,11 @@ export class AccessRequestBuilder {
     if (!this.body.app_client_id) throw new Error('app_client_id is required');
     if (!this.body.flow_type) throw new Error('flow_type is required');
     if (!this.body.requested_role) throw new Error('requested_role is required');
-    return this.body as CreateAccessRequest;
+    const result = { ...this.body } as CreateAccessRequest;
+    if (result.flow_type === 'redirect' && result.redirect_url) {
+      const sep = result.redirect_url.includes('?') ? '&' : '?';
+      result.redirect_url = `${result.redirect_url}${sep}bodhi_flow=access_request`;
+    }
+    return result;
   }
 }

@@ -7,7 +7,7 @@ export { BodhiError, BodhiApiError, unwrapResponse } from '@bodhiapp/bodhi-brows
 export type { BodhiErrorCode } from '@bodhiapp/bodhi-browser-types';
 
 // Export error factory functions (backward compatibility wrappers)
-export { createApiError, createOperationError } from '../errors';
+export { createApiError, createOperationError, throwAccessRequestDenialError } from '../errors';
 
 export {
   BACKEND_SERVER_NOT_CONNECTED,
