@@ -122,8 +122,8 @@ await client.login(options?: LoginOptions);
 
 // LoginOptions — all fields optional:
 interface LoginOptions {
-  userRole?: UserScope;               // 'scope_user_user' | 'scope_user_power_user'
-  requested?: RequestedResources;     // MCPs your app needs
+  userRole?: UserScope;               // Default: 'scope_user_user'. Alternative: 'scope_user_power_user'
+  requested?: RequestedResourcesV1;   // MCPs your app needs (version auto-injected by SDK)
   flowType?: FlowType;                // 'popup' (default) | 'redirect'
   redirectUrl?: string;               // Return URL for redirect flow
   onProgress?: LoginProgressCallback; // (stage: 'requesting'|'reviewing'|'authenticating') => void
@@ -131,10 +131,17 @@ interface LoginOptions {
   pollTimeoutMs?: number;             // Polling timeout, default: 300000ms (5min)
 }
 
-// RequestedResources — what your app needs access to:
-interface RequestedResources {
+// RequestedResourcesV1 — what your app needs access to:
+interface RequestedResourcesV1 {
   mcp_servers?: Array<{ url: string }>;
 }
+
+// LoginOptionsBuilder — fluent builder (recommended):
+new LoginOptionsBuilder()
+  .setRole('scope_user_power_user')
+  .addMcpServer('https://mcp.exa.ai/mcp')
+  .setFlowType('popup')
+  .build() // → LoginOptions
 
 // Logout and clear tokens
 await client.logout();

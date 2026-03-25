@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-react",
-  "version": "0.0.30-dev",
+  "version": "0.0.31-dev",
   "description": "React bindings for Bodhi Browser SDK with WebUIClient preset",
   "type": "module",
   "main": "dist/bodhi-react.cjs.js",

@@ -15,7 +15,6 @@ import {
   type LogLevel,
   type StateChange,
   type StateChangeCallback,
-  type UserScope,
 } from '@bodhiapp/bodhi-js-core';
 import { DirectWebClient } from './direct-client';
 import { WindowBodhiextClient } from './ext-client';
@@ -27,7 +26,6 @@ import { WindowBodhiextClient } from './ext-client';
 export interface WebClientConfig {
   authServerUrl: string;
   redirectUri: string;
-  userRole: UserScope;
   basePath: string;
   logLevel: LogLevel;
   apiTimeoutMs?: number;
@@ -46,7 +44,6 @@ export interface WebClientConfig {
 export interface WebUIClientParams {
   redirectUri?: string;
   authServerUrl?: string;
-  userRole?: UserScope;
   basePath?: string;
   logLevel?: LogLevel;
   apiTimeoutMs?: number;
@@ -93,7 +90,6 @@ export class WebUIClient
       basePath: cfg.basePath || '/',
       redirectUri: cfg.redirectUri || computeDefaultRedirectUri(cfg.basePath || '/'),
       authServerUrl: cfg.authServerUrl || 'https://id.getbodhi.app/realms/bodhi',
-      userRole: cfg.userRole || 'scope_user_user',
       logLevel: cfg.logLevel || 'warn',
       apiTimeoutMs: cfg.apiTimeoutMs,
       initParams: cfg.initParams,
@@ -119,7 +115,6 @@ export class WebUIClient
       {
         authServerUrl: config.authServerUrl,
         redirectUri: config.redirectUri,
-        userRole: config.userRole,
         basePath: config.basePath,
         logLevel: config.logLevel,
         apiTimeoutMs: config.apiTimeoutMs,
@@ -139,7 +134,6 @@ export class WebUIClient
         authClientId,
         authServerUrl: config.authServerUrl,
         redirectUri: config.redirectUri,
-        userRole: config.userRole,
         logLevel: config.logLevel,
         basePath: config.basePath,
         apiTimeoutMs: config.apiTimeoutMs,

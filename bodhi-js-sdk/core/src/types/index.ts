@@ -81,10 +81,10 @@ export type LoginProgressStage = 'requesting' | 'reviewing' | 'authenticating';
 export type LoginProgressCallback = (stage: LoginProgressStage) => void;
 
 // Login options
-import type { FlowType, RequestedResources, UserScope } from '@bodhiapp/ts-client';
+import type { FlowType, RequestedResourcesV1, UserScope } from '@bodhiapp/ts-client';
 export interface LoginOptions {
   userRole?: UserScope;
-  requested?: RequestedResources;
+  requested?: RequestedResourcesV1;
   flowType?: FlowType;
   redirectUrl?: string;
   onProgress?: LoginProgressCallback;

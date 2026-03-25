@@ -22,7 +22,7 @@ import {
   type LogLevel,
   type StateChangeCallback,
 } from '@bodhiapp/bodhi-js-core';
-import type { AccessRequestStatusResponse, UserScope } from '@bodhiapp/ts-client';
+import type { AccessRequestStatusResponse } from '@bodhiapp/ts-client';
 
 /**
  * Configuration for DirectWebClient
@@ -30,7 +30,6 @@ import type { AccessRequestStatusResponse, UserScope } from '@bodhiapp/ts-client
 export interface DirectWebClientConfig {
   authClientId: string;
   authServerUrl: string;
-  userRole: UserScope;
   basePath: string;
   logLevel: LogLevel;
   redirectUri: string;
@@ -51,7 +50,6 @@ export class DirectWebClient extends DirectClientBase {
     const baseConfig: DirectClientBaseConfig = {
       authClientId: config.authClientId,
       authServerUrl: config.authServerUrl,
-      userRole: config.userRole,
       storagePrefix,
       logLevel: config.logLevel,
       loggerPrefix: 'DirectWebClient',
@@ -71,7 +69,7 @@ export class DirectWebClient extends DirectClientBase {
       return existingAuth;
     }
 
-    const userRole = options?.userRole ?? this.userRole;
+    const userRole = options?.userRole ?? 'scope_user_user';
     const flowType = options?.flowType ?? 'popup';
 
     // Step 1: Create access request

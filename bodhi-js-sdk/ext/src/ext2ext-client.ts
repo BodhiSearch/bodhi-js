@@ -66,7 +66,6 @@ import {
   type RefreshTokenResponse,
   type Tokens,
   type UserInfo,
-  type UserScope,
 } from '@bodhiapp/bodhi-js-core';
 
 // ============================================================================
@@ -79,7 +78,6 @@ export interface BodhiExtClientConfig {
   authServerUrl?: string;
   extensionId?: string;
   logLevel?: LogLevel;
-  userRole?: UserScope;
   attempts?: number;
   attemptWaitMs?: number;
   attemptTimeout?: number;
@@ -107,7 +105,6 @@ export class BodhiExtClient {
   private isAuthenticating = false;
   private authClientId: string;
   private authServerUrl: string;
-  private userRole: UserScope;
   private logger: Logger;
   private state: ClientExtState = 'setup';
   private listenersInitialized = false;
@@ -156,7 +153,6 @@ export class BodhiExtClient {
   constructor(authClientId: string, config?: BodhiExtClientConfig) {
     this.authClientId = authClientId;
     this.authServerUrl = config?.authServerUrl || 'https://id.getbodhi.app/realms/bodhi';
-    this.userRole = config?.userRole || 'scope_user_user';
     this.extensionId = config?.extensionId;
     this.logger = new Logger('BodhiExtClient', config?.logLevel || 'warn');
 
@@ -771,7 +767,7 @@ export class BodhiExtClient {
         this.logger.warn('Extension mode does not support redirect flow type; using popup instead');
       }
 
-      const userRole = options?.userRole ?? this.userRole;
+      const userRole = options?.userRole ?? 'scope_user_user';
 
       // Step 1: Create access request
       const builder = new AccessRequestBuilder(this.authClientId)

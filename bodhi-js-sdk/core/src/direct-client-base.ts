@@ -86,7 +86,6 @@ import type {
   CreateAccessRequestResponse,
   DeploymentMode,
   PingResponse,
-  UserScope,
 } from '@bodhiapp/ts-client';
 import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
 import { BodhiError, BodhiApiError } from '@bodhiapp/bodhi-browser-types';
@@ -94,7 +93,7 @@ import { DEFAULT_API_TIMEOUT_MS } from './constants';
 import { pollAccessRequestUntilResolved } from './access-request';
 import type { IDirectClient } from './interface';
 import { Logger } from './logger';
-import { Chat, Models, Embeddings, Toolsets, Mcps } from './openai-client-compat';
+import { Chat, Models, Embeddings, Mcps } from './openai-client-compat';
 import {
   createOAuthEndpoints,
   extractUserInfo,
@@ -127,7 +126,6 @@ import {
 export interface DirectClientBaseConfig {
   authClientId: string;
   authServerUrl: string;
-  userRole: UserScope;
   storagePrefix: string;
   logLevel: LogLevel;
   loggerPrefix: string;
@@ -142,7 +140,6 @@ export abstract class DirectClientBase implements IDirectClient {
   protected serverUrl: string | null = null;
   protected authClientId: string;
   protected authServerUrl: string;
-  protected userRole: UserScope;
   protected authEndpoints: OAuthEndpoints;
   protected storageKeys: StorageKeys;
   protected state: DirectState = DIRECT_STATE_NOT_INITIALIZED;
@@ -154,14 +151,12 @@ export abstract class DirectClientBase implements IDirectClient {
   private _chat: Chat | undefined;
   private _models: Models | undefined;
   private _embeddings: Embeddings | undefined;
-  private _toolsets: Toolsets | undefined;
   private _mcps: Mcps | undefined;
 
   constructor(config: DirectClientBaseConfig, onStateChange?: StateChangeCallback) {
     this.logger = new Logger(config.loggerPrefix, config.logLevel);
     this.authClientId = config.authClientId;
     this.authServerUrl = config.authServerUrl;
-    this.userRole = config.userRole;
     this.authEndpoints = createOAuthEndpoints(this.authServerUrl);
     this.storageKeys = createStorageKeys(config.storagePrefix);
     this.onStateChange = onStateChange ?? NOOP_STATE_CALLBACK;
@@ -520,10 +515,6 @@ export abstract class DirectClientBase implements IDirectClient {
     return (this._embeddings ??= new Embeddings(this));
   }
 
-  get toolsets(): Toolsets {
-    return (this._toolsets ??= new Toolsets(this));
-  }
-
   get mcps(): Mcps {
     return (this._mcps ??= new Mcps(this));
   }
@@ -563,7 +554,6 @@ export abstract class DirectClientBase implements IDirectClient {
       authState: await this.getAuthState(),
       authClientId: this.authClientId,
       authServerUrl: this.authServerUrl,
-      userRole: this.userRole,
     };
   }
 

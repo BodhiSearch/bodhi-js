@@ -3,7 +3,6 @@ import type {
   CreateAccessRequest,
   CreateAccessRequestResponse,
   PingResponse,
-  UserScope,
 } from '@bodhiapp/ts-client';
 import {
   AccessRequestBuilder,
@@ -35,7 +34,6 @@ import {
   Chat,
   Models,
   Embeddings,
-  Toolsets,
   Mcps,
   type AuthState,
   type BackendServerState,
@@ -68,7 +66,6 @@ export type SerializedWebExtensionState = { extensionId?: string };
 export interface WindowBodhiextClientConfig {
   authServerUrl: string;
   redirectUri: string;
-  userRole: UserScope;
   basePath: string;
   logLevel: LogLevel;
   apiTimeoutMs?: number;
@@ -105,7 +102,6 @@ export class WindowBodhiextClient implements IExtensionClient {
   private _chat: Chat | undefined;
   private _models: Models | undefined;
   private _embeddings: Embeddings | undefined;
-  private _toolsets: Toolsets | undefined;
   private _mcps: Mcps | undefined;
 
   constructor(
@@ -361,7 +357,7 @@ export class WindowBodhiextClient implements IExtensionClient {
     // Ensure extension discovered
     this.ensureBodhiext();
 
-    const userRole = options?.userRole ?? this.config.userRole;
+    const userRole = options?.userRole ?? 'scope_user_user';
     const flowType = options?.flowType ?? 'popup';
 
     // Step 1: Create access request
@@ -824,10 +820,6 @@ export class WindowBodhiextClient implements IExtensionClient {
     return (this._embeddings ??= new Embeddings(this));
   }
 
-  get toolsets(): Toolsets {
-    return (this._toolsets ??= new Toolsets(this));
-  }
-
   get mcps(): Mcps {
     return (this._mcps ??= new Mcps(this));
   }
@@ -928,7 +920,6 @@ export class WindowBodhiextClient implements IExtensionClient {
       authClientId: this.authClientId,
       authServerUrl: this.config.authServerUrl,
       redirectUri: this.config.redirectUri,
-      userRole: this.config.userRole,
     };
   }
 }

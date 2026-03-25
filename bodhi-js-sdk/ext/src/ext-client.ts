@@ -23,7 +23,6 @@ import {
   Chat,
   Models,
   Embeddings,
-  Toolsets,
   Mcps,
   type AuthState,
   type BackendServerState,
@@ -102,7 +101,6 @@ export class ExtClient implements IExtensionClient {
   private _chat: Chat | undefined;
   private _models: Models | undefined;
   private _embeddings: Embeddings | undefined;
-  private _toolsets: Toolsets | undefined;
   private _mcps: Mcps | undefined;
 
   constructor(config: ExtClientConfig = {}, onStateChange?: StateChangeCallback) {
@@ -416,7 +414,7 @@ export class ExtClient implements IExtensionClient {
 
   /**
    * Login user via OAuth
-   * @param options - Optional login parameters including toolsetScopeIds
+   * @param options - Optional login parameters
    * @throws ExtError if login fails
    * @returns AuthState with login state and user info
    */
@@ -701,10 +699,6 @@ export class ExtClient implements IExtensionClient {
 
   get embeddings(): Embeddings {
     return (this._embeddings ??= new Embeddings(this));
-  }
-
-  get toolsets(): Toolsets {
-    return (this._toolsets ??= new Toolsets(this));
   }
 
   get mcps(): Mcps {

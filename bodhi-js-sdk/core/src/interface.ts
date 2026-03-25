@@ -16,7 +16,7 @@ import type {
   LoginOptions,
   StateChangeCallback,
 } from './types';
-import type { Chat, Models, Embeddings, Toolsets, Mcps } from './openai-client-compat';
+import type { Chat, Models, Embeddings, Mcps } from './openai-client-compat';
 
 /**
  * ConnectionClient - Base interface for all client implementations
@@ -124,7 +124,7 @@ export interface IConnectionClient<IParams = unknown, SerialState = unknown> {
    * Login via OAuth
    * - IExtensionClient: Delegates to extension (chrome.identity or browser redirect)
    * - DirectClient: Direct HTTP OAuth flow
-   * @param options - Optional login options (toolsetScopeIds, version)
+   * @param options - Optional login options (requested resources, role, flow type)
    * @returns AuthState with login state and user info
    */
   login(options?: LoginOptions): Promise<AuthState>;
@@ -206,12 +206,6 @@ export interface IConnectionClient<IParams = unknown, SerialState = unknown> {
    * Usage: await client.embeddings.create({ model, input })
    */
   readonly embeddings: Embeddings;
-
-  /**
-   * Toolsets resource
-   * Usage: await client.toolsets.list()
-   */
-  readonly toolsets: Toolsets;
 
   /**
    * MCPs resource

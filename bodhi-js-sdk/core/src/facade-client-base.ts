@@ -18,7 +18,7 @@ import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
 import type { IConnectionClient, IExtensionClient } from './interface';
 import { Logger } from './logger';
 import { BodhiClientUserPrefsManager } from './storage';
-import { Chat, Models, Embeddings, Toolsets, Mcps } from './openai-client-compat';
+import { Chat, Models, Embeddings, Mcps } from './openai-client-compat';
 import type {
   AuthState,
   BackendServerState,
@@ -61,7 +61,6 @@ export abstract class BaseFacadeClient<
   private _chat: Chat | undefined;
   private _models: Models | undefined;
   private _embeddings: Embeddings | undefined;
-  private _toolsets: Toolsets | undefined;
   private _mcps: Mcps | undefined;
 
   constructor(authClientId: string, config: TConfig, onStateChange?: StateChangeCallback) {
@@ -474,10 +473,6 @@ export abstract class BaseFacadeClient<
 
   get embeddings(): Embeddings {
     return (this._embeddings ??= new Embeddings(this));
-  }
-
-  get toolsets(): Toolsets {
-    return (this._toolsets ??= new Toolsets(this));
   }
 
   get mcps(): Mcps {

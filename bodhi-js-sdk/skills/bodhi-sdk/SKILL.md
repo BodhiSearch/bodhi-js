@@ -74,7 +74,7 @@ function App() {
 ### 4. Login with Resource Requests
 
 ```tsx
-import { useBodhi } from '@bodhiapp/bodhi-js-react';
+import { useBodhi, LoginOptionsBuilder } from '@bodhiapp/bodhi-js-react';
 
 function MainContent() {
   const { isOverallReady, isAuthenticated, login, showSetup } = useBodhi();
@@ -82,26 +82,24 @@ function MainContent() {
   if (!isOverallReady) return <button onClick={showSetup}>Setup Required</button>;
 
   if (!isAuthenticated) {
-    return (
-      <button
-        onClick={() =>
-          login({
-            requested: {
-              mcp_servers: [{ url: 'https://mcp.exa.ai/mcp' }],
-            },
-          })
-        }
-      >
-        Login
-      </button>
-    );
+    const loginOpts = new LoginOptionsBuilder().addMcpServer('https://mcp.exa.ai/mcp').build();
+
+    return <button onClick={() => login(loginOpts)}>Login</button>;
   }
 
   return <ChatInterface />;
 }
 ```
 
-The `requested` field tells Bodhi App what resources your app needs. The user sees a consent popup listing these and can approve, modify, or deny each one.
+The `requested` field tells Bodhi App what resources your app needs. The user sees a consent popup listing these and can approve, modify, or deny each one. You can also construct LoginOptions directly:
+
+```tsx
+login({
+  requested: {
+    mcp_servers: [{ url: 'https://mcp.exa.ai/mcp' }],
+  },
+});
+```
 
 ### 5. Use Approved Resources
 
@@ -125,7 +123,6 @@ const stream = client.chat.completions.create({
   clientConfig={{                       // Optional
     authServerUrl: '...',              // Auth server (default: prod)
     redirectUri: '...',                // OAuth callback URL (auto-computed)
-    userRole: 'scope_user_user',       // Default role for login
     basePath: '/',                     // App base path
     logLevel: 'warn',
   }}
@@ -175,7 +172,7 @@ await login({
   },
 
   // Optional overrides
-  userRole: 'scope_user_power_user', // Default: from client config ('scope_user_user')
+  userRole: 'scope_user_power_user', // Default: 'scope_user_user'
   flowType: 'popup', // Default: 'popup' (alternative: 'redirect')
 
   // Progress tracking
@@ -195,15 +192,33 @@ await login({
 
 ### LoginOptions Reference
 
-| Field            | Type                 | Default            | Description                                      |
-| ---------------- | -------------------- | ------------------ | ------------------------------------------------ |
-| `requested`      | `RequestedResources` | none               | MCPs your app needs                              |
-| `userRole`       | `UserScope`          | client config      | `'scope_user_user'` or `'scope_user_power_user'` |
-| `flowType`       | `FlowType`           | `'popup'`          | `'popup'` or `'redirect'`                        |
-| `redirectUrl`    | `string`             | client redirectUri | Return URL for redirect flow                     |
-| `onProgress`     | `(stage) => void`    | none               | Progress callback                                |
-| `pollIntervalMs` | `number`             | `2000`             | Polling interval (popup flow)                    |
-| `pollTimeoutMs`  | `number`             | `300000`           | Polling timeout (popup flow, 5min)               |
+| Field            | Type                   | Default             | Description                                      |
+| ---------------- | ---------------------- | ------------------- | ------------------------------------------------ |
+| `requested`      | `RequestedResourcesV1` | none                | MCPs your app needs (version auto-injected)      |
+| `userRole`       | `UserScope`            | `'scope_user_user'` | `'scope_user_user'` or `'scope_user_power_user'` |
+| `flowType`       | `FlowType`             | `'popup'`           | `'popup'` or `'redirect'`                        |
+| `redirectUrl`    | `string`               | client redirectUri  | Return URL for redirect flow                     |
+| `onProgress`     | `(stage) => void`      | none                | Progress callback                                |
+| `pollIntervalMs` | `number`               | `2000`              | Polling interval (popup flow)                    |
+| `pollTimeoutMs`  | `number`               | `300000`            | Polling timeout (popup flow, 5min)               |
+
+### LoginOptionsBuilder (Recommended)
+
+Fluent builder for constructing LoginOptions:
+
+```tsx
+import { LoginOptionsBuilder } from '@bodhiapp/bodhi-js-react';
+
+const opts = new LoginOptionsBuilder()
+  .setRole('scope_user_power_user')
+  .addMcpServer('https://mcp.exa.ai/mcp')
+  .addMcpServer('http://localhost:3001')
+  .setFlowType('popup')
+  .setOnProgress(stage => console.log(stage))
+  .build();
+
+await login(opts);
+```
 
 ### Setting App-Level Resource Defaults
 
@@ -347,9 +362,9 @@ function App() {
 
 - `bodhi-js-sdk/core/src/interface.ts` — UIClient interface definition
 - `bodhi-js-sdk/core/src/openai-client-compat.ts` — Chat, Models, Embeddings, Mcps
-- `bodhi-js-sdk/core/src/access-request.ts` — AccessRequestBuilder, polling logic
+- `bodhi-js-sdk/core/src/access-request.ts` — AccessRequestBuilder, LoginOptionsBuilder, polling logic
 - `bodhi-js-sdk/web/src/direct-client.ts` — login() implementation with access request flow
-- `bodhi-js-sdk/core/src/types/index.ts` — LoginOptions, LoginProgressStage, RequestedResources
+- `bodhi-js-sdk/core/src/types/index.ts` — LoginOptions, LoginProgressStage
 - `bodhi-js-sdk/react-core/src/BodhiProvider.tsx` — React provider, callback handling
 - `sdk-test-app/web/src/` — Reference app with full integration
 - BodhiApp OpenAPI spec: https://github.com/BodhiSearch/BodhiApp/blob/main/openapi.json

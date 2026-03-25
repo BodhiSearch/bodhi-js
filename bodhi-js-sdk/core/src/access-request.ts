@@ -3,13 +3,13 @@ import type {
   CreateAccessRequest,
   FlowType,
   RequestedMcpServer,
-  RequestedResources,
-  ToolsetTypeRequest,
+  RequestedResourcesV1,
   UserScope,
 } from '@bodhiapp/ts-client';
 import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
 import { BodhiError, unwrapResponse } from '@bodhiapp/bodhi-browser-types';
 import { createOperationError, throwAccessRequestDenialError } from './errors';
+import type { LoginOptions, LoginProgressCallback } from './types';
 
 export const DEFAULT_POLL_INTERVAL_MS = 2000;
 export const DEFAULT_POLL_TIMEOUT_MS = 300_000;
@@ -69,7 +69,9 @@ export function pollAccessRequestUntilResolved(
 }
 
 export class AccessRequestBuilder {
-  private body: Partial<CreateAccessRequest> = {};
+  private body: Partial<Omit<CreateAccessRequest, 'requested'>> & {
+    requested?: RequestedResourcesV1;
+  } = {};
 
   constructor(appClientId: string) {
     this.body.app_client_id = appClientId;
@@ -90,15 +92,8 @@ export class AccessRequestBuilder {
     return this;
   }
 
-  requested(resources: RequestedResources): this {
+  requested(resources: RequestedResourcesV1): this {
     this.body.requested = resources;
-    return this;
-  }
-
-  addToolsetType(toolsetType: string): this {
-    if (!this.body.requested) this.body.requested = {};
-    if (!this.body.requested.toolset_types) this.body.requested.toolset_types = [];
-    this.body.requested.toolset_types.push({ toolset_type: toolsetType } as ToolsetTypeRequest);
     return this;
   }
 
@@ -113,10 +108,62 @@ export class AccessRequestBuilder {
     if (!this.body.app_client_id) throw new Error('app_client_id is required');
     if (!this.body.flow_type) throw new Error('flow_type is required');
     if (!this.body.requested_role) throw new Error('requested_role is required');
-    const result = { ...this.body } as CreateAccessRequest;
+    const { requested, ...rest } = this.body;
+    const result = {
+      ...rest,
+      requested: { version: '1' as const, ...requested },
+    } as CreateAccessRequest;
     if (result.flow_type === 'redirect' && result.redirect_url) {
       const sep = result.redirect_url.includes('?') ? '&' : '?';
       result.redirect_url = `${result.redirect_url}${sep}bodhi_flow=access_request`;
+    }
+    return result;
+  }
+}
+
+export class LoginOptionsBuilder {
+  private options: LoginOptions = {};
+  private mcpServers: Array<{ url: string }> = [];
+
+  setRole(role: UserScope): this {
+    this.options.userRole = role;
+    return this;
+  }
+
+  addMcpServer(url: string): this {
+    this.mcpServers.push({ url });
+    return this;
+  }
+
+  setFlowType(type: FlowType): this {
+    this.options.flowType = type;
+    return this;
+  }
+
+  setRedirectUrl(url: string): this {
+    this.options.redirectUrl = url;
+    return this;
+  }
+
+  setOnProgress(callback: LoginProgressCallback): this {
+    this.options.onProgress = callback;
+    return this;
+  }
+
+  setPollInterval(ms: number): this {
+    this.options.pollIntervalMs = ms;
+    return this;
+  }
+
+  setPollTimeout(ms: number): this {
+    this.options.pollTimeoutMs = ms;
+    return this;
+  }
+
+  build(): LoginOptions {
+    const result = { ...this.options };
+    if (this.mcpServers.length > 0) {
+      result.requested = { mcp_servers: [...this.mcpServers] };
     }
     return result;
   }

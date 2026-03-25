@@ -14,7 +14,6 @@ import {
   type StateChange,
   type StateChangeCallback,
   type UIClient,
-  type UserScope,
 } from '@bodhiapp/bodhi-js-core';
 import { DirectExtClient } from './direct-client';
 import { ExtClient } from './ext-client';
@@ -25,7 +24,6 @@ import { ExtClient } from './ext-client';
  */
 export interface ExtUIClientConfig {
   authServerUrl: string;
-  userRole: UserScope;
   basePath: string;
   logLevel: LogLevel;
   apiTimeoutMs?: number;
@@ -45,7 +43,6 @@ export interface ExtUIClientConfig {
  */
 export interface ExtUIClientParams {
   authServerUrl?: string;
-  userRole?: UserScope;
   basePath?: string;
   logLevel?: LogLevel;
   apiTimeoutMs?: number;
@@ -79,7 +76,6 @@ export class ExtUIClient
     const normalizedConfig: ExtUIClientConfig = {
       basePath: cfg.basePath || '/',
       authServerUrl: cfg.authServerUrl || 'https://id.getbodhi.app/realms/bodhi',
-      userRole: cfg.userRole || 'scope_user_user',
       logLevel: cfg.logLevel || 'warn',
       apiTimeoutMs: cfg.apiTimeoutMs,
       initParams: cfg.initParams,
@@ -120,7 +116,6 @@ export class ExtUIClient
       {
         authClientId,
         authServerUrl: config.authServerUrl,
-        userRole: config.userRole,
         logLevel: config.logLevel,
         basePath: config.basePath,
         apiTimeoutMs: config.apiTimeoutMs,

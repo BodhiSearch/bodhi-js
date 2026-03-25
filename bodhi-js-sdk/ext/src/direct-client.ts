@@ -21,7 +21,6 @@ import {
   type LogLevel,
   type StateChangeCallback,
 } from '@bodhiapp/bodhi-js-core';
-import type { UserScope } from '@bodhiapp/ts-client';
 
 /**
  * Configuration for DirectExtClient
@@ -29,7 +28,6 @@ import type { UserScope } from '@bodhiapp/ts-client';
 export interface DirectExtClientConfig {
   authClientId: string;
   authServerUrl: string;
-  userRole: UserScope;
   basePath: string;
   logLevel: LogLevel;
   apiTimeoutMs?: number;
@@ -47,7 +45,6 @@ export class DirectExtClient extends DirectClientBase {
     const baseConfig: DirectClientBaseConfig = {
       authClientId: config.authClientId,
       authServerUrl: config.authServerUrl,
-      userRole: config.userRole,
       storagePrefix,
       logLevel: config.logLevel,
       loggerPrefix: 'DirectExtClient',
@@ -70,7 +67,7 @@ export class DirectExtClient extends DirectClientBase {
       this.logger.warn('Extension mode does not support redirect flow type; using popup instead');
     }
 
-    const userRole = options?.userRole ?? this.userRole;
+    const userRole = options?.userRole ?? 'scope_user_user';
 
     options?.onProgress?.('requesting');
     const builder = new AccessRequestBuilder(this.authClientId)

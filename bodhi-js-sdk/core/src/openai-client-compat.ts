@@ -15,7 +15,6 @@ import type {
   CreateEmbeddingResponse,
   Model,
   ListModelsResponse,
-  ListToolsetsResponse,
   ListMcpsResponse,
   McpToolsResponse,
 } from '@bodhiapp/ts-client';
@@ -157,43 +156,6 @@ export class Embeddings extends APIResource {
       CreateEmbeddingResponse
     >('POST', '/v1/embeddings', body, undefined, true);
 
-    return unwrapResponse(result);
-  }
-}
-
-/**
- * Toolsets resource
- */
-export class Toolsets extends APIResource {
-  /**
-   * List available toolsets
-   */
-  async list(): Promise<ListToolsetsResponse> {
-    const result = await this.client.sendApiRequest<void, ListToolsetsResponse>(
-      'GET',
-      '/bodhi/v1/apps/toolsets',
-      undefined,
-      undefined,
-      true
-    );
-    return unwrapResponse(result);
-  }
-
-  /**
-   * Execute a tool on a toolset
-   */
-  async executeTool(
-    toolsetId: string,
-    toolName: string,
-    params: Record<string, unknown>
-  ): Promise<unknown> {
-    const result = await this.client.sendApiRequest<{ params: Record<string, unknown> }, unknown>(
-      'POST',
-      `/bodhi/v1/apps/toolsets/${toolsetId}/tools/${toolName}/execute`,
-      { params },
-      undefined,
-      true
-    );
     return unwrapResponse(result);
   }
 }
