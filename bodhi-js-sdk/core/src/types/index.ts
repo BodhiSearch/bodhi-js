@@ -72,7 +72,7 @@ export { INITIAL_AUTH_STATE, isAuthError, isAuthLoading, isAuthenticated } from 
 export type { AuthError, AuthState, AuthStatus } from './auth';
 
 export type { Tokens, UserInfo } from './user-info';
-export type { UserScope } from '@bodhiapp/ts-client';
+export type { FlowType, RequestedResourcesV1, UserScope } from '@bodhiapp/ts-client';
 
 export type { ClientConfig, DiscoveryResult, LogLevel } from './config';
 

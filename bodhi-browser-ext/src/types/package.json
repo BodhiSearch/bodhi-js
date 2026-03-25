@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-browser-types",
-  "version": "0.0.31-dev",
+  "version": "0.0.32-dev",
   "description": "TypeScript types for Bodhi Browser Extension",
   "type": "module",
   "main": "dist/index.js",
