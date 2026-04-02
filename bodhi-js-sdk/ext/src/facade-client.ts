@@ -10,6 +10,8 @@ import {
   createStoragePrefixWithBasePath,
   Logger,
   STORAGE_PREFIXES,
+  type InitialTokens,
+  type IStorage,
   type LogLevel,
   type StateChange,
   type StateChangeCallback,
@@ -27,6 +29,8 @@ export interface ExtUIClientConfig {
   basePath: string;
   logLevel: LogLevel;
   apiTimeoutMs?: number;
+  storage?: IStorage;
+  initialTokens?: InitialTokens;
   initParams?: {
     extension?: {
       timeoutMs?: number;
@@ -46,6 +50,8 @@ export interface ExtUIClientParams {
   basePath?: string;
   logLevel?: LogLevel;
   apiTimeoutMs?: number;
+  storage?: IStorage;
+  initialTokens?: InitialTokens;
   initParams?: {
     extension?: {
       timeoutMs?: number;
@@ -78,6 +84,8 @@ export class ExtUIClient
       authServerUrl: cfg.authServerUrl || 'https://id.getbodhi.app/realms/bodhi',
       logLevel: cfg.logLevel || 'warn',
       apiTimeoutMs: cfg.apiTimeoutMs,
+      storage: cfg.storage,
+      initialTokens: cfg.initialTokens,
       initParams: cfg.initParams,
     };
 
@@ -119,6 +127,8 @@ export class ExtUIClient
         logLevel: config.logLevel,
         basePath: config.basePath,
         apiTimeoutMs: config.apiTimeoutMs,
+        storage: config.storage,
+        initialTokens: config.initialTokens,
       },
       onStateChange
     );

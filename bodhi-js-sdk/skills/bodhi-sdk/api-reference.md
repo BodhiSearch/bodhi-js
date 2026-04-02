@@ -66,25 +66,79 @@ const result = await client.embeddings.create({
 
 ```typescript
 // List MCP servers (returns ListMcpsResponse with .mcps array)
-// Each Mcp object includes tools_cache: McpTool[] with pre-loaded tools
+// Each Mcp object includes path for proxy connection
 const { mcps } = await client.mcps.list();
 
-// Access tools directly from tools_cache (no separate API call needed)
-const tools = mcps[0].tools_cache ?? [];
-// McpTool fields: name, description, input_schema (not "parameters")
+// Each mcp.path is a proxy endpoint (e.g. '/bodhi/v1/apps/mcps/{id}/mcp')
+// Use createMcpClient() to connect:
+import { createMcpClient } from '@bodhiapp/bodhi-js-react/mcp'; // or /bodhi-js-cli/mcp
+const mcpClient = await createMcpClient(client, mcps[0].path);
+const tools = await mcpClient.listTools();
+await mcpClient.close();
+```
 
-// List tools for an MCP server (returns McpToolsResponse with .tools array)
-const { tools } = await client.mcps.listTools(mcpId: string);
+MCP tool discovery and execution uses `@modelcontextprotocol/sdk` via `createMcpClient(client, mcp.path)`. See the MCP Client Factory section below.
 
-// Refresh tool list (re-discovers tools from MCP server)
-const refreshed = await client.mcps.refreshTools(mcpId: string);
+## MCP Client Factory
 
-// Execute an MCP tool
-const result = await client.mcps.executeTool(
-  mcpId: string,
-  toolName: string,
-  params: Record<string, unknown>  // Auto-wrapped in { params: {...} }
+### createMcpClient()
+
+Creates a connected `@modelcontextprotocol/sdk` Client for a given MCP proxy path. Works with any Bodhi client type (UIClient, CliClient).
+
+```typescript
+import { createMcpClient } from '@bodhiapp/bodhi-js-react/mcp';     // Web/React
+import { createMcpClient } from '@bodhiapp/bodhi-js-react-ext/mcp'; // Chrome extension
+import { createMcpClient } from '@bodhiapp/bodhi-js-cli/mcp';       // CLI/headless
+
+const mcpClient = await createMcpClient(
+  client,          // UIClient or CliClient (any McpTransportProvider)
+  mcp.path,        // MCP proxy path from Mcp.path (e.g. '/bodhi/v1/apps/mcps/{id}/mcp')
+  options?: {
+    name?: string,   // MCP client name (default: 'bodhi-mcp-client')
+    version?: string // MCP client version (default: '1.0.0')
+  }
 );
+
+// Returns @modelcontextprotocol/sdk Client — use standard MCP SDK methods:
+const { tools } = await mcpClient.listTools();
+const result = await mcpClient.callTool({ name: 'search', arguments: { query: 'AI' } });
+await mcpClient.close();
+```
+
+> **Peer dependency**: Requires `@modelcontextprotocol/sdk` installed in your project.
+
+### client.createMcpTransportConfig()
+
+Low-level method for manual MCP transport setup. Prefer `createMcpClient()` for most cases.
+
+```typescript
+const config: McpTransportConfig = client.createMcpTransportConfig(mcp_path);
+// config.url — Full URL for the MCP proxy endpoint
+// config.fetch — Fetch function with auth token injection (Bearer for direct, extension relay for ext)
+
+// Manual usage with @modelcontextprotocol/sdk:
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+const transport = new StreamableHTTPClientTransport(config.url, { fetch: config.fetch });
+```
+
+### McpTransportConfig
+
+```typescript
+interface McpTransportConfig {
+  url: URL; // Full URL for MCP proxy endpoint
+  fetch: McpFetchLike; // Fetch with auth injection
+}
+
+type McpFetchLike = (url: string | URL, init?: RequestInit) => Promise<Response>;
+```
+
+### McpTransportProvider
+
+```typescript
+// Interface implemented by UIClient and CliClient
+interface McpTransportProvider {
+  createMcpTransportConfig(mcp_path: string): McpTransportConfig;
+}
 ```
 
 ## Generic API Methods
@@ -255,16 +309,15 @@ import { isAuthenticated } from '@bodhiapp/bodhi-js-react';
 
 ## Endpoints Reference
 
-| Method | Endpoint                                      | SDK Method                       |
-| ------ | --------------------------------------------- | -------------------------------- |
-| POST   | /v1/chat/completions                          | client.chat.completions.create() |
-| GET    | /v1/models                                    | client.models.list()             |
-| GET    | /v1/models/{id}                               | client.models.retrieve(id)       |
-| POST   | /v1/embeddings                                | client.embeddings.create()       |
-| GET    | /bodhi/v1/apps/mcps                           | client.mcps.list()               |
-| GET    | /bodhi/v1/apps/mcps/{id}/tools                | client.mcps.listTools()          |
-| POST   | /bodhi/v1/apps/mcps/{id}/tools/refresh        | client.mcps.refreshTools()       |
-| POST   | /bodhi/v1/apps/mcps/{id}/tools/{name}/execute | client.mcps.executeTool()        |
-| POST   | /bodhi/v1/apps/request-access                 | client.requestAccess()           |
-| GET    | /bodhi/v1/apps/access-requests/{id}           | client.getAccessRequestStatus()  |
-| GET    | /bodhi/v1/info                                | client.getServerState()          |
+| Method | Endpoint                            | SDK Method                       |
+| ------ | ----------------------------------- | -------------------------------- |
+| POST   | /v1/chat/completions                | client.chat.completions.create() |
+| GET    | /v1/models                          | client.models.list()             |
+| GET    | /v1/models/{id}                     | client.models.retrieve(id)       |
+| POST   | /v1/embeddings                      | client.embeddings.create()       |
+| GET    | /bodhi/v1/apps/mcps                 | client.mcps.list()               |
+| POST   | /bodhi/v1/apps/request-access       | client.requestAccess()           |
+| GET    | /bodhi/v1/apps/access-requests/{id} | client.getAccessRequestStatus()  |
+| GET    | /bodhi/v1/info                      | client.getServerState()          |
+
+> **Note**: MCP tool operations (list tools, refresh, execute) are handled via `@modelcontextprotocol/sdk` using `createMcpClient(client, mcp.path)`.

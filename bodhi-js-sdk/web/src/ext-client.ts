@@ -48,6 +48,7 @@ import {
   type ServerInfoResponse,
   type StateChangeCallback,
   type StorageKeys,
+  type StreamTextResult,
 } from '@bodhiapp/bodhi-js-core';
 import {
   type ApiResponse,
@@ -532,6 +533,9 @@ export class WindowBodhiextClient implements IExtensionClient {
       user: null,
       accessToken: null,
       error: null,
+      refreshToken: null,
+      expiresAt: null,
+      isTokenRefresh: false,
     };
 
     this.setAuthState(result);
@@ -545,15 +549,39 @@ export class WindowBodhiextClient implements IExtensionClient {
     const accessToken = await this._getAccessTokenRaw();
 
     if (!accessToken) {
-      return { status: 'unauthenticated', user: null, accessToken: null, error: null };
+      return {
+        status: 'unauthenticated',
+        user: null,
+        accessToken: null,
+        error: null,
+        refreshToken: null,
+        expiresAt: null,
+        isTokenRefresh: false,
+      };
     }
 
     try {
       const userInfo = extractUserInfo(accessToken);
-      return { status: 'authenticated', user: userInfo, accessToken, error: null };
+      return {
+        status: 'authenticated',
+        user: userInfo,
+        accessToken,
+        error: null,
+        refreshToken: null,
+        expiresAt: null,
+        isTokenRefresh: false,
+      };
     } catch (error) {
       this.logger.error('Failed to parse token:', error);
-      return { status: 'unauthenticated', user: null, accessToken: null, error: null };
+      return {
+        status: 'unauthenticated',
+        user: null,
+        accessToken: null,
+        error: null,
+        refreshToken: null,
+        expiresAt: null,
+        isTokenRefresh: false,
+      };
     }
   }
 
@@ -627,6 +655,9 @@ export class WindowBodhiextClient implements IExtensionClient {
           user: userInfo,
           accessToken: result.tokens.access_token,
           error: null,
+          refreshToken: null,
+          expiresAt: null,
+          isTokenRefresh: true,
         });
         this.logger.info('Token refreshed successfully');
         return result.tokens.access_token;
@@ -640,6 +671,9 @@ export class WindowBodhiextClient implements IExtensionClient {
           user: null,
           accessToken: null,
           error: null,
+          refreshToken: null,
+          expiresAt: null,
+          isTokenRefresh: false,
         });
         return null;
       }
@@ -802,6 +836,53 @@ export class WindowBodhiextClient implements IExtensionClient {
     } finally {
       reader.releaseLock();
     }
+  }
+
+  /**
+   * Raw text streaming via window.bodhiext.sendStreamText
+   * Returns status, headers, and async generator of raw text chunks.
+   * No SSE/JSON parsing. Non-2xx responses are returned as data (not thrown).
+   */
+  async streamText(
+    method: string,
+    endpoint: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+    authenticated: boolean = true
+  ): Promise<StreamTextResult> {
+    this.ensureBodhiext();
+
+    let requestHeaders: Record<string, string> = { ...headers };
+    if (authenticated) {
+      const accessToken = await this._getAccessTokenRaw();
+      if (accessToken) {
+        requestHeaders = {
+          ...requestHeaders,
+          Authorization: `Bearer ${accessToken}`,
+        };
+      }
+    }
+
+    const result = await this.bodhiext!.sendStreamText(method, endpoint, body, requestHeaders);
+
+    async function* toAsyncGenerator(stream: ReadableStream<string>): AsyncGenerator<string> {
+      const reader = stream.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          yield value;
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    }
+
+    return {
+      status: result.status,
+      headers: result.headers,
+      body: toAsyncGenerator(result.body),
+    };
   }
 
   // ============================================================================

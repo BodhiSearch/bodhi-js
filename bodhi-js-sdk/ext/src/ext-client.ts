@@ -33,6 +33,7 @@ import {
   type LogLevel,
   type ServerInfoResponse,
   type StateChangeCallback,
+  type StreamTextResult,
 } from '@bodhiapp/bodhi-js-core';
 import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
 import { isApiSuccessResponse, isExtError } from '@bodhiapp/bodhi-browser-types';
@@ -42,6 +43,7 @@ import {
   EXT2EXT_CLIENT_ACTIONS,
   EXT2EXT_CLIENT_MESSAGE_TYPES,
   EXT2EXT_CLIENT_STREAM_PORT,
+  EXT2EXT_CLIENT_STREAM_TEXT_PORT,
 } from './constants';
 import type {
   ExtClientApiRequest,
@@ -53,6 +55,7 @@ import type {
   ExtClientStreamChunkMessage,
   ExtClientStreamErrorMessage,
   ExtClientStreamMessage,
+  ExtClientStreamTextMessage,
 } from './messages';
 import { isExtClientApiError } from './messages';
 
@@ -476,6 +479,9 @@ export class ExtClient implements IExtensionClient {
       user: null,
       accessToken: null,
       error: null,
+      refreshToken: null,
+      expiresAt: null,
+      isTokenRefresh: false,
     };
 
     this.setAuthState(result);
@@ -683,6 +689,100 @@ export class ExtClient implements IExtensionClient {
     } finally {
       reader.releaseLock();
     }
+  }
+
+  /**
+   * Raw text streaming method - no SSE/JSON parsing
+   * Returns status, headers, and async generator of raw text chunks
+   */
+  async streamText(
+    method: string,
+    endpoint: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+    authenticated: boolean = true
+  ): Promise<StreamTextResult> {
+    const requestId = this.generateRequestId();
+
+    return new Promise<StreamTextResult>((resolve, reject) => {
+      let streamController: ReadableStreamDefaultController<string>;
+      let startResolved = false;
+
+      const readableStream = new ReadableStream<string>({
+        start: (controller) => {
+          streamController = controller;
+        },
+      });
+
+      const port = chrome.runtime.connect({ name: EXT2EXT_CLIENT_STREAM_TEXT_PORT });
+
+      port.onMessage.addListener((message: ExtClientStreamTextMessage) => {
+        if (message.requestId !== requestId) return;
+
+        switch (message.type) {
+          case EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_TEXT_START: {
+            startResolved = true;
+            async function* toAsyncGenerator(
+              stream: ReadableStream<string>
+            ): AsyncGenerator<string> {
+              const reader = stream.getReader();
+              try {
+                while (true) {
+                  const { done, value } = await reader.read();
+                  if (done) break;
+                  yield value;
+                }
+              } finally {
+                reader.releaseLock();
+              }
+            }
+            resolve({
+              status: message.status,
+              headers: message.headers,
+              body: toAsyncGenerator(readableStream),
+            });
+            break;
+          }
+          case EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_TEXT_CHUNK:
+            streamController.enqueue(message.chunk);
+            break;
+          case EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_TEXT_DONE:
+            streamController.close();
+            port.disconnect();
+            break;
+          case EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_TEXT_ERROR: {
+            const err = createOperationError('extension_error', message.error.message);
+            if (!startResolved) {
+              reject(err);
+            } else {
+              streamController.error(err);
+            }
+            port.disconnect();
+            break;
+          }
+        }
+      });
+
+      port.onDisconnect.addListener(() => {
+        if (!startResolved) {
+          reject(createOperationError('extension_error', 'Connection closed unexpectedly'));
+        } else {
+          try {
+            streamController.error(
+              createOperationError('extension_error', 'Connection closed unexpectedly')
+            );
+          } catch {
+            // Controller already closed
+          }
+        }
+      });
+
+      port.postMessage({
+        type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_TEXT_REQUEST,
+        requestId,
+        request: { method, endpoint, body, headers, authenticated },
+      });
+    });
   }
 
   // ============================================================================

@@ -17,10 +17,13 @@ import {
   unwrapResponse,
   type AuthState,
   type DirectClientBaseConfig,
+  type IStorage,
+  type InitialTokens,
   type LoginOptions,
   type LogLevel,
   type StateChangeCallback,
 } from '@bodhiapp/bodhi-js-core';
+import { ChromeSessionStorageAdapter } from './chrome-storage';
 
 /**
  * Configuration for DirectExtClient
@@ -31,6 +34,8 @@ export interface DirectExtClientConfig {
   basePath: string;
   logLevel: LogLevel;
   apiTimeoutMs?: number;
+  storage?: IStorage;
+  initialTokens?: InitialTokens;
 }
 
 /**
@@ -49,6 +54,8 @@ export class DirectExtClient extends DirectClientBase {
       logLevel: config.logLevel,
       loggerPrefix: 'DirectExtClient',
       apiTimeoutMs: config.apiTimeoutMs,
+      storage: config.storage ?? new ChromeSessionStorageAdapter(),
+      initialTokens: config.initialTokens,
     };
     super(baseConfig, onStateChange);
   }
@@ -109,7 +116,7 @@ export class DirectExtClient extends DirectClientBase {
     const codeChallenge = await generateCodeChallenge(codeVerifier);
     const state = generateCodeVerifier();
 
-    await chrome.storage.session.set({
+    await this._storageSet({
       [this.storageKeys.CODE_VERIFIER]: codeVerifier,
       [this.storageKeys.STATE]: state,
     });
@@ -129,18 +136,12 @@ export class DirectExtClient extends DirectClientBase {
         { url: authUrl.toString(), interactive: true },
         async (redirectUrl) => {
           if (chrome.runtime.lastError) {
-            await chrome.storage.session.remove([
-              this.storageKeys.CODE_VERIFIER,
-              this.storageKeys.STATE,
-            ]);
+            await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
             reject(chrome.runtime.lastError);
             return;
           }
           if (!redirectUrl) {
-            await chrome.storage.session.remove([
-              this.storageKeys.CODE_VERIFIER,
-              this.storageKeys.STATE,
-            ]);
+            await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
             reject(createOperationError('oauth_error', 'No redirect URL received'));
             return;
           }
@@ -148,20 +149,14 @@ export class DirectExtClient extends DirectClientBase {
             const url = new URL(redirectUrl);
             const code = url.searchParams.get('code');
             const returnedState = url.searchParams.get('state');
-            const data = await chrome.storage.session.get(this.storageKeys.STATE);
-            if (returnedState !== data[this.storageKeys.STATE]) {
-              await chrome.storage.session.remove([
-                this.storageKeys.CODE_VERIFIER,
-                this.storageKeys.STATE,
-              ]);
+            const storedState = await this._storageGet(this.storageKeys.STATE);
+            if (returnedState !== storedState) {
+              await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
               reject(createOperationError('oauth_error', 'State mismatch'));
               return;
             }
             if (!code) {
-              await chrome.storage.session.remove([
-                this.storageKeys.CODE_VERIFIER,
-                this.storageKeys.STATE,
-              ]);
+              await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
               reject(createOperationError('oauth_error', 'No authorization code'));
               return;
             }
@@ -171,120 +166,15 @@ export class DirectExtClient extends DirectClientBase {
               throw createOperationError('oauth_error', 'Login failed');
             }
             this.setAuthState(authState);
-            await chrome.storage.session.remove([
-              this.storageKeys.CODE_VERIFIER,
-              this.storageKeys.STATE,
-            ]);
+            await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
             resolve(authState);
           } catch (error) {
-            await chrome.storage.session.remove([
-              this.storageKeys.CODE_VERIFIER,
-              this.storageKeys.STATE,
-            ]);
+            await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
             reject(error);
           }
         }
       );
     });
-  }
-
-  async logout(): Promise<AuthState> {
-    const data = await chrome.storage.session.get(this.storageKeys.REFRESH_TOKEN);
-    const refreshToken = data[this.storageKeys.REFRESH_TOKEN];
-
-    if (refreshToken) {
-      try {
-        const params = new URLSearchParams({
-          token: refreshToken,
-          client_id: this.authClientId,
-          token_type_hint: 'refresh_token',
-        });
-
-        await fetch(this.authEndpoints.revoke, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: params,
-        });
-      } catch (error) {
-        this.logger.warn('Token revocation failed:', error);
-      }
-    }
-
-    await chrome.storage.session.remove([
-      this.storageKeys.ACCESS_TOKEN,
-      this.storageKeys.REFRESH_TOKEN,
-      this.storageKeys.EXPIRES_AT,
-    ]);
-
-    const result: AuthState = {
-      status: 'unauthenticated',
-      user: null,
-      accessToken: null,
-      error: null,
-    };
-
-    this.setAuthState(result);
-    return result;
-  }
-
-  // ============================================================================
-  // OAuth Helper Methods
-  // ============================================================================
-
-  protected async exchangeCodeForTokens(code: string): Promise<void> {
-    const data = await chrome.storage.session.get(this.storageKeys.CODE_VERIFIER);
-    const codeVerifier = data[this.storageKeys.CODE_VERIFIER];
-    const redirectUri = chrome.identity.getRedirectURL('callback');
-
-    const response = await fetch(this.authEndpoints.token, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: redirectUri,
-        client_id: this.authClientId,
-        code_verifier: codeVerifier,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Token exchange failed: ${response.status} ${errorText}`);
-    }
-
-    const tokens = await response.json();
-    const expiresAt = Date.now() + (tokens.expires_in || 3600) * 1000;
-
-    await chrome.storage.session.set({
-      [this.storageKeys.ACCESS_TOKEN]: tokens.access_token,
-      [this.storageKeys.REFRESH_TOKEN]: tokens.refresh_token,
-      [this.storageKeys.EXPIRES_AT]: expiresAt,
-    });
-
-    await chrome.storage.session.remove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
-  }
-
-  // ============================================================================
-  // Storage Implementation (chrome.storage.session)
-  // ============================================================================
-
-  protected async _storageGet(key: string): Promise<string | null> {
-    const data = await chrome.storage.session.get(key);
-    const value = data[key];
-    return value !== undefined ? String(value) : null;
-  }
-
-  protected async _storageSet(items: Record<string, string | number>): Promise<void> {
-    await chrome.storage.session.set(items);
-  }
-
-  protected async _storageRemove(keys: string[]): Promise<void> {
-    await chrome.storage.session.remove(keys);
   }
 
   protected _getRedirectUri(): string {

@@ -25,6 +25,9 @@ export interface AuthState {
   user: UserInfo | null;
   accessToken: string | null;
   error: AuthError | null;
+  refreshToken: string | null;
+  expiresAt: number | null;
+  isTokenRefresh: boolean;
 }
 
 /**
@@ -56,4 +59,7 @@ export const INITIAL_AUTH_STATE: AuthState = {
   user: null,
   accessToken: null,
   error: null,
+  refreshToken: null,
+  expiresAt: null,
+  isTokenRefresh: false,
 };

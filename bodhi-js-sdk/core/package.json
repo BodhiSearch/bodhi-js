@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-core",
-  "version": "0.0.32-dev",
+  "version": "0.0.33-dev",
   "description": "Core types and interfaces for Bodhi Browser SDK",
   "type": "module",
   "main": "dist/bodhi-core.cjs.js",
@@ -24,6 +24,11 @@
       "types": "./dist/api/index.d.ts",
       "import": "./dist/api/index.esm.js",
       "require": "./dist/api/index.cjs.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.esm.js",
+      "require": "./dist/mcp.cjs.js"
     }
   },
   "files": [
@@ -53,16 +58,26 @@
     "build:prod": "npm run copy-deps && npm run build-cli && vite build --mode production",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx && prettier --check .",
     "lint:fix": "prettier --write . && eslint . --ext .js,.jsx,.ts,.tsx --fix",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@bodhiapp/bodhi-browser-types": "file:../../bodhi-browser-ext/src/types",
     "@bodhiapp/setup-modal-types": "file:../../setup-modal/src/types",
-    "@bodhiapp/ts-client": "0.1.24",
+    "@bodhiapp/ts-client": "0.1.26",
     "ua-parser-js": "^1.0.40"
   },
   "devDependencies": {
     "@eslint/js": "^9.23.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@types/node": "^20.19.10",
     "@types/ua-parser-js": "^0.7.39",
     "@typescript-eslint/eslint-plugin": "8.28.0",
@@ -76,6 +91,7 @@
     "tslib": "^2.6.2",
     "typescript": "^5.8.3",
     "vite": "^7.1.12",
-    "vite-plugin-dts": "^4.5.4"
+    "vite-plugin-dts": "^4.5.4",
+    "vitest": "^4.1.2"
   }
 }

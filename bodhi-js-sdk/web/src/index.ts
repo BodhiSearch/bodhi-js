@@ -6,6 +6,9 @@
 import type { SerializedWebExtensionState } from './ext-client';
 export { WebUIClient, type WebUIClientParams } from './facade-client';
 
+// Direct client (for CLI/headless use cases with token injection)
+export { DirectWebClient, type DirectWebClientConfig } from './direct-client';
+
 // Re-export IWebUIClient from core (internal monorepo package)
 import type { IWebUIClient } from './interface';
 
@@ -13,3 +16,8 @@ export type { IWebUIClient, SerializedWebExtensionState };
 
 // Re-export build info
 export { BUILD_MODE as WEB_BUILD_MODE } from './build-info';
+
+// Storage
+export { LocalStorageAdapter } from './local-storage';
+export { InMemoryStorage } from '@bodhiapp/bodhi-js-core';
+export type { IStorage, InitialTokens } from '@bodhiapp/bodhi-js-core';

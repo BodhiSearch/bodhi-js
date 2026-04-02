@@ -255,72 +255,11 @@ List available MCP servers.
 ```typescript
 const { mcps } = await client.mcps.list();
 for (const mcp of mcps) {
-  console.log(mcp.id, mcp.tools_cache.length, 'tools');
+  console.log(mcp.id, mcp.slug, mcp.path);
 }
 ```
 
-#### listTools()
-
-```typescript
-async listTools(mcpId: string): Promise<McpToolsResponse>
-```
-
-List tools for a specific MCP server.
-
-**Endpoint**: `GET /bodhi/v1/apps/mcps/{mcpId}/tools`
-
-**Returns**: `Promise<McpToolsResponse>`
-
-**Example**:
-
-```typescript
-const { tools } = await client.mcps.listTools('my-mcp-server');
-for (const tool of tools) {
-  console.log(tool.name, tool.description);
-}
-```
-
-#### refreshTools()
-
-```typescript
-async refreshTools(mcpId: string): Promise<McpToolsResponse>
-```
-
-Refresh the tool cache for a specific MCP server by re-discovering tools from the server.
-
-**Endpoint**: `POST /bodhi/v1/apps/mcps/{mcpId}/tools/refresh`
-
-**Returns**: `Promise<McpToolsResponse>`
-
-#### executeTool()
-
-```typescript
-async executeTool(
-  mcpId: string,
-  toolName: string,
-  params: Record<string, unknown>
-): Promise<unknown>
-```
-
-Execute a tool on an MCP server.
-
-**Endpoint**: `POST /bodhi/v1/apps/mcps/{mcpId}/tools/{toolName}/execute`
-
-**Parameters**:
-
-| Parameter  | Type                      | Description           |
-| ---------- | ------------------------- | --------------------- |
-| `mcpId`    | `string`                  | MCP server ID         |
-| `toolName` | `string`                  | Tool name to execute  |
-| `params`   | `Record<string, unknown>` | Tool execution params |
-
-**Returns**: `Promise<unknown>`
-
-**Example**:
-
-```typescript
-const result = await client.mcps.executeTool('my-mcp-server', 'search', { query: 'hello world' });
-```
+For MCP tool discovery and execution, use `createMcpClient(client, mcp.path)` from `@bodhiapp/bodhi-js-react/mcp` to connect via `@modelcontextprotocol/sdk`.
 
 ---
 
@@ -894,20 +833,13 @@ interface ListMcpsResponse {
 
 interface Mcp {
   id: string;
-  tools_cache: McpTool[];
+  slug: string;
+  path: string;
   [key: string]: unknown;
 }
-
-interface McpToolsResponse {
-  tools: McpTool[];
-}
-
-interface McpTool {
-  name: string;
-  description: string;
-  input_schema: Record<string, unknown>;
-}
 ```
+
+Use `createMcpClient(client, mcp.path)` for MCP tool discovery and execution via `@modelcontextprotocol/sdk`.
 
 ### LogLevel
 

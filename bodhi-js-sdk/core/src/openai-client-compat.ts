@@ -16,7 +16,6 @@ import type {
   Model,
   ListModelsResponse,
   ListMcpsResponse,
-  McpToolsResponse,
 } from '@bodhiapp/ts-client';
 import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
 import { unwrapResponse } from '@bodhiapp/bodhi-browser-types';
@@ -172,52 +171,6 @@ export class Mcps extends APIResource {
       'GET',
       '/bodhi/v1/apps/mcps',
       undefined,
-      undefined,
-      true
-    );
-    return unwrapResponse(result);
-  }
-
-  /**
-   * List tools for a specific MCP server
-   */
-  async listTools(mcpId: string): Promise<McpToolsResponse> {
-    const result = await this.client.sendApiRequest<void, McpToolsResponse>(
-      'GET',
-      `/bodhi/v1/apps/mcps/${mcpId}/tools`,
-      undefined,
-      undefined,
-      true
-    );
-    return unwrapResponse(result);
-  }
-
-  /**
-   * Refresh tools for a specific MCP server
-   */
-  async refreshTools(mcpId: string): Promise<McpToolsResponse> {
-    const result = await this.client.sendApiRequest<void, McpToolsResponse>(
-      'POST',
-      `/bodhi/v1/apps/mcps/${mcpId}/tools/refresh`,
-      undefined,
-      undefined,
-      true
-    );
-    return unwrapResponse(result);
-  }
-
-  /**
-   * Execute a tool on an MCP server
-   */
-  async executeTool(
-    mcpId: string,
-    toolName: string,
-    params: Record<string, unknown>
-  ): Promise<unknown> {
-    const result = await this.client.sendApiRequest<{ params: Record<string, unknown> }, unknown>(
-      'POST',
-      `/bodhi/v1/apps/mcps/${mcpId}/tools/${toolName}/execute`,
-      { params },
       undefined,
       true
     );

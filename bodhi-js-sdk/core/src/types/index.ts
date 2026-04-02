@@ -94,6 +94,9 @@ export interface LoginOptions {
 
 export type { BrowserInfo, OSInfo } from './platform';
 
+export { InMemoryStorage } from './storage';
+export type { IStorage, InitialTokens } from './storage';
+
 export { NOOP_STATE_CALLBACK } from './callback';
 export type {
   AuthStateChange,
@@ -104,3 +107,6 @@ export type {
 
 // Re-export protocol utilities from local implementation
 export { buildError, buildEvent, buildResponse, handleRequest } from '../onboarding/protocol-utils';
+
+// MCP transport types
+export type { McpFetchLike, McpTransportConfig } from '../mcp-fetch';

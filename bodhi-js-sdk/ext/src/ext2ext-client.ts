@@ -12,6 +12,7 @@ import {
   EXT2EXT_CLIENT_ACTIONS,
   EXT2EXT_CLIENT_MESSAGE_TYPES,
   EXT2EXT_CLIENT_STREAM_PORT,
+  EXT2EXT_CLIENT_STREAM_TEXT_PORT,
 } from './constants';
 import type {
   ExtClientApiRequestMessage,
@@ -24,8 +25,8 @@ import type {
   ExtClientStreamApiErrorMessage,
   ExtClientStreamChunkMessage,
   ExtClientStreamDoneMessage,
-  ExtClientStreamErrorMessage,
   ExtClientStreamRequestMessage,
+  ExtClientStreamTextRequestMessage,
 } from './messages';
 
 // Import types from bodhi-browser
@@ -37,9 +38,11 @@ import type {
   ExtResponse,
   ExtResponseMessage,
   StreamMessage,
+  StreamTextMessage,
 } from '@bodhiapp/bodhi-browser-types';
 import {
   BODHI_STREAM_PORT,
+  BODHI_STREAM_TEXT_PORT,
   EXT_ACTIONS,
   MESSAGE_TYPES,
   isExtError,
@@ -402,37 +405,19 @@ export class BodhiExtClient {
       return true; // Will respond asynchronously
     });
 
-    // Streaming listener via chrome.runtime.connect
-    chrome.runtime.onConnect.addListener((port) => {
-      if (port.name !== EXT2EXT_CLIENT_STREAM_PORT) {
-        this.logger.debug('[BodhiExtClient] Ignoring port with name:', port.name);
-        return;
-      }
-
-      this.logger.info('[BodhiExtClient] Streaming port connected');
-
-      port.onMessage.addListener(async (message: ExtClientStreamRequestMessage) => {
-        if (message.type !== EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_REQUEST) {
-          this.logger.warn('[BodhiExtClient] Unknown stream message type:', message.type);
-          port.postMessage({
-            type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_ERROR,
-            requestId: message.requestId,
-            error: {
-              message: 'Unknown stream message type',
-              type: 'extension_error',
-            },
-          } satisfies ExtClientStreamErrorMessage);
-          return;
-        }
-
-        // Handle stream request via extracted method
-        await this.handleStreamRequest(port, message);
-      });
-
-      port.onDisconnect.addListener(() => {
-        this.logger.info('[BodhiExtClient] Streaming port disconnected');
-      });
-    });
+    // Register stream listeners for both parsed (SSE) and raw text protocols
+    this.registerStreamPortListener(
+      EXT2EXT_CLIENT_STREAM_PORT,
+      EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_REQUEST,
+      EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_ERROR,
+      (port, message) => this.handleStreamRequest(port, message)
+    );
+    this.registerStreamPortListener(
+      EXT2EXT_CLIENT_STREAM_TEXT_PORT,
+      EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_TEXT_REQUEST,
+      EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_TEXT_ERROR,
+      (port, message) => this.handleStreamTextRequest(port, message)
+    );
 
     this.logger.info('[BodhiExtClient] Streaming listeners initialized');
   }
@@ -856,7 +841,15 @@ export class BodhiExtClient {
     const accessToken = await this._getAccessTokenRaw();
 
     if (!accessToken) {
-      return { status: 'unauthenticated', user: null, accessToken: null, error: null };
+      return {
+        status: 'unauthenticated',
+        user: null,
+        accessToken: null,
+        error: null,
+        refreshToken: null,
+        expiresAt: null,
+        isTokenRefresh: false,
+      };
     }
 
     try {
@@ -875,10 +868,21 @@ export class BodhiExtClient {
         user: userInfo,
         accessToken,
         error: null,
+        refreshToken: null,
+        expiresAt: null,
+        isTokenRefresh: false,
       };
     } catch (error) {
       this.logger.error('Failed to parse token:', error);
-      return { status: 'unauthenticated', user: null, accessToken: null, error: null };
+      return {
+        status: 'unauthenticated',
+        user: null,
+        accessToken: null,
+        error: null,
+        refreshToken: null,
+        expiresAt: null,
+        isTokenRefresh: false,
+      };
     }
   }
 
@@ -1224,185 +1228,157 @@ export class BodhiExtClient {
   private static readonly STREAM_TIMEOUT = 60000;
 
   /**
-   * Handle streaming request from UI port
-   * Connects to bodhi-browser-ext and forwards chunks directly to UI port
-   * @param uiPort Port connected from UI
-   * @param message Stream request message from UI
+   * Register a chrome.runtime.onConnect listener for a streaming port.
+   * Validates port name and message type, then delegates to handler.
    */
-  private async handleStreamRequest(
-    uiPort: chrome.runtime.Port,
-    message: ExtClientStreamRequestMessage
-  ): Promise<void> {
-    const { requestId, request } = message;
-    const { method, endpoint, body, headers, authenticated } = request;
+  private registerStreamPortListener(
+    portName: string,
+    expectedMessageType: string,
+    errorMessageType: string,
+    handler: (port: chrome.runtime.Port, message: any) => Promise<void>
+  ): void {
+    chrome.runtime.onConnect.addListener((port) => {
+      if (port.name !== portName) return;
 
-    this.logger.debug('[BodhiExtClient] Processing stream request:', {
+      this.logger.info(`[BodhiExtClient] Port connected: ${portName}`);
+
+      port.onMessage.addListener(async (message: any) => {
+        if (message.type !== expectedMessageType) {
+          this.logger.warn(`[BodhiExtClient] Unknown message type on ${portName}:`, message.type);
+          port.postMessage({
+            type: errorMessageType,
+            requestId: message.requestId,
+            error: { message: 'Unknown message type', type: 'extension_error' },
+          });
+          return;
+        }
+        await handler(port, message);
+      });
+
+      port.onDisconnect.addListener(() => {
+        this.logger.info(`[BodhiExtClient] Port disconnected: ${portName}`);
+      });
+    });
+  }
+
+  /**
+   * Generic stream relay: validates auth, connects to bodhi-browser-ext,
+   * sets up timeout/disconnect handling, and delegates message forwarding
+   * to the onBodhiMessage callback.
+   *
+   * @param onBodhiMessage Called for each message from bodhi-browser-ext.
+   *   Returns true if the stream is complete (triggers cleanup).
+   */
+  private async handleGenericStreamRelay(
+    uiPort: chrome.runtime.Port,
+    requestId: string,
+    request: {
+      method: string;
+      endpoint: string;
+      body?: unknown;
+      headers?: Record<string, string>;
+      authenticated?: boolean;
+    },
+    bodhiPortName: string,
+    bodhiRequestType: string,
+    errorMessageType: string,
+    onBodhiMessage: (streamMessage: any, uiPort: chrome.runtime.Port, requestId: string) => boolean
+  ): Promise<void> {
+    this.logger.debug('[BodhiExtClient] Processing stream relay:', {
       requestId,
-      method,
-      endpoint,
-      authenticated,
+      method: request.method,
+      endpoint: request.endpoint,
+      bodhiPortName,
     });
 
     if (!this.extensionId) {
       uiPort.postMessage({
-        type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_ERROR,
+        type: errorMessageType,
         requestId,
-        error: {
-          message: this.createErrorClientNotInitialized(message),
-          type: 'extension_error',
-        },
-      } satisfies ExtClientStreamErrorMessage);
+        error: { message: `Client not initialized (no extensionId)`, type: 'extension_error' },
+      });
+      return;
     }
 
     try {
-      let requestHeaders: Record<string, string> = { ...headers };
+      let requestHeaders: Record<string, string> = { ...request.headers };
 
-      // Token injection for authenticated requests
-      if (authenticated !== false) {
+      if (request.authenticated !== false) {
         const accessToken = await this._getAccessTokenRaw();
         if (!accessToken) {
           uiPort.postMessage({
-            type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_ERROR,
+            type: errorMessageType,
             requestId,
-            error: {
-              message: 'Not authenticated. Please log in first.',
-              type: 'extension_error',
-            },
-          } satisfies ExtClientStreamErrorMessage);
+            error: { message: 'Not authenticated. Please log in first.', type: 'extension_error' },
+          });
           return;
         }
-        requestHeaders = {
-          ...requestHeaders,
-          Authorization: `Bearer ${accessToken}`,
-        };
-        this.logger.debug('[BodhiExtClient] Injected auth token for authenticated request');
+        requestHeaders = { ...requestHeaders, Authorization: `Bearer ${accessToken}` };
+        this.logger.debug('[BodhiExtClient] Injected auth token for stream relay');
       }
 
-      // Connect to bodhi-browser-ext via port
-      const bodhiPort = chrome.runtime.connect(this.extensionId!, {
-        name: BODHI_STREAM_PORT,
-      });
-
+      const bodhiPort = chrome.runtime.connect(this.extensionId!, { name: bodhiPortName });
       this.activeStreamPorts.set(requestId, bodhiPort);
 
-      // Set up timeout
       const timeoutId = setTimeout(() => {
         if (this.activeStreamPorts.has(requestId)) {
           this.logger.error(`[BodhiExtClient] Stream timeout for ${requestId}`);
           uiPort.postMessage({
-            type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_ERROR,
+            type: errorMessageType,
             requestId,
-            error: {
-              message: 'Stream request timed out',
-              type: 'timeout_error',
-            },
-          } satisfies ExtClientStreamErrorMessage);
+            error: { message: 'Stream request timed out', type: 'timeout_error' },
+          });
           this.cleanupStreamPort(requestId);
         }
       }, BodhiExtClient.STREAM_TIMEOUT);
 
-      // Handle incoming chunks from bodhi-browser-ext
-      bodhiPort.onMessage.addListener((streamMessage: StreamMessage) => {
-        if (isStreamChunk(streamMessage)) {
-          const response = streamMessage.response;
-          const responseBody = response.body as { done?: boolean } | undefined;
-
-          if (response.status >= 400) {
-            // API error - send error message
-            uiPort.postMessage({
-              type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_API_ERROR,
-              requestId,
-              response: response as ApiResponse<OpenAiApiError>,
-            } satisfies ExtClientStreamApiErrorMessage);
-            // Don't break - let stream close naturally
-          } else if (responseBody?.done) {
-            // Done signal - send done message
-            uiPort.postMessage({
-              type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_DONE,
-              requestId,
-            } satisfies ExtClientStreamDoneMessage);
-            this.logger.info(`[BodhiExtClient] Stream complete for ${requestId}`);
-            clearTimeout(timeoutId);
-            this.cleanupStreamPort(requestId);
-          } else {
-            // Normal chunk - send chunk message
-            uiPort.postMessage({
-              type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_CHUNK,
-              requestId,
-              response,
-            } satisfies ExtClientStreamChunkMessage);
-          }
-        } else if (isStreamApiError(streamMessage)) {
-          // API error from bodhi-browser-ext
-          this.logger.error(
-            `[BodhiExtClient] Stream API error for ${requestId}: ${streamMessage.response.status}`
-          );
-          uiPort.postMessage({
-            type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_API_ERROR,
-            requestId,
-            response: streamMessage.response as ApiResponse<OpenAiApiError>,
-          } satisfies ExtClientStreamApiErrorMessage);
-        } else if (isStreamError(streamMessage)) {
-          // Network/connection error
-          this.logger.error(
-            `[BodhiExtClient] Stream error for ${requestId}:`,
-            streamMessage.error.message
-          );
-          uiPort.postMessage({
-            type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_ERROR,
-            requestId,
-            error: {
-              message: `stream error: ${JSON.stringify(streamMessage)}`,
-              type: 'extension_error',
-            },
-          } satisfies ExtClientStreamErrorMessage);
+      bodhiPort.onMessage.addListener((streamMessage: any) => {
+        const done = onBodhiMessage(streamMessage, uiPort, requestId);
+        if (done) {
           clearTimeout(timeoutId);
           this.cleanupStreamPort(requestId);
         }
       });
 
-      // Handle bodhi port disconnect
       bodhiPort.onDisconnect.addListener(() => {
         clearTimeout(timeoutId);
         if (this.activeStreamPorts.has(requestId)) {
           this.logger.error(`[BodhiExtClient] Bodhi port disconnected for ${requestId}`);
           uiPort.postMessage({
-            type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_ERROR,
+            type: errorMessageType,
             requestId,
             error: {
               message: 'Connection to Bodhi extension closed unexpectedly',
               type: 'network_error',
             },
-          } satisfies ExtClientStreamErrorMessage);
+          });
           this.activeStreamPorts.delete(requestId);
         }
       });
 
-      // Send the streaming request
-      const streamRequest: ApiRequestMessage = {
-        type: MESSAGE_TYPES.STREAM_REQUEST,
+      const bodhiRequest: ApiRequestMessage = {
+        type: bodhiRequestType,
         requestId,
         request: {
-          method,
-          endpoint,
-          body,
+          method: request.method,
+          endpoint: request.endpoint,
+          body: request.body,
           headers: requestHeaders,
         },
       };
-
-      this.logger.debug(`[BodhiExtClient] Sending stream request to bodhi port:`, streamRequest);
-      bodhiPort.postMessage(streamRequest);
+      this.logger.debug('[BodhiExtClient] Sending stream request to bodhi port:', bodhiRequest);
+      bodhiPort.postMessage(bodhiRequest);
     } catch (error) {
       const err = error as Error;
-      this.logger.error('[BodhiExtClient] Stream error:', JSON.stringify(err.message));
+      this.logger.error('[BodhiExtClient] Stream relay error:', JSON.stringify(err.message));
       uiPort.postMessage({
-        type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_ERROR,
+        type: errorMessageType,
         requestId,
         error: {
           message: `uncaught error: ${JSON.stringify({ error: err, message: err.message })}`,
           type: 'extension_error',
         },
-      } satisfies ExtClientStreamErrorMessage);
+      });
     }
   }
 
@@ -1419,6 +1395,134 @@ export class BodhiExtClient {
       }
       this.activeStreamPorts.delete(requestId);
     }
+  }
+
+  /**
+   * Handle SSE-parsed streaming request — translates STREAM_* messages to EXT2EXT_CLIENT_STREAM_*
+   */
+  private async handleStreamRequest(
+    uiPort: chrome.runtime.Port,
+    message: ExtClientStreamRequestMessage
+  ): Promise<void> {
+    const { requestId, request } = message;
+    await this.handleGenericStreamRelay(
+      uiPort,
+      requestId,
+      request,
+      BODHI_STREAM_PORT,
+      MESSAGE_TYPES.STREAM_REQUEST,
+      EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_ERROR,
+      (streamMessage: StreamMessage, uiPort, requestId) => {
+        if (isStreamChunk(streamMessage)) {
+          const response = streamMessage.response;
+          const responseBody = response.body as { done?: boolean } | undefined;
+
+          if (response.status >= 400) {
+            uiPort.postMessage({
+              type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_API_ERROR,
+              requestId,
+              response: response as ApiResponse<OpenAiApiError>,
+            } satisfies ExtClientStreamApiErrorMessage);
+            return false;
+          } else if (responseBody?.done) {
+            uiPort.postMessage({
+              type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_DONE,
+              requestId,
+            } satisfies ExtClientStreamDoneMessage);
+            this.logger.info(`[BodhiExtClient] Stream complete for ${requestId}`);
+            return true;
+          } else {
+            uiPort.postMessage({
+              type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_CHUNK,
+              requestId,
+              response,
+            } satisfies ExtClientStreamChunkMessage);
+            return false;
+          }
+        } else if (isStreamApiError(streamMessage)) {
+          this.logger.error(
+            `[BodhiExtClient] Stream API error for ${requestId}: ${streamMessage.response.status}`
+          );
+          uiPort.postMessage({
+            type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_API_ERROR,
+            requestId,
+            response: streamMessage.response as ApiResponse<OpenAiApiError>,
+          } satisfies ExtClientStreamApiErrorMessage);
+          return false;
+        } else if (isStreamError(streamMessage)) {
+          this.logger.error(
+            `[BodhiExtClient] Stream error for ${requestId}:`,
+            streamMessage.error.message
+          );
+          uiPort.postMessage({
+            type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_ERROR,
+            requestId,
+            error: {
+              message: `stream error: ${JSON.stringify(streamMessage)}`,
+              type: 'extension_error',
+            },
+          });
+          return true;
+        }
+        return false;
+      }
+    );
+  }
+
+  /**
+   * Handle raw text streaming request — translates STREAM_TEXT_* messages to EXT2EXT_CLIENT_STREAM_TEXT_*
+   */
+  private async handleStreamTextRequest(
+    uiPort: chrome.runtime.Port,
+    message: ExtClientStreamTextRequestMessage
+  ): Promise<void> {
+    const { requestId, request } = message;
+    await this.handleGenericStreamRelay(
+      uiPort,
+      requestId,
+      request,
+      BODHI_STREAM_TEXT_PORT,
+      MESSAGE_TYPES.STREAM_TEXT_REQUEST,
+      EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_TEXT_ERROR,
+      (streamMessage: StreamTextMessage, uiPort, requestId) => {
+        switch (streamMessage.type) {
+          case MESSAGE_TYPES.STREAM_TEXT_START:
+            uiPort.postMessage({
+              type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_TEXT_START,
+              requestId,
+              status: streamMessage.status,
+              headers: streamMessage.headers,
+            });
+            return false;
+          case MESSAGE_TYPES.STREAM_TEXT_CHUNK:
+            uiPort.postMessage({
+              type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_TEXT_CHUNK,
+              requestId,
+              chunk: streamMessage.chunk,
+            });
+            return false;
+          case MESSAGE_TYPES.STREAM_TEXT_DONE:
+            this.logger.info(`[BodhiExtClient] Stream text complete for ${requestId}`);
+            uiPort.postMessage({
+              type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_TEXT_DONE,
+              requestId,
+            });
+            return true;
+          case MESSAGE_TYPES.STREAM_TEXT_ERROR:
+            this.logger.error(
+              `[BodhiExtClient] Stream text error for ${requestId}:`,
+              streamMessage.error.message
+            );
+            uiPort.postMessage({
+              type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_TEXT_ERROR,
+              requestId,
+              error: streamMessage.error,
+            });
+            return true;
+        }
+        return false;
+      }
+    );
   }
 
   // ============================================================================

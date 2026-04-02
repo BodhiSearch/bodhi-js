@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
         entry: {
           index: resolve(__dirname, 'src/index.ts'),
           'api/index': resolve(__dirname, 'src/api/index.ts'),
+          mcp: resolve(__dirname, 'src/mcp.ts'),
         },
         name: 'BodhiReactExt',
         formats: ['es', 'cjs'],
@@ -39,7 +40,10 @@ export default defineConfig(({ mode }) => {
           '@bodhiapp/bodhi-js-core',
           '@bodhiapp/bodhi-js-core/api',
           '@bodhiapp/bodhi-js-core/types',
+          '@bodhiapp/bodhi-js-core/mcp',
           '@bodhiapp/ts-client',
+          '@modelcontextprotocol/sdk',
+          /^@modelcontextprotocol\/sdk\//,
           '@bodhiapp/bodhi-browser-types',
           '@bodhiapp/setup-modal-types',
         ],

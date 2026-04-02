@@ -1,0 +1,61 @@
+{
+  "name": "@bodhiapp/bodhi-js-cli",
+  "version": "0.0.33-dev",
+  "description": "CLI/headless client for Bodhi Browser SDK",
+  "type": "module",
+  "main": "dist/bodhi-cli.cjs.js",
+  "module": "dist/bodhi-cli.esm.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/bodhi-cli.esm.js",
+      "require": "./dist/bodhi-cli.cjs.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.esm.js",
+      "require": "./dist/mcp.cjs.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BodhiSearch/bodhi-js.git",
+    "directory": "bodhi-js-sdk/cli"
+  },
+  "license": "MIT",
+  "author": "BodhiSearch",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vite build --mode development",
+    "ci:build": "vite build --mode development",
+    "build:prod": "vite build --mode production",
+    "clean": "rimraf dist",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx && prettier --check .",
+    "lint:fix": "prettier --write . && eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "typecheck": "tsc --noEmit",
+    "dev:build": "node ../../scripts/build-fast.mjs bodhi-js-sdk/cli 'npm run build' src package.json vite.config.ts"
+  },
+  "dependencies": {
+    "@bodhiapp/bodhi-js-core": "file:../core"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.23.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@types/node": "^20.19.10",
+    "eslint": "9.32.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "^16.0.0",
+    "prettier": "3.6.2",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.50.1",
+    "vite": "^7.1.12",
+    "vite-plugin-dts": "^4.5.4"
+  }
+}

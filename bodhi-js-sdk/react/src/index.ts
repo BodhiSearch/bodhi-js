@@ -57,6 +57,10 @@ export {
   type BodhiBadgeProps,
   type BodhiBadgeSize,
   type BodhiBadgeVariant,
+  InMemoryStorage,
+  type IStorage,
+  type InitialTokens,
+  type StreamTextResult,
 } from '@bodhiapp/bodhi-js-react-core';
 
 // Re-export build info

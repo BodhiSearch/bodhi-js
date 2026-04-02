@@ -193,24 +193,21 @@ async function embed(model: string, text: string) {
 }
 ```
 
-## MCP Tool Discovery and Execution
+## MCP Server Discovery
 
-List available MCP servers, discover their tools, and execute them:
+List available MCP servers:
 
 ```typescript
 const { client } = useBodhi();
 
 // List available MCP servers
 const { mcps } = await client.mcps.list();
-
-// List tools for a specific MCP server
-const { tools } = await client.mcps.listTools(mcp.id);
-
-// Execute a tool
-const result = await client.mcps.executeTool(mcp.id, 'tool_name', { param: 'value' });
+for (const mcp of mcps) {
+  console.log(mcp.id, mcp.slug, mcp.path);
+}
 ```
 
-Each MCP has a `slug` identifier and a `tools_cache` array. Tools have `name`, `description`, and `input_schema` fields. See [Advanced: MCP Agentic Patterns](./advanced.md#mcp-agentic-patterns) for building agentic chat loops with tool calls.
+For MCP tool discovery and execution, use `createMcpClient(client, mcp.path)` from `@bodhiapp/bodhi-js-react/mcp`. See [Advanced: MCP Agentic Patterns](./advanced.md#mcp-agentic-patterns) for building agentic chat loops.
 
 ## OAuth Callback Handling
 

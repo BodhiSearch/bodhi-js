@@ -15,10 +15,12 @@ import type {
   PingResponse,
 } from '@bodhiapp/ts-client';
 import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
-import type { IConnectionClient, IExtensionClient } from './interface';
+import type { IConnectionClient, IExtensionClient, StreamTextResult } from './interface';
 import { Logger } from './logger';
 import { BodhiClientUserPrefsManager } from './storage';
 import { Chat, Models, Embeddings, Mcps } from './openai-client-compat';
+import { createDirectMcpFetch, createExtensionMcpFetch } from './mcp-fetch';
+import type { McpTransportConfig } from './mcp-fetch';
 import type {
   AuthState,
   BackendServerState,
@@ -459,6 +461,19 @@ export abstract class BaseFacadeClient<
     return this.extClient.stream(method, endpoint, body, headers, authenticated);
   }
 
+  async streamText(
+    method: string,
+    endpoint: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+    authenticated?: boolean
+  ): Promise<StreamTextResult> {
+    if (this.isNotSetOrDirect()) {
+      return this.directClient.streamText(method, endpoint, body, headers, authenticated);
+    }
+    return this.extClient.streamText(method, endpoint, body, headers, authenticated);
+  }
+
   // ============================================================================
   // OpenAI-Compatible Namespaced API
   // ============================================================================
@@ -477,6 +492,38 @@ export abstract class BaseFacadeClient<
 
   get mcps(): Mcps {
     return (this._mcps ??= new Mcps(this));
+  }
+
+  // ============================================================================
+  // MCP Transport
+  // ============================================================================
+
+  /**
+   * Create transport config for MCP StreamableHTTPClientTransport.
+   * Handles connection mode transparently — direct mode uses standard fetch with
+   * Bearer token, extension mode routes through the extension's message passing.
+   *
+   * @param mcp_path - Relative proxy path from Mcp.path (e.g. '/bodhi/v1/apps/mcps/{id}/mcp')
+   * @returns McpTransportConfig with url and fetch function for StreamableHTTPClientTransport
+   */
+  createMcpTransportConfig(mcp_path: string): McpTransportConfig {
+    if (this.isNotSetOrDirect()) {
+      const state = this.directClient.getState();
+      const serverUrl = isDirectState(state) ? state.url || '' : '';
+      return {
+        url: new URL(`${serverUrl}${mcp_path}`),
+        fetch: createDirectMcpFetch(async () => {
+          const authState = await this.getAuthState();
+          return authState.accessToken;
+        }),
+      };
+    }
+    // Synthetic URL — never fetched directly. The custom fetch intercepts it and
+    // routes through the extension's message passing; only the pathname is used.
+    return {
+      url: new URL(`http://bodhi-ext${mcp_path}`),
+      fetch: createExtensionMcpFetch(this),
+    };
   }
 
   // ============================================================================

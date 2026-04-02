@@ -56,6 +56,11 @@ export const MESSAGE_TYPES = {
   STREAM_CHUNK: 'BODHI_STREAM_CHUNK',
   STREAM_ERROR: 'BODHI_STREAM_ERROR',
   STREAM_API_ERROR: 'BODHI_STREAM_API_ERROR',
+  STREAM_TEXT_REQUEST: 'BODHI_STREAM_TEXT_REQUEST',
+  STREAM_TEXT_START: 'BODHI_STREAM_TEXT_START',
+  STREAM_TEXT_CHUNK: 'BODHI_STREAM_TEXT_CHUNK',
+  STREAM_TEXT_DONE: 'BODHI_STREAM_TEXT_DONE',
+  STREAM_TEXT_ERROR: 'BODHI_STREAM_TEXT_ERROR',
   ERROR: 'BODHI_ERROR',
   EXT_REQUEST: 'BODHI_EXT_REQUEST',
   EXT_RESPONSE: 'BODHI_EXT_RESPONSE',
@@ -203,6 +208,53 @@ export function isStreamApiError(msg: StreamMessage): msg is StreamApiErrorMessa
 export function isStreamError(msg: StreamMessage): msg is StreamErrorMessage {
   return msg !== null && typeof msg === 'object' && msg.type === MESSAGE_TYPES.STREAM_ERROR;
 }
+
+//-----------------------------------------------------------------------------------
+// RAW TEXT STREAMING MESSAGE TYPES (no SSE/JSON parsing)
+//-----------------------------------------------------------------------------------
+
+/**
+ * Stream text start message — response metadata (status + headers)
+ * Sent once before any STREAM_TEXT_CHUNK messages
+ */
+export interface StreamTextStartMessage {
+  type: typeof MESSAGE_TYPES.STREAM_TEXT_START;
+  requestId: string;
+  status: number;
+  headers: Record<string, string>;
+}
+
+/**
+ * Stream text chunk message — raw text from response body
+ * No SSE parsing, no JSON.parse, no data: prefix stripping
+ */
+export interface StreamTextChunkMessage {
+  type: typeof MESSAGE_TYPES.STREAM_TEXT_CHUNK;
+  requestId: string;
+  chunk: string;
+}
+
+/**
+ * Stream text done message — stream completed
+ */
+export interface StreamTextDoneMessage {
+  type: typeof MESSAGE_TYPES.STREAM_TEXT_DONE;
+  requestId: string;
+}
+
+/**
+ * Stream text error message — network/extension level error
+ */
+export interface StreamTextErrorMessage {
+  type: typeof MESSAGE_TYPES.STREAM_TEXT_ERROR;
+  requestId: string;
+  error: OperationErrorResponse;
+}
+
+/**
+ * Union type for all stream text messages
+ */
+export type StreamTextMessage = StreamTextStartMessage | StreamTextChunkMessage | StreamTextDoneMessage | StreamTextErrorMessage;
 
 /**
  * Interface for stream controller to handle SSE responses

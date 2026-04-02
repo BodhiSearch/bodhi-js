@@ -84,6 +84,7 @@ export const EVENT_INITIALIZED = 'bodhiext:initialized';
 //-----------------------------------------------------------------------------------
 
 export const BODHI_STREAM_PORT = 'BODHI_STREAM_PORT';
+export const BODHI_STREAM_TEXT_PORT = 'BODHI_STREAM_TEXT_PORT';
 
 //-----------------------------------------------------------------------------------
 // FALLBACKS

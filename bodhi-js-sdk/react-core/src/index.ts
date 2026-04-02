@@ -70,6 +70,10 @@ export type {
 // Builders
 export { LoginOptionsBuilder } from '@bodhiapp/bodhi-js-core';
 
+// Storage
+export { InMemoryStorage } from '@bodhiapp/bodhi-js-core';
+export type { IStorage, InitialTokens } from '@bodhiapp/bodhi-js-core';
+
 // Type guards and helpers (for auth state)
 export {
   isAuthError,
@@ -80,6 +84,12 @@ export {
 
 // ApiResponse type (from bodhi-browser/types via core)
 export type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
+
+// MCP transport types
+export type { McpFetchLike, McpTransportConfig } from '@bodhiapp/bodhi-js-core';
+
+// Streaming types
+export type { StreamTextResult } from '@bodhiapp/bodhi-js-core';
 
 // Re-export build info
 export { BUILD_MODE as REACT_CORE_BUILD_MODE } from './build-info';

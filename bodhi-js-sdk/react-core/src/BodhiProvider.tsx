@@ -95,6 +95,9 @@ export function BodhiProvider({
       user: null,
       accessToken: null,
       error: { code, message },
+      refreshToken: null,
+      expiresAt: null,
+      isTokenRefresh: false,
     });
     setIsAuthLoading(false);
   }, []);
@@ -270,6 +273,9 @@ export function BodhiProvider({
             message: err instanceof Error ? err.message : 'Login failed',
             code: bodhiError?.code ?? 'login_failed',
           },
+          refreshToken: null,
+          expiresAt: null,
+          isTokenRefresh: false,
         };
         setAuth(errorState);
         setIsAuthLoading(false);

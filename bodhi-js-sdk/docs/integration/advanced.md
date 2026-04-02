@@ -61,198 +61,27 @@ function LoginWithAccess() {
 
 ## MCP Agentic Patterns
 
-Build an agentic chat loop where the LLM can discover and call tools via MCP servers. This is the full workflow from discovery through multi-turn tool execution.
+Build agentic chat loops where the LLM can discover and call tools via MCP servers.
 
-### Step 1: Discover MCPs and Convert Tools
+Use `client.mcps.list()` to discover available MCP servers, then connect to each via `createMcpClient(client, mcp.path)` for tool listing and execution.
 
-List MCP servers and convert their tools to the `ChatCompletionTools` format expected by the chat API:
+### Discover MCP Servers
 
 ```typescript
 import { useBodhi } from '@bodhiapp/bodhi-js-react';
-import type { ChatCompletionTools } from '@bodhiapp/bodhi-js-react/api';
+import { createMcpClient } from '@bodhiapp/bodhi-js-react/mcp';
 
 const { client } = useBodhi();
 
 // Fetch all MCPs for this app
 const { mcps } = await client.mcps.list();
 
-// Build tools array for chat completions
-const tools: ChatCompletionTools[] = [];
 for (const mcp of mcps) {
-  const mcpTools = mcp.tools_cache ?? [];
-  for (const tool of mcpTools) {
-    tools.push({
-      type: 'function',
-      function: {
-        name: `mcp__${mcp.slug}__${tool.name}`,
-        description: tool.description ?? '',
-        parameters: tool.input_schema as Record<string, unknown>,
-      },
-    });
-  }
-}
-```
-
-**Tool naming convention**: `mcp__<slug>__<tool-name>`. The slug identifies the MCP server and the tool name identifies the specific tool within it.
-
-### Step 2: Streaming Chat with Tool Calls
-
-Send a chat request with tools. When streaming, tool call deltas arrive incrementally and must be accumulated across chunks:
-
-```typescript
-const messages: ChatCompletionRequestMessage[] = [{ role: 'user', content: 'What is the weather in San Francisco?' }];
-
-const stream = client.chat.completions.create({
-  model: 'your-model',
-  messages,
-  stream: true,
-  tools,
-});
-
-// Accumulate tool calls across streaming chunks
-interface AccumulatedToolCall {
-  index: number;
-  id: string;
-  function: { name: string; arguments: string };
-}
-
-const accumulatedToolCalls: AccumulatedToolCall[] = [];
-let assistantContent = '';
-
-for await (const chunk of stream) {
-  const delta = chunk.choices?.[0]?.delta;
-
-  // Accumulate text content
-  if (delta?.content) {
-    assistantContent += delta.content;
-  }
-
-  // Accumulate tool call deltas
-  if (delta?.tool_calls) {
-    for (const toolCallDelta of delta.tool_calls) {
-      const index = toolCallDelta.index ?? 0;
-
-      if (!accumulatedToolCalls[index]) {
-        // First chunk for this tool call - initialize
-        accumulatedToolCalls[index] = {
-          index,
-          id: toolCallDelta.id || '',
-          function: {
-            name: toolCallDelta.function?.name || '',
-            arguments: toolCallDelta.function?.arguments || '',
-          },
-        };
-      } else {
-        // Subsequent chunks - merge deltas
-        if (toolCallDelta.id) {
-          accumulatedToolCalls[index].id = toolCallDelta.id;
-        }
-        if (toolCallDelta.function?.name) {
-          accumulatedToolCalls[index].function.name = toolCallDelta.function.name;
-        }
-        if (toolCallDelta.function?.arguments) {
-          // Arguments are concatenated as they stream in
-          accumulatedToolCalls[index].function.arguments += toolCallDelta.function.arguments;
-        }
-      }
-    }
-  }
-}
-```
-
-### Step 3: Execute Tools and Continue the Loop
-
-After accumulating tool calls, execute each tool and feed results back to the LLM. Loop until the model responds without tool calls:
-
-```typescript
-const MAX_ITERATIONS = 10;
-let loopCount = 0;
-
-while (loopCount < MAX_ITERATIONS) {
-  loopCount++;
-
-  // ... (streaming or non-streaming call as shown above) ...
-
-  // If no tool calls, we are done
-  if (accumulatedToolCalls.length === 0) {
-    break;
-  }
-
-  // Build completed tool calls
-  const toolCalls = accumulatedToolCalls
-    .filter(tc => tc.id && tc.function.name)
-    .map(tc => ({
-      id: tc.id,
-      type: 'function' as const,
-      function: tc.function,
-    }));
-
-  // Add assistant message with tool_calls to conversation
-  messages.push({
-    role: 'assistant',
-    content: assistantContent || undefined,
-    tool_calls: toolCalls,
-  });
-
-  // Execute each tool and add results
-  for (const toolCall of toolCalls) {
-    const params = JSON.parse(toolCall.function.arguments);
-
-    // Parse the qualified tool name: mcp__<slug>__<tool-name>
-    const [, slug, toolName] = toolCall.function.name.split('__');
-    const mcp = mcps.find(m => m.slug === slug);
-
-    if (!mcp) {
-      messages.push({
-        role: 'tool',
-        tool_call_id: toolCall.id,
-        content: JSON.stringify({ error: `MCP '${slug}' not found` }),
-      });
-      continue;
-    }
-
-    try {
-      const result = await client.mcps.executeTool(mcp.id, toolName, params);
-      messages.push({
-        role: 'tool',
-        tool_call_id: toolCall.id,
-        content: JSON.stringify(result ?? 'No result'),
-      });
-    } catch (err) {
-      messages.push({
-        role: 'tool',
-        tool_call_id: toolCall.id,
-        content: JSON.stringify({
-          error: err instanceof Error ? err.message : 'Tool execution failed',
-        }),
-      });
-    }
-  }
-
-  // Reset for next iteration
-  accumulatedToolCalls.length = 0;
-  assistantContent = '';
-
-  // Continue loop - next iteration sends updated messages back to LLM
-}
-```
-
-### Non-Streaming Tool Calls
-
-For non-streaming responses, tool calls arrive complete in a single response:
-
-```typescript
-const response = await client.chat.completions.create({
-  model: 'your-model',
-  messages,
-  tools,
-});
-
-const message = response.choices?.[0]?.message;
-const toolCalls = message?.tool_calls;
-
-if (toolCalls && toolCalls.length > 0) {
-  // Process tool calls as shown in Step 3
+  console.log(`${mcp.slug}: ${mcp.path}`);
+  const mcpClient = await createMcpClient(client, mcp.path);
+  const { tools } = await mcpClient.listTools();
+  // Use tools...
+  await mcpClient.close();
 }
 ```
 
@@ -479,7 +308,7 @@ if (isApiResultSuccess(result)) {
 
 ### Namespaced API Error Handling
 
-The namespaced APIs (`client.chat.completions.create()`, `client.models.list()`, `client.embeddings.create()`, `client.mcps.*`) throw errors instead of returning `ApiResponseResult`:
+The namespaced APIs (`client.chat.completions.create()`, `client.models.list()`, `client.embeddings.create()`, `client.mcps.list()`) throw errors instead of returning `ApiResponseResult`:
 
 - **Operation errors**: Thrown as `Error` with the operation error message
 - **Non-streaming**: Throws on operation errors; returns the response body directly on success

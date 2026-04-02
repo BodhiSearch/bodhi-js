@@ -91,7 +91,7 @@ import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
 import { BodhiError, BodhiApiError } from '@bodhiapp/bodhi-browser-types';
 import { DEFAULT_API_TIMEOUT_MS } from './constants';
 import { pollAccessRequestUntilResolved } from './access-request';
-import type { IDirectClient } from './interface';
+import type { IDirectClient, StreamTextResult } from './interface';
 import { Logger } from './logger';
 import { Chat, Models, Embeddings, Mcps } from './openai-client-compat';
 import {
@@ -107,6 +107,8 @@ import {
   type BackendServerState,
   type ClientState,
   type DirectState,
+  type IStorage,
+  type InitialTokens,
   type InitParams,
   type LogLevel,
   type SerializedDirectState,
@@ -130,6 +132,8 @@ export interface DirectClientBaseConfig {
   logLevel: LogLevel;
   loggerPrefix: string;
   apiTimeoutMs?: number;
+  storage?: IStorage;
+  initialTokens?: InitialTokens;
 }
 
 /**
@@ -141,11 +145,13 @@ export abstract class DirectClientBase implements IDirectClient {
   protected authClientId: string;
   protected authServerUrl: string;
   protected authEndpoints: OAuthEndpoints;
+  protected storage: IStorage | null = null;
   protected storageKeys: StorageKeys;
   protected state: DirectState = DIRECT_STATE_NOT_INITIALIZED;
   private onStateChange: StateChangeCallback;
   private refreshPromise: Promise<string | null> | null = null;
   private apiTimeoutMs: number;
+  private initialTokens: InitialTokens | undefined;
 
   // OpenAI-compatible resource namespaces
   private _chat: Chat | undefined;
@@ -161,6 +167,8 @@ export abstract class DirectClientBase implements IDirectClient {
     this.storageKeys = createStorageKeys(config.storagePrefix);
     this.onStateChange = onStateChange ?? NOOP_STATE_CALLBACK;
     this.apiTimeoutMs = config.apiTimeoutMs ?? DEFAULT_API_TIMEOUT_MS;
+    this.storage = config.storage ?? null;
+    this.initialTokens = config.initialTokens;
   }
 
   /**
@@ -190,6 +198,12 @@ export abstract class DirectClientBase implements IDirectClient {
   // ============================================================================
 
   async init(params: InitParams): Promise<DirectState> {
+    // Bootstrap auth from initial tokens (consumed once, not re-applied on re-init)
+    if (this.initialTokens) {
+      await this._bootstrapInitialTokens(this.initialTokens);
+      this.initialTokens = undefined;
+    }
+
     // Priority: explicit serverUrl > savedState.url > this.serverUrl
     const serverUrl =
       params.serverUrl ?? (params.savedState as SerializedDirectState)?.url ?? this.serverUrl;
@@ -499,6 +513,60 @@ export abstract class DirectClientBase implements IDirectClient {
     }
   }
 
+  async streamText(
+    method: string,
+    endpoint: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+    authenticated: boolean = true
+  ): Promise<StreamTextResult> {
+    if (!this.serverUrl) {
+      throw new BodhiError('not_initialized', 'Client not initialized - connection failed');
+    }
+
+    const url = `${this.serverUrl}${endpoint}`;
+    const fetchHeaders: Record<string, string> = { ...headers };
+
+    if (authenticated) {
+      const token = await this._getAccessTokenRaw();
+      if (token) {
+        fetchHeaders['Authorization'] = `Bearer ${token}`;
+      }
+    }
+
+    const response = await fetch(url, {
+      method,
+      headers: fetchHeaders,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    const responseHeaders: Record<string, string> = {};
+    response.headers.forEach((value, key) => {
+      responseHeaders[key] = value;
+    });
+
+    async function* bodyGenerator(): AsyncGenerator<string> {
+      if (!response.body) return;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          yield decoder.decode(value, { stream: true });
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    }
+
+    return {
+      status: response.status,
+      headers: responseHeaders,
+      body: bodyGenerator(),
+    };
+  }
+
   // ============================================================================
   // OpenAI-Compatible Namespaced API
   // ============================================================================
@@ -601,16 +669,49 @@ export abstract class DirectClientBase implements IDirectClient {
   // ============================================================================
 
   abstract login(): Promise<AuthState>;
-  abstract logout(): Promise<AuthState>;
   protected abstract performOAuthPkce(scope: string): Promise<AuthState>;
 
   async getAuthState(): Promise<AuthState> {
     const accessToken = await this._getAccessTokenRaw();
     if (!accessToken) {
-      return { status: 'unauthenticated', user: null, accessToken: null, error: null };
+      return {
+        status: 'unauthenticated',
+        user: null,
+        accessToken: null,
+        error: null,
+        refreshToken: null,
+        expiresAt: null,
+        isTokenRefresh: false,
+      };
     }
     const userInfo = extractUserInfo(accessToken);
-    return { status: 'authenticated', user: userInfo, accessToken, error: null };
+    const refreshToken = await this._storageGet(this.storageKeys.REFRESH_TOKEN);
+    const expiresAtStr = await this._storageGet(this.storageKeys.EXPIRES_AT);
+    return {
+      status: 'authenticated',
+      user: userInfo,
+      accessToken,
+      error: null,
+      refreshToken: refreshToken ?? null,
+      expiresAt: expiresAtStr ? parseInt(expiresAtStr, 10) : null,
+      isTokenRefresh: false,
+    };
+  }
+
+  async logout(): Promise<AuthState> {
+    await this.revokeRefreshToken();
+    await this.clearAuthStorage();
+    const state: AuthState = {
+      status: 'unauthenticated',
+      user: null,
+      accessToken: null,
+      error: null,
+      refreshToken: null,
+      expiresAt: null,
+      isTokenRefresh: false,
+    };
+    this.setAuthState(state);
+    return state;
   }
 
   protected async _getAccessTokenRaw(): Promise<string | null> {
@@ -671,11 +772,15 @@ export abstract class DirectClientBase implements IDirectClient {
       if (result.success) {
         await this._storeRefreshedTokens(result.tokens);
         const userInfo = extractUserInfo(result.tokens.access_token);
+        const expiresAt = Date.now() + result.tokens.expires_in * 1000;
         this.setAuthState({
           status: 'authenticated',
           user: userInfo,
           accessToken: result.tokens.access_token,
           error: null,
+          refreshToken: result.tokens.refresh_token ?? null,
+          expiresAt,
+          isTokenRefresh: true,
         });
         this.logger.info('Token refreshed successfully');
         return result.tokens.access_token;
@@ -689,6 +794,9 @@ export abstract class DirectClientBase implements IDirectClient {
           user: null,
           accessToken: null,
           error: null,
+          refreshToken: null,
+          expiresAt: null,
+          isTokenRefresh: false,
         });
         return null;
       }
@@ -735,33 +843,35 @@ export abstract class DirectClientBase implements IDirectClient {
 
     const redirectUri = this._getRedirectUri();
 
-    const response = await fetch(this.authEndpoints.token, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: redirectUri,
-        client_id: this.authClientId,
-        code_verifier: codeVerifier,
-      }),
-    });
+    try {
+      const response = await fetch(this.authEndpoints.token, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: redirectUri,
+          client_id: this.authClientId,
+          code_verifier: codeVerifier,
+        }),
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Token exchange failed: ${response.status} ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Token exchange failed: ${response.status} ${errorText}`);
+      }
+
+      const tokens = await response.json();
+      const expiresAt = Date.now() + (tokens.expires_in || 3600) * 1000;
+
+      await this._storageSet({
+        [this.storageKeys.ACCESS_TOKEN]: tokens.access_token,
+        [this.storageKeys.REFRESH_TOKEN]: tokens.refresh_token || '',
+        [this.storageKeys.EXPIRES_AT]: String(expiresAt),
+      });
+    } finally {
+      await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
     }
-
-    const tokens = await response.json();
-    const expiresAt = Date.now() + (tokens.expires_in || 3600) * 1000;
-
-    await this._storageSet({
-      [this.storageKeys.ACCESS_TOKEN]: tokens.access_token,
-      [this.storageKeys.REFRESH_TOKEN]: tokens.refresh_token || '',
-      [this.storageKeys.EXPIRES_AT]: String(expiresAt),
-    });
-
-    await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
   }
 
   protected async revokeRefreshToken(): Promise<void> {
@@ -795,11 +905,78 @@ export abstract class DirectClientBase implements IDirectClient {
   }
 
   // ============================================================================
-  // Abstract Storage Methods (Platform-Specific)
+  // Token Injection
   // ============================================================================
 
-  protected abstract _storageGet(key: string): Promise<string | null>;
-  protected abstract _storageSet(items: Record<string, string | number>): Promise<void>;
-  protected abstract _storageRemove(keys: string[]): Promise<void>;
+  private async _bootstrapInitialTokens(tokens: InitialTokens): Promise<void> {
+    const storageData: Record<string, string> = {
+      [this.storageKeys.ACCESS_TOKEN]: tokens.accessToken,
+    };
+    if (tokens.refreshToken) {
+      storageData[this.storageKeys.REFRESH_TOKEN] = tokens.refreshToken;
+    }
+    if (tokens.expiresAt !== undefined) {
+      storageData[this.storageKeys.EXPIRES_AT] = String(tokens.expiresAt);
+    }
+    await this._storageSet(storageData);
+
+    // Check if access token is expired
+    const isExpired = tokens.expiresAt !== undefined && Date.now() >= tokens.expiresAt - 5 * 1000;
+
+    if (!isExpired) {
+      // Token is valid — set authenticated state
+      const userInfo = extractUserInfo(tokens.accessToken);
+      this.setAuthState({
+        status: 'authenticated',
+        user: userInfo,
+        accessToken: tokens.accessToken,
+        error: null,
+        refreshToken: tokens.refreshToken ?? null,
+        expiresAt: tokens.expiresAt ?? null,
+        isTokenRefresh: false,
+      });
+    } else if (tokens.refreshToken) {
+      // Token expired but refresh token available — attempt refresh
+      // _doRefreshToken handles setAuthState with isTokenRefresh: true
+      await this._tryRefreshToken(tokens.refreshToken);
+    } else {
+      // Token expired, no refresh token — unauthenticated
+      this.setAuthState({
+        status: 'unauthenticated',
+        user: null,
+        accessToken: null,
+        error: null,
+        refreshToken: null,
+        expiresAt: null,
+        isTokenRefresh: false,
+      });
+    }
+  }
+
+  // ============================================================================
+  // Storage Methods
+  // ============================================================================
+
+  protected async _storageGet(key: string): Promise<string | null> {
+    if (!this.storage) {
+      throw new Error('No storage adapter configured');
+    }
+    return this.storage.get(key);
+  }
+
+  protected async _storageSet(items: Record<string, string | number>): Promise<void> {
+    if (!this.storage) {
+      throw new Error('No storage adapter configured');
+    }
+    await this.storage.set(items);
+  }
+
+  protected async _storageRemove(keys: string[]): Promise<void> {
+    if (!this.storage) {
+      throw new Error('No storage adapter configured');
+    }
+    await this.storage.remove(keys);
+  }
+
   protected abstract _getRedirectUri(): string;
 }

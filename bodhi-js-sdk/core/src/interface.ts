@@ -17,6 +17,18 @@ import type {
   StateChangeCallback,
 } from './types';
 import type { Chat, Models, Embeddings, Mcps } from './openai-client-compat';
+import type { McpTransportConfig } from './mcp-fetch';
+
+/**
+ * Result of a raw text streaming request
+ * Unlike stream() which parses SSE/JSON, streamText() forwards raw response text
+ * without any parsing. Non-2xx responses are returned as data (not thrown).
+ */
+export interface StreamTextResult {
+  status: number;
+  headers: Record<string, string>;
+  body: AsyncGenerator<string>;
+}
 
 /**
  * ConnectionClient - Base interface for all client implementations
@@ -115,6 +127,24 @@ export interface IConnectionClient<IParams = unknown, SerialState = unknown> {
     headers?: Record<string, string>,
     authenticated?: boolean
   ): AsyncGenerator<TRes>;
+
+  /**
+   * Raw text streaming request
+   * - DirectClient: fetch + ReadableStream without SSE parsing
+   * - IExtensionClient: window.bodhiext.sendStreamText or chrome.runtime equivalent
+   *
+   * Returns status, headers, and async generator of raw text chunks.
+   * Non-2xx responses are returned as data (not thrown).
+   *
+   * @returns Promise<StreamTextResult> with status, headers, and body generator
+   */
+  streamText(
+    method: string,
+    endpoint: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+    authenticated?: boolean
+  ): Promise<StreamTextResult>;
 
   // ============================================================================
   // Authentication
@@ -319,6 +349,13 @@ export type UIClient = IConnectionClient<InitParams> & {
    * @throws Error if connection mode is not 'extension'
    */
   sendExtRequest<TParams = void, TRes = unknown>(action: string, params?: TParams): Promise<TRes>;
+
+  /**
+   * Create transport config for MCP StreamableHTTPClientTransport.
+   * Handles connection mode transparently.
+   * @param mcp_path - Relative proxy path from Mcp.path (e.g. '/bodhi/v1/apps/mcps/{id}/mcp')
+   */
+  createMcpTransportConfig(mcp_path: string): McpTransportConfig;
 };
 
 /**

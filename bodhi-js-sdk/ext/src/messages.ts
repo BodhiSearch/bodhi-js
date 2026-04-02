@@ -193,3 +193,62 @@ export type ExtClientStreamMessage<TRes = unknown> =
   | ExtClientStreamApiErrorMessage
   | ExtClientStreamErrorMessage
   | ExtClientStreamDoneMessage;
+
+// ============================================================================
+// Stream Text Types (Raw text streaming - no SSE/JSON parsing)
+// ============================================================================
+
+/**
+ * Stream text request message
+ */
+export interface ExtClientStreamTextRequestMessage<TReq = unknown> {
+  type: typeof EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_TEXT_REQUEST;
+  requestId: string;
+  request: ExtClientStreamRequest<TReq> & { authenticated?: boolean };
+}
+
+/**
+ * Stream text start message - response metadata (status + headers)
+ * Sent once before any stream text chunk messages
+ */
+export interface ExtClientStreamTextStartMessage {
+  type: typeof EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_TEXT_START;
+  requestId: string;
+  status: number;
+  headers: Record<string, string>;
+}
+
+/**
+ * Stream text chunk message - raw text from response body
+ */
+export interface ExtClientStreamTextChunkMessage {
+  type: typeof EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_TEXT_CHUNK;
+  requestId: string;
+  chunk: string;
+}
+
+/**
+ * Stream text done message - stream completed
+ */
+export interface ExtClientStreamTextDoneMessage {
+  type: typeof EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_TEXT_DONE;
+  requestId: string;
+}
+
+/**
+ * Stream text error message - network/extension level error
+ */
+export interface ExtClientStreamTextErrorMessage {
+  type: typeof EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_TEXT_ERROR;
+  requestId: string;
+  error: OperationErrorResponse;
+}
+
+/**
+ * Union type for all ext2ext stream text messages (received by UI)
+ */
+export type ExtClientStreamTextMessage =
+  | ExtClientStreamTextStartMessage
+  | ExtClientStreamTextChunkMessage
+  | ExtClientStreamTextDoneMessage
+  | ExtClientStreamTextErrorMessage;

@@ -47,6 +47,9 @@ export * from './facade-client-base';
 // Re-export OpenAI-compatible resources
 export * from './openai-client-compat';
 
+// Re-export MCP fetch adapters
+export { createDirectMcpFetch, createExtensionMcpFetch } from './mcp-fetch';
+
 // Note: BodhiError, BodhiApiError, unwrapResponse, BodhiErrorCode are re-exported via ./types
 
 // Re-export build info

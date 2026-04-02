@@ -135,6 +135,27 @@ export interface BodhiExtPublicApi {
   sendStreamRequest<TReq = unknown>(method: string, endpoint: string, body?: TReq, headers?: Record<string, string>): ReadableStream<StreamChunk>;
 
   /**
+   * Send a raw text streaming request through the extension.
+   *
+   * Unlike sendStreamRequest which parses SSE/JSON, this forwards raw response
+   * bytes as text strings without any parsing. Returns response metadata (status,
+   * headers) plus a ReadableStream of raw text chunks.
+   *
+   * @template TReq - Request body type (inferred from body parameter)
+   * @param method - HTTP method
+   * @param endpoint - API endpoint path
+   * @param body - Optional request body
+   * @param headers - Optional additional headers
+   * @returns Promise with status, headers, and ReadableStream<string> body
+   */
+  sendStreamText<TReq = unknown>(
+    method: string,
+    endpoint: string,
+    body?: TReq,
+    headers?: Record<string, string>
+  ): Promise<{ status: number; headers: Record<string, string>; body: ReadableStream<string> }>;
+
+  /**
    * Send a generic extension request.
    *
    * Used for extension-specific operations like test_connection, get_extension_id, etc.

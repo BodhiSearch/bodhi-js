@@ -8,5 +8,10 @@ export { ExtUIClient, type ExtUIClientParams } from './facade-client';
 
 export { BodhiExtClient } from './ext2ext-client';
 
+// Storage
+export { ChromeSessionStorageAdapter } from './chrome-storage';
+export { InMemoryStorage } from '@bodhiapp/bodhi-js-core';
+export type { IStorage, InitialTokens } from '@bodhiapp/bodhi-js-core';
+
 // Re-export build info
 export { BUILD_MODE as EXT_BUILD_MODE } from './build-info';

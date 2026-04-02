@@ -34,6 +34,7 @@ Apps don't get automatic access to a user's LLMs or MCPs. Instead:
 | `@bodhiapp/bodhi-js`           | Vanilla JS/TS web apps                       |
 | `@bodhiapp/bodhi-js-react-ext` | React Chrome extensions                      |
 | `@bodhiapp/bodhi-js-ext`       | Vanilla JS Chrome extensions                 |
+| `@bodhiapp/bodhi-js-cli`       | CLI/headless Node.js apps                    |
 
 For extension development, see [extension-sdk.md](./extension-sdk.md).
 
@@ -268,20 +269,35 @@ For apps that use MCP tools in chat (tool calling + agent loop), see **[agentic-
 // 1. Request MCP access during login
 await login({ requested: { mcp_servers: [{ url: 'https://mcp.exa.ai/mcp' }] } });
 
-// 2. List approved MCPs — tools available via tools_cache
+// 2. List approved MCPs — each has a path for proxy connection
 const { mcps } = await client.mcps.list();
-const tools = mcps[0].tools_cache ?? [];
 
-// 3. Convert to chat tool format with mcp__slug__name naming
-const chatTools = tools.map(t => ({
-  type: 'function' as const,
-  function: { name: `mcp__${mcps[0].slug}__${t.name}`, description: t.description, parameters: t.input_schema },
-}));
-
-const stream = client.chat.completions.create({ model, messages, tools: chatTools, stream: true });
-
-// 4. Handle tool_calls in response → execute → feed back → loop
+// 3. Create MCP client using createMcpClient(client, mcp.path) for tool discovery and execution
+import { createMcpClient } from '@bodhiapp/bodhi-js-react/mcp';
+const mcpClient = await createMcpClient(client, mcps[0].path);
+const tools = await mcpClient.listTools();
 // See agentic-patterns.md for the full agent loop implementation
+```
+
+### CLI MCP Usage
+
+```typescript
+import { CliClient } from '@bodhiapp/bodhi-js-cli';
+import { createMcpClient } from '@bodhiapp/bodhi-js-cli/mcp';
+
+const client = new CliClient({ authClientId, authServerUrl, serverUrl });
+await client.login({
+  requested: { mcp_servers: [{ url: 'https://mcp.exa.ai/mcp' }] },
+  onReviewUrl: url => console.log(url),
+});
+
+const mcps = await client.mcps.list();
+for (const mcp of mcps.mcps) {
+  const mcpClient = await createMcpClient(client, mcp.path);
+  const tools = await mcpClient.listTools();
+  const result = await mcpClient.callTool({ name: 'search', arguments: { query: 'AI news' } });
+  await mcpClient.close();
+}
 ```
 
 ## Model Listing
@@ -361,7 +377,9 @@ function App() {
 ## Key Source Files
 
 - `bodhi-js-sdk/core/src/interface.ts` — UIClient interface definition
-- `bodhi-js-sdk/core/src/openai-client-compat.ts` — Chat, Models, Embeddings, Mcps
+- `bodhi-js-sdk/core/src/openai-client-compat.ts` — Chat, Models, Embeddings, Mcps (list only)
+- `bodhi-js-sdk/core/src/mcp.ts` — createMcpClient factory, McpTransportProvider interface
+- `bodhi-js-sdk/cli/src/cli-client.ts` — CliClient with login(), createMcpTransportConfig()
 - `bodhi-js-sdk/core/src/access-request.ts` — AccessRequestBuilder, LoginOptionsBuilder, polling logic
 - `bodhi-js-sdk/web/src/direct-client.ts` — login() implementation with access request flow
 - `bodhi-js-sdk/core/src/types/index.ts` — LoginOptions, LoginProgressStage

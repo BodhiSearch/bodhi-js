@@ -390,86 +390,18 @@ if (isApiResultSuccess(result)) {
 
 ## MCP API
 
-The SDK provides a namespaced API for interacting with MCP (Model Context Protocol) servers configured on the backend.
+The SDK provides `client.mcps.list()` for listing MCP servers configured on the backend.
 
 ### List MCPs
 
 ```typescript
 const { mcps } = await client.mcps.list();
 for (const mcp of mcps) {
-  console.log(mcp.id, mcp.tools_cache.length, 'cached tools');
+  console.log(mcp.id, mcp.slug, mcp.path);
 }
 ```
 
-Each `Mcp` object includes a `tools_cache` array with pre-loaded tools, so you can often avoid a separate `listTools()` call.
-
-### List Tools for an MCP
-
-```typescript
-const { tools } = await client.mcps.listTools('my-mcp-server');
-for (const tool of tools) {
-  console.log(tool.name, '-', tool.description);
-  console.log('Schema:', JSON.stringify(tool.input_schema));
-}
-```
-
-### Refresh Tools
-
-Re-discover tools from the MCP server and update the cache:
-
-```typescript
-const { tools } = await client.mcps.refreshTools('my-mcp-server');
-console.log(
-  'Refreshed tools:',
-  tools.map(t => t.name)
-);
-```
-
-### Execute a Tool
-
-```typescript
-const result = await client.mcps.executeTool('my-mcp-server', 'search', { query: 'hello world' });
-console.log('Tool result:', result);
-```
-
-### Complete MCP Example
-
-```typescript
-import { useBodhi } from '@bodhiapp/bodhi-js-react';
-
-function McpTools() {
-  const { client } = useBodhi();
-  const [tools, setTools] = useState<{ name: string; description: string }[]>([]);
-
-  const loadTools = async () => {
-    const { mcps } = await client.mcps.list();
-    if (mcps.length > 0) {
-      const { tools } = await client.mcps.listTools(mcps[0].id);
-      setTools(tools.map(t => ({ name: t.name, description: t.description })));
-    }
-  };
-
-  const executeTool = async (mcpId: string, toolName: string) => {
-    try {
-      const result = await client.mcps.executeTool(mcpId, toolName, {});
-      console.log('Result:', result);
-    } catch (err) {
-      console.error('Tool execution failed:', err);
-    }
-  };
-
-  return (
-    <div>
-      <button onClick={loadTools}>Load Tools</button>
-      <ul>
-        {tools.map(t => (
-          <li key={t.name}>{t.name}: {t.description}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-```
+For MCP tool discovery and execution, use `createMcpClient(client, mcp.path)` from `@bodhiapp/bodhi-js-react/mcp` (or the appropriate package variant). See [Advanced: MCP Agentic Patterns](./integration/advanced.md#mcp-agentic-patterns).
 
 ## TypeScript Support
 

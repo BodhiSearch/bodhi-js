@@ -11,6 +11,8 @@ import {
   Logger,
   STORAGE_PREFIXES,
   type AuthState,
+  type InitialTokens,
+  type IStorage,
   type IWebUIClient,
   type LogLevel,
   type StateChange,
@@ -29,6 +31,8 @@ export interface WebClientConfig {
   basePath: string;
   logLevel: LogLevel;
   apiTimeoutMs?: number;
+  storage?: IStorage;
+  initialTokens?: InitialTokens;
   initParams?: {
     extension?: {
       timeoutMs?: number;
@@ -42,11 +46,13 @@ export interface WebClientConfig {
  * Public type for consumers
  */
 export interface WebUIClientParams {
-  redirectUri?: string;
   authServerUrl?: string;
+  redirectUri?: string;
   basePath?: string;
   logLevel?: LogLevel;
   apiTimeoutMs?: number;
+  storage?: IStorage;
+  initialTokens?: InitialTokens;
   initParams?: {
     extension?: {
       timeoutMs?: number;
@@ -92,6 +98,8 @@ export class WebUIClient
       authServerUrl: cfg.authServerUrl || 'https://id.getbodhi.app/realms/bodhi',
       logLevel: cfg.logLevel || 'warn',
       apiTimeoutMs: cfg.apiTimeoutMs,
+      storage: cfg.storage,
+      initialTokens: cfg.initialTokens,
       initParams: cfg.initParams,
     };
 
@@ -137,6 +145,8 @@ export class WebUIClient
         logLevel: config.logLevel,
         basePath: config.basePath,
         apiTimeoutMs: config.apiTimeoutMs,
+        storage: config.storage,
+        initialTokens: config.initialTokens,
       },
       onStateChange
     );

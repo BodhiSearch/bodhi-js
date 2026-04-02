@@ -17,13 +17,14 @@ const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..');
 
 // All packages in monorepo
-const packages = ['core', 'web', 'ext', 'react-core', 'react', 'react-ext'];
+const packages = ['core', 'web', 'ext', 'cli', 'react-core', 'react', 'react-ext'];
 
 // Map directory name to npm package name
 const packageNameMap = {
   core: '@bodhiapp/bodhi-js-core',
   web: '@bodhiapp/bodhi-js',
   ext: '@bodhiapp/bodhi-js-ext',
+  cli: '@bodhiapp/bodhi-js-cli',
   'react-core': '@bodhiapp/bodhi-js-react-core',
   react: '@bodhiapp/bodhi-js-react',
   'react-ext': '@bodhiapp/bodhi-js-react-ext',

@@ -14,6 +14,7 @@
 | @bodhiapp/bodhi-js-react-ext | React Chrome extensions                   |
 | @bodhiapp/bodhi-js           | Vanilla JS web apps                       |
 | @bodhiapp/bodhi-js-ext       | Vanilla JS Chrome extensions              |
+| @bodhiapp/bodhi-js-cli       | CLI/headless Node.js apps                 |
 
 ## Public API Surface (VERIFIED from source code)
 
@@ -56,9 +57,7 @@
 - client.models.retrieve(modelId) → Promise<Model>
 - client.embeddings.create({ model, input }) → Promise<CreateEmbeddingResponse>
 - client.mcps.list() → Promise<ListMcpsResponse>
-- client.mcps.listTools(mcpId) → Promise<McpToolsResponse>
-- client.mcps.refreshTools(mcpId) → Promise<McpToolsResponse>
-- client.mcps.executeTool(mcpId, toolName, params) → Promise<unknown>
+  > Note: Each Mcp has a `path` field (e.g. `/bodhi/v1/apps/mcps/{id}/mcp`). Use `createMcpClient(client, mcp.path)` for tool discovery and execution via @modelcontextprotocol/sdk.
 
 ### Generic API (core/src/interface.ts)
 
@@ -132,18 +131,44 @@
 - GitHub Pages: basePath in Vite config + BodhiProvider, 404.html hack for SPA routing
 - Multi-tenant: server returns deployment mode in BackendServerState
 
-## MCP Integration (VERIFIED: core/src/openai-client-compat.ts:227-299)
+## MCP Integration
 
 - client.mcps.list() → Promise<ListMcpsResponse> — GET /bodhi/v1/apps/mcps
-- client.mcps.listTools(mcpId) → Promise<McpToolsResponse> — GET /bodhi/v1/apps/mcps/{id}/tools
-- client.mcps.refreshTools(mcpId) → Promise<McpToolsResponse> — POST /bodhi/v1/apps/mcps/{id}/tools/refresh
-- client.mcps.executeTool(mcpId, toolName, params) → Promise<unknown> — POST /bodhi/v1/apps/mcps/{id}/tools/{name}/execute
+  > Each Mcp has a `path` field (e.g. `/bodhi/v1/apps/mcps/{id}/mcp`). Use `createMcpClient(client, mcp.path)` for tool discovery and execution.
+- createMcpClient(client, mcp.path) → Promise<Client> — creates connected @modelcontextprotocol/sdk Client
+  > Available from `@bodhiapp/bodhi-js-react/mcp`, `@bodhiapp/bodhi-js-react-ext/mcp`, `@bodhiapp/bodhi-js-cli/mcp`
+  > Works with any client type (UIClient, CliClient) — the client implements McpTransportProvider
+- client.createMcpTransportConfig(mcp_path) → McpTransportConfig — low-level transport config for manual MCP SDK setup
+- @modelcontextprotocol/sdk is an optional peer dependency (only needed when using createMcpClient)
+
+### CLI MCP Usage (@bodhiapp/bodhi-js-cli)
+
+```typescript
+import { CliClient } from '@bodhiapp/bodhi-js-cli';
+import { createMcpClient } from '@bodhiapp/bodhi-js-cli/mcp';
+
+const client = new CliClient({ authClientId, authServerUrl, serverUrl });
+await client.login({
+  requested: { mcp_servers: [{ url: 'https://mcp.exa.ai/mcp' }] },
+  onReviewUrl: url => console.log(url),
+});
+
+const mcps = await client.mcps.list();
+for (const mcp of mcps.mcps) {
+  const mcpClient = await createMcpClient(client, mcp.path);
+  const tools = await mcpClient.listTools();
+  const result = await mcpClient.callTool({ name: 'search', arguments: { query: 'AI news' } });
+  await mcpClient.close();
+}
+```
 
 ## Key Source Directories
 
 - bodhi-js-sdk/docs/ (20+ comprehensive guide files)
 - bodhi-js-sdk/core/src/interface.ts (UIClient interface)
-- bodhi-js-sdk/core/src/openai-client-compat.ts (Chat, Models, Embeddings, Mcps)
+- bodhi-js-sdk/core/src/openai-client-compat.ts (Chat, Models, Embeddings, Mcps list only)
+- bodhi-js-sdk/core/src/mcp.ts (createMcpClient factory, McpTransportProvider interface)
+- bodhi-js-sdk/cli/src/cli-client.ts (CliClient with createMcpTransportConfig)
 - bodhi-js-sdk/core/src/access-request.ts (AccessRequestBuilder, LoginOptionsBuilder)
 - bodhi-js-sdk/core/src/types/ (ClientState, AuthState, LoginOptions)
 - bodhi-js-sdk/react-core/src/BodhiProvider.tsx (React provider)

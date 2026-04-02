@@ -33,6 +33,7 @@ export default [
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       'no-console': 'off',
+      'no-undef': 'off', // TypeScript handles undefined checks; avoids false positives on DOM types
     },
   },
   {
