@@ -24,7 +24,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         external: [
           '@bodhiapp/bodhi-js-core',
-          '@bodhiapp/ts-client',
+          /^@bodhiapp\/ts-client(\/.*)?$/,
           '@bodhiapp/bodhi-browser-types',
         ],
       },

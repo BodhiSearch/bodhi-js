@@ -418,9 +418,44 @@ const revokeResponse = await fetch(endpoints.revoke, {
 
 ---
 
+## AuthState Fields
+
+The `AuthState` interface includes these fields relevant to token management:
+
+```typescript
+interface AuthState {
+  status: 'unauthenticated' | 'authenticated' | 'loading' | 'error';
+  accessToken: string | null;
+  refreshToken: string | null; // Present when authenticated
+  expiresAt: number | null; // Unix ms timestamp when access token expires
+  isTokenRefresh: boolean; // true during a background token refresh
+  user: UserInfo | null;
+  error: string | null;
+}
+```
+
+`isTokenRefresh` distinguishes a silent background refresh (user remains functionally authenticated) from a full re-authentication flow. Automatic refresh is handled internally by `DirectClientBase`.
+
+## CLI: setStateCallback
+
+The CLI client (`@bodhiapp/bodhi-js-cli`) does not use browser storage. Use `setStateCallback()` to receive state changes and persist them manually:
+
+```typescript
+import { CliClient } from '@bodhiapp/bodhi-js-cli';
+
+const client = new CliClient('client-id');
+
+client.setStateCallback(state => {
+  // Persist to file or config store
+  fs.writeFileSync('bodhi-state.json', JSON.stringify(state));
+});
+
+await client.init();
+```
+
 ## State Serialization
 
-Serialize and deserialize client state for persistence across page reloads.
+Serialize and deserialize client state for persistence across page reloads. Use `serialize()` for an explicit state snapshot and `init({ savedState })` to restore.
 
 ### Serializing Client State
 
@@ -430,12 +465,9 @@ import { WebUIClient } from '@bodhiapp/bodhi-js';
 const client = new WebUIClient('client-id');
 await client.init();
 
-// Get current state
-const state = client.getState();
-
-// Serialize for storage
-const serialized = JSON.stringify(state);
-localStorage.setItem('bodhi:client-state', serialized);
+// Serialize state for storage
+const serialized = client.serialize();
+localStorage.setItem('bodhi:client-state', JSON.stringify(serialized));
 ```
 
 ### Deserializing Client State

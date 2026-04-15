@@ -20,11 +20,13 @@ Most applications should use the preset packages (`@bodhiapp/bodhi-js-react` or 
 
 ## Package Comparison
 
-| Package                         | Client Creation                | Props          | Best For                  |
-| ------------------------------- | ------------------------------ | -------------- | ------------------------- |
-| `@bodhiapp/bodhi-js-react`      | **Auto** (creates WebUIClient) | `authClientId` | Web apps (90% of cases)   |
-| `@bodhiapp/bodhi-js-react-ext`  | **Auto** (creates ExtUIClient) | `authClientId` | Extensions (90% of cases) |
-| `@bodhiapp/bodhi-js-react-core` | **Manual** (you create client) | `client` prop  | Advanced/custom scenarios |
+| Package                         | Client Creation                | Props                                               | Best For                  |
+| ------------------------------- | ------------------------------ | --------------------------------------------------- | ------------------------- |
+| `@bodhiapp/bodhi-js-react`      | **Auto** (creates WebUIClient) | `authClientId` (required) + optional `clientConfig` | Web apps (90% of cases)   |
+| `@bodhiapp/bodhi-js-react-ext`  | **Auto** (creates ExtUIClient) | `authClientId` (required) + optional `clientConfig` | Extensions (90% of cases) |
+| `@bodhiapp/bodhi-js-react-core` | **Manual** (you create client) | `client` prop (required)                            | Advanced/custom scenarios |
+
+**Rule**: When using preset packages (`react` or `react-ext`) without a `client` prop, `authClientId` is required. An optional `clientConfig` (`WebUIClientParams`) can customize the auto-created client. When providing a `client` prop directly, `authClientId` is not needed.
 
 ---
 

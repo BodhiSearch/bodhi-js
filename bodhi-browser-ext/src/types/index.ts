@@ -2,8 +2,10 @@
 // This package provides the shared protocol definitions for communication
 // between web pages, external extensions, and bodhi-browser-ext
 //
-// NOTE: OpenAI types (CreateChatCompletionRequest, PingResponse, etc.)
-// are NOT re-exported. Import them directly from '@bodhiapp/ts-client' when needed.
+// NOTE: API types are NOT re-exported. Import them directly:
+//   - Management types (PingResponse, AppInfo, AppStatus, ...) from '@bodhiapp/ts-client'
+//   - OpenAI-compatible types (CreateChatCompletionRequest, ErrorResponse, ...)
+//     from '@bodhiapp/ts-client/openai'
 
 //-----------------------------------------------------------------------------------
 // PUBLIC API TYPES (window.bodhiext)
@@ -24,7 +26,6 @@ export type {
   ApiResponseSuccessMessage,
   OperationErrorResponseMessage,
   ApiResponseMessage,
-  ErrorMessage,
   StreamChunkMessage,
   StreamApiErrorMessage,
   StreamErrorMessage,

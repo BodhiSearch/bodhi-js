@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
         entry: {
           index: resolve(__dirname, 'src/index.ts'),
           'api/index': resolve(__dirname, 'src/api/index.ts'),
+          'api/openai': resolve(__dirname, 'src/api/openai.ts'),
           'types/index': resolve(__dirname, 'src/types/index.ts'),
           mcp: resolve(__dirname, 'src/mcp.ts'),
         },
@@ -33,7 +34,7 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: false, // Don't clear dist/ - preserves dist/cli/ from build-cli
       rollupOptions: {
         external: [
-          '@bodhiapp/ts-client',
+          /^@bodhiapp\/ts-client(\/.*)?$/,
           'ua-parser-js',
           '@bodhiapp/bodhi-browser-types',
           '@bodhiapp/setup-modal-types',

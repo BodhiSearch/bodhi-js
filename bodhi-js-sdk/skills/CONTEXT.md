@@ -33,7 +33,7 @@
 
 - client: UIClient
 - clientState: ClientContextState (status, mode, extensionId, url, server, error)
-- auth: AuthState (status, user, accessToken, error)
+- auth: AuthState (status, user, accessToken, error, refreshToken, expiresAt, isTokenRefresh)
 - setupState: SetupState ('ready' | 'loading' | 'loaded')
 - isAuthLoading: boolean
 - login(options?: LoginOptions): Promise<AuthState | void>
@@ -83,6 +83,12 @@
 - testDirectConnectivity(serverUrl?) → Promise<DirectState>
 - getExtensionState() → Promise<ExtensionState>
 - getDirectState() → Promise<DirectState>
+- sendExtRequest(action, params) — extension mode only, throws otherwise
+- createMcpTransportConfig(mcp_path) → McpTransportConfig (url, fetch)
+- streamText(method, endpoint, body?, headers?, auth?) → { status, headers, body: AsyncGenerator<string> }
+- debug() → Promise<Record<string, unknown>> — async introspection
+- serialize() — for persistence
+- setStateCallback(cb) — state change notifications
 
 ### IWebUIClient (web only, via isWebUIClient() guard)
 
@@ -92,7 +98,7 @@
 ### State types
 
 - ClientState = ExtensionState | DirectState (core/src/types/client-state.ts)
-- AuthState: { status, user, accessToken, error } (core/src/types/auth.ts)
+- AuthState: { status, user, accessToken, error, refreshToken, expiresAt, isTokenRefresh } (core/src/types/auth.ts)
 - BackendServerState: { status, version, error, deployment?, client_id? }
 - ApiResponse<T> = { body: T, status: number, headers?: Record<string, string> }
 - Error classes: BodhiError (operational), BodhiApiError extends BodhiError (HTTP 4xx/5xx) — use instanceof
@@ -126,10 +132,13 @@
 ## Key Patterns
 
 - Streaming: AsyncGenerator with `for await (const chunk of stream)`
-- Error handling: type guards (isApiResultSuccess, isApiResultOperationError)
+- Error handling: `instanceof BodhiError` / `instanceof BodhiApiError` — no isApiResult\* type guards
 - Conditional rendering: isOverallReady -> isAuthenticated -> app content
 - GitHub Pages: basePath in Vite config + BodhiProvider, 404.html hack for SPA routing
 - Multi-tenant: server returns deployment mode in BackendServerState
+- MCP tool namespacing in agentic chat: `mcp__{slug}__{toolName}` format for tool names passed to LLM
+- State persistence: use `client.serialize()` + `setStateCallback(cb)` for CLI-style apps
+- Ext2ext: use `client.sendExtRequest(action, params)` only when `isExtension` is true
 
 ## MCP Integration
 

@@ -5,6 +5,7 @@
 
 import { type Page } from '@playwright/test';
 import { BaseModalPage } from './BaseModalPage.js';
+import { clickViaDispatch } from '../utils/clickViaDispatch.js';
 
 export class ServerSetupPage extends BaseModalPage {
   constructor(page: Page, iframeSelector?: string) {
@@ -48,10 +49,11 @@ export class ServerSetupPage extends BaseModalPage {
   }
 
   /**
-   * Click server install confirmation checkbox
+   * Click server install confirmation checkbox.
+   * Uses dispatchEvent — see clickViaDispatch for rationale.
    */
   async clickConfirmCheckbox(): Promise<void> {
-    await this.getByTestId('server-confirm-checkbox').click();
+    await clickViaDispatch(this.getByTestId('server-confirm-checkbox'));
   }
 
   /**

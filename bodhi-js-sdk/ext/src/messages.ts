@@ -7,12 +7,13 @@ import type {
   ExtResponse,
   OperationErrorResponse,
 } from '@bodhiapp/bodhi-browser-types';
-import type { OpenAiApiError } from '@bodhiapp/ts-client';
+import type { ErrorResponse } from '@bodhiapp/ts-client/openai';
 import { EXT2EXT_CLIENT_MESSAGE_TYPES } from './constants';
 
 // Note: Type imports from upstream projects should be imported directly:
 // - Protocol types: import from '@bodhiapp/bodhi-js-core/bodhi-browser'
-// - OpenAI types: import from '@bodhiapp/ts-client'
+// - Management types: import from '@bodhiapp/ts-client'
+// - OpenAI types: import from '@bodhiapp/ts-client/openai'
 
 // ============================================================================
 // Extended Types
@@ -164,7 +165,7 @@ export interface ExtClientStreamChunkMessage<TRes = unknown> {
 export interface ExtClientStreamApiErrorMessage {
   type: typeof EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_API_ERROR;
   requestId: string;
-  response: ApiResponse<OpenAiApiError>; // ← Same as bodhi-browser-ext
+  response: ApiResponse<ErrorResponse>; // ← Same as bodhi-browser-ext
 }
 
 /**

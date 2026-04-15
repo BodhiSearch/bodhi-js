@@ -58,7 +58,7 @@ await login({
 
 ```typescript
 interface LoginOptions {
-  userRole?: UserScope; // 'scope_user_user' (default) | 'scope_user_power_user'
+  userRole?: UserScope; // Requested user role (default: 'scope_user_user')
   requested?: RequestedResources; // Resources to request access to
   flowType?: FlowType; // 'redirect' | 'popup'
   redirectUrl?: string; // Custom redirect URL for OAuth callback
@@ -74,7 +74,7 @@ type RequestedResources = {
   mcp_servers?: Array<{ url: string }>;
 };
 
-type UserScope = 'scope_user_user' | 'scope_user_power_user';
+type UserScope = 'scope_user_user' | 'scope_user_power_user' | 'scope_user_manager' | 'scope_user_admin';
 type FlowType = 'redirect' | 'popup';
 ```
 
@@ -162,16 +162,20 @@ import { BodhiProvider } from '@bodhiapp/bodhi-js-react';
 
 ### Manual
 
-For custom callback handling, use the client methods directly:
+For custom callback handling, use the client methods directly. These methods are available on web clients only (`IWebUIClient`); use the `isWebUIClient` type guard before calling them:
 
 ```typescript
+import { useBodhi, isWebUIClient } from '@bodhiapp/bodhi-js-react';
+
 const { client } = useBodhi();
 
-// Handle OAuth authorization code callback
-await client.handleOAuthCallback(code, state);
+if (isWebUIClient(client)) {
+  // Handle OAuth authorization code callback
+  await client.handleOAuthCallback(code, state);
 
-// Handle access request callback (resume polling after redirect)
-await client.handleAccessRequestCallback(requestId);
+  // Handle access request callback (resume polling after redirect)
+  await client.handleAccessRequestCallback(requestId);
+}
 ```
 
 The callback URL defaults to `{basePath}/callback` (e.g., `http://localhost:3000/callback`).
@@ -186,6 +190,9 @@ interface AuthState {
   user: UserInfo | null; // User details (when authenticated)
   accessToken: string | null; // JWT access token (when authenticated)
   error: AuthError | null; // Error details (when status === 'error')
+  refreshToken: string | null; // Refresh token (when authenticated)
+  expiresAt: number | null; // Token expiry timestamp in ms (when authenticated)
+  isTokenRefresh: boolean; // True when a background token refresh is in progress
 }
 
 type AuthStatus =
@@ -260,7 +267,10 @@ import { INITIAL_AUTH_STATE } from '@bodhiapp/bodhi-js-core';
 //   status: 'idle',
 //   user: null,
 //   accessToken: null,
-//   error: null
+//   error: null,
+//   refreshToken: null,
+//   expiresAt: null,
+//   isTokenRefresh: false
 // }
 ```
 
@@ -371,7 +381,7 @@ function LoginFlow() {
 
 ## User Scopes
 
-The Bodhi App backend supports two user scopes:
+The Bodhi App backend supports four user scopes:
 
 ### scope_user_user (Default)
 
@@ -400,7 +410,23 @@ Extended privileges (includes all `scope_user_user` permissions plus):
 await login({ userRole: 'scope_user_power_user' });
 ```
 
-> **Note**: The actual scope granted depends on Bodhi App server configuration. The server may only grant `scope_user_user` based on user permissions, even if `scope_user_power_user` is requested.
+### scope_user_manager
+
+Management privileges for administering users and resources.
+
+```typescript
+await login({ userRole: 'scope_user_manager' });
+```
+
+### scope_user_admin
+
+Full administrative privileges.
+
+```typescript
+await login({ userRole: 'scope_user_admin' });
+```
+
+> **Note**: The actual scope granted depends on Bodhi App server configuration. The server may grant a lower privilege level based on user permissions, even if a higher scope is requested.
 
 ## Next Steps
 

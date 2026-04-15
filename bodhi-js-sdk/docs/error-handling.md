@@ -1,29 +1,46 @@
 # Error Handling
 
-Comprehensive guide to handling errors in the Bodhi JS SDK using type-safe patterns.
+Comprehensive guide to handling errors in the Bodhi JS SDK using class-based patterns.
 
 ## Overview
 
-The SDK provides two types of errors:
+The SDK uses two error classes for all failure scenarios:
 
-- **ApiError**: HTTP errors (4xx/5xx) from the server
-- **OperationError**: Network/extension level errors
+- **BodhiApiError**: HTTP errors (4xx/5xx) from the server
+- **BodhiError**: Operational errors (network, timeout, extension, auth)
 
-Both types are integrated into the `ApiResponseResult` type for type-safe error handling.
+Both classes extend `Error` and are discriminated using `instanceof`.
 
-## Error Types
+## Error Classes
 
-### ApiError
+### BodhiError
 
-HTTP errors with response details:
+Base class for operational errors — network failures, timeouts, extension unavailability, and authentication problems:
 
 ```typescript
-interface ApiError extends Error {
-  response: {
-    status: number; // HTTP status code
-    body: OpenAiApiError; // OpenAI-format error body
-    headers?: Record<string, string>; // Response headers
-  };
+class BodhiError extends Error {
+  readonly code: BodhiErrorCode; // 'network' | 'timeout' | 'extension' | 'auth'
+}
+```
+
+**Example**:
+
+```typescript
+{
+  message: 'Extension not detected',
+  code: 'extension'
+}
+```
+
+### BodhiApiError
+
+HTTP errors with response details, thrown when the server returns 4xx or 5xx:
+
+```typescript
+class BodhiApiError extends BodhiError {
+  readonly status: number; // HTTP status code
+  readonly body: OpenAiApiError; // OpenAI-format error body
+  readonly headers?: Record<string, string>; // Response headers
 }
 
 interface OpenAiApiError {
@@ -41,113 +58,35 @@ interface OpenAiApiError {
 ```typescript
 {
   message: 'Request failed with status 404',
-  response: {
-    status: 404,
-    body: {
-      error: {
-        message: 'Model not found',
-        type: 'invalid_request_error',
-        code: 'model_not_found',
-        param: 'model'
-      }
+  code: 'network',
+  status: 404,
+  body: {
+    error: {
+      message: 'Model not found',
+      type: 'invalid_request_error',
+      code: 'model_not_found',
+      param: 'model'
     }
   }
 }
 ```
 
-### OperationError
+## ApiResponse and unwrapResponse
 
-Network/extension errors without HTTP response:
-
-```typescript
-interface OperationError extends Error {
-  error: {
-    message: string; // Error message
-    type: string; // Error type
-  };
-}
-```
-
-**Example**:
+`sendApiRequest` returns `ApiResponse<T>`, which wraps the HTTP response without throwing on 4xx/5xx:
 
 ```typescript
-{
-  message: 'Extension not detected',
-  error: {
-    message: 'Extension not detected',
-    type: 'extension_error'
-  }
-}
-```
-
-## ApiResponseResult Type
-
-All API requests return `ApiResponseResult<T>`:
-
-```typescript
-type ApiResponseResult<T> =
-  | ApiResponse<T> // Success
-  | { error: OperationErrorResponse }; // Operation error
-
 interface ApiResponse<T> {
   body: T;
   status: number;
   headers?: Record<string, string>;
 }
-
-interface OperationErrorResponse {
-  message: string;
-  type: string;
-}
 ```
 
-## Type Guards
-
-Use type guards to handle responses safely:
-
-### isApiResultSuccess
-
-Check for successful response (HTTP 2xx):
+Use `unwrapResponse` to extract the body or throw `BodhiApiError` on HTTP errors:
 
 ```typescript
-import { isApiResultSuccess } from '@bodhiapp/bodhi-js-react';
-
-const result = await client.sendApiRequest('GET', '/v1/models');
-
-if (isApiResultSuccess(result)) {
-  // result.body is typed correctly
-  console.log(result.body);
-}
-```
-
-### isApiResultError
-
-Check for HTTP error (4xx/5xx):
-
-```typescript
-import { isApiResultError } from '@bodhiapp/bodhi-js-react';
-
-const result = await client.sendApiRequest('GET', '/v1/models');
-
-if (isApiResultError(result)) {
-  // HTTP error with response
-  console.error(`HTTP ${result.status}:`, result.body.error.message);
-}
-```
-
-### isApiResultOperationError
-
-Check for operation/network error:
-
-```typescript
-import { isApiResultOperationError } from '@bodhiapp/bodhi-js-react';
-
-const result = await client.sendApiRequest('GET', '/v1/models');
-
-if (isApiResultOperationError(result)) {
-  // Network/extension error
-  console.error('Operation error:', result.error.message);
-}
+function unwrapResponse<T>(response: ApiResponse<T>): T; // throws BodhiApiError on status >= 400
 ```
 
 ## Complete Error Handling Pattern
@@ -155,38 +94,22 @@ if (isApiResultOperationError(result)) {
 ### Recommended Approach
 
 ```typescript
-import { isApiResultOperationError, isApiResultError, isApiResultSuccess } from '@bodhiapp/bodhi-js-react';
+import { BodhiError, BodhiApiError, unwrapResponse } from '@bodhiapp/bodhi-js-react';
 
 async function fetchModels() {
-  const result = await client.sendApiRequest('GET', '/v1/models');
-
-  // 1. Check for operation errors first (no HTTP response)
-  if (isApiResultOperationError(result)) {
-    console.error('Connection error:', result.error.message);
-    switch (result.error.type) {
-      case 'extension_error':
-        return 'Extension not available';
-      case 'network_error':
-        return 'Network connection failed';
-      case 'timeout_error':
-        return 'Request timed out';
-      default:
-        return `Error: ${result.error.message}`;
+  try {
+    const response = await client.sendApiRequest('GET', '/v1/models');
+    const body = unwrapResponse(response); // throws BodhiApiError on 4xx/5xx
+    return body.data;
+  } catch (err) {
+    if (err instanceof BodhiApiError) {
+      console.error(`HTTP ${err.status}: ${err.message}`, err.body);
+    } else if (err instanceof BodhiError) {
+      console.error(`Operational error [${err.code}]: ${err.message}`);
+    } else {
+      throw err;
     }
   }
-
-  // 2. Check HTTP status
-  if (isApiResultError(result)) {
-    console.error(`HTTP ${result.status}:`, result.body.error);
-    return `Server error: ${result.body.error.message}`;
-  }
-
-  // 3. Success
-  if (isApiResultSuccess(result)) {
-    return result.body.data;
-  }
-
-  // TypeScript ensures all cases handled
 }
 ```
 
@@ -195,10 +118,14 @@ async function fetchModels() {
 ### Extension Not Detected
 
 ```typescript
-const result = await client.sendApiRequest('GET', '/v1/models');
+import { BodhiError, BodhiApiError, unwrapResponse } from '@bodhiapp/bodhi-js-react';
 
-if (isApiResultOperationError(result)) {
-  if (result.error.type === 'extension_error') {
+try {
+  const response = await client.sendApiRequest('GET', '/v1/models');
+  const body = unwrapResponse(response);
+  return body.data;
+} catch (err) {
+  if (err instanceof BodhiError && err.code === 'extension') {
     // Show extension installation prompt
     setError('Extension not installed');
     setShowExtensionPrompt(true);
@@ -209,8 +136,12 @@ if (isApiResultOperationError(result)) {
 ### Network Errors
 
 ```typescript
-if (isApiResultOperationError(result)) {
-  if (result.error.type === 'network_error') {
+try {
+  const response = await client.sendApiRequest('GET', '/v1/models');
+  const body = unwrapResponse(response);
+  return body.data;
+} catch (err) {
+  if (err instanceof BodhiError && err.code === 'network') {
     // Server not reachable
     setError('Cannot connect to local server');
     setShowServerSetup(true);
@@ -221,9 +152,12 @@ if (isApiResultOperationError(result)) {
 ### Authentication Errors
 
 ```typescript
-if (isApiResultError(result)) {
-  if (result.status === 401) {
-    // Unauthorized
+try {
+  const response = await client.sendApiRequest('GET', '/v1/protected');
+  const body = unwrapResponse(response);
+  return body;
+} catch (err) {
+  if (err instanceof BodhiApiError && err.status === 401) {
     console.log('Authentication required');
     await login();
   }
@@ -233,9 +167,13 @@ if (isApiResultError(result)) {
 ### Model Not Found
 
 ```typescript
-if (isApiResultError(result)) {
-  if (result.status === 404 && result.body.error.code === 'model_not_found') {
-    setError(`Model "${result.body.error.param}" not found`);
+try {
+  const response = await client.sendApiRequest('GET', '/v1/models/unknown');
+  const body = unwrapResponse(response);
+  return body;
+} catch (err) {
+  if (err instanceof BodhiApiError && err.status === 404 && err.body.error.code === 'model_not_found') {
+    setError(`Model "${err.body.error.param}" not found`);
   }
 }
 ```
@@ -243,9 +181,13 @@ if (isApiResultError(result)) {
 ### Rate Limiting
 
 ```typescript
-if (isApiResultError(result)) {
-  if (result.status === 429) {
-    const retryAfter = result.headers?.['retry-after'];
+try {
+  const response = await client.sendApiRequest('POST', '/v1/chat/completions', request);
+  const body = unwrapResponse(response);
+  return body;
+} catch (err) {
+  if (err instanceof BodhiApiError && err.status === 429) {
+    const retryAfter = err.headers?.['retry-after'];
     setError(`Rate limited. Retry after ${retryAfter} seconds`);
   }
 }
@@ -256,6 +198,8 @@ if (isApiResultError(result)) {
 ### Error State Management
 
 ```typescript
+import { BodhiError, BodhiApiError, unwrapResponse } from '@bodhiapp/bodhi-js-react';
+
 function ApiComponent() {
   const { client } = useBodhi();
   const [data, setData] = useState(null);
@@ -267,24 +211,17 @@ function ApiComponent() {
     setError(null);
 
     try {
-      const result = await client.sendApiRequest('GET', '/v1/models');
-
-      if (isApiResultOperationError(result)) {
-        setError(result.error.message);
-        return;
-      }
-
-      if (isApiResultError(result)) {
-        setError(`HTTP ${result.status}: ${result.body.error.message}`);
-        return;
-      }
-
-      if (isApiResultSuccess(result)) {
-        setData(result.body);
-      }
+      const response = await client.sendApiRequest('GET', '/v1/models');
+      const body = unwrapResponse(response);
+      setData(body);
     } catch (err) {
-      // Unexpected error
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      if (err instanceof BodhiApiError) {
+        setError(`HTTP ${err.status}: ${err.body.error.message}`);
+      } else if (err instanceof BodhiError) {
+        setError(err.message);
+      } else {
+        setError(err instanceof Error ? err.message : 'Unknown error');
+      }
     } finally {
       setLoading(false);
     }
@@ -343,7 +280,7 @@ class ErrorBoundary extends Component<Props, State> {
 
 // Usage
 <ErrorBoundary>
-  <BodhiProvider client={client}>
+  <BodhiProvider authClientId="your-client-id">
     <App />
   </BodhiProvider>
 </ErrorBoundary>
@@ -354,21 +291,21 @@ class ErrorBoundary extends Component<Props, State> {
 ### Basic Streaming Errors
 
 ```typescript
+import { BodhiError, BodhiApiError } from '@bodhiapp/bodhi-js-react';
+
 try {
-  const stream = client.chat.completions.create({
+  for await (const chunk of client.chat.completions.create({
     model: 'gemma-3n-e4b-it',
     messages: [{ role: 'user', content: prompt }],
     stream: true,
-  });
-
-  for await (const chunk of stream) {
+  })) {
     console.log(chunk.choices?.[0]?.delta?.content);
   }
 } catch (err) {
-  if (err instanceof Error) {
-    // HTTP errors: "HTTP 404: ..." format
-    // Network errors: "Network error: ..." format
-    setError(`Stream error: ${err.message}`);
+  if (err instanceof BodhiApiError) {
+    setError(`HTTP ${err.status}: ${err.body.error.message}`);
+  } else if (err instanceof BodhiError) {
+    setError(`Connection error [${err.code}]: ${err.message}`);
   } else {
     setError('Unknown error occurred');
   }
@@ -381,16 +318,13 @@ try {
 async function* streamWithRetry(model: string, prompt: string, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const stream = client.chat.completions.create({
+      for await (const chunk of client.chat.completions.create({
         model,
         messages: [{ role: 'user', content: prompt }],
         stream: true,
-      });
-
-      for await (const chunk of stream) {
+      })) {
         yield chunk;
       }
-
       return; // Success
     } catch (err) {
       if (attempt === maxRetries) {
@@ -410,14 +344,14 @@ For creating custom error objects in advanced scenarios, see [Error Factories](.
 
 ## Common Error Codes
 
-### Operation Error Types
+### BodhiError Codes
 
-| Type              | Cause                     | Solution                         |
-| ----------------- | ------------------------- | -------------------------------- |
-| `extension_error` | Extension not available   | Install extension                |
-| `network_error`   | Network connection failed | Check server running             |
-| `timeout_error`   | Request timed out         | Increase timeout or check server |
-| `auth_error`      | Authentication failed     | Re-login                         |
+| Code        | Cause                     | Solution                         |
+| ----------- | ------------------------- | -------------------------------- |
+| `extension` | Extension not available   | Install extension                |
+| `network`   | Network connection failed | Check server running             |
+| `timeout`   | Request timed out         | Increase timeout or check server |
+| `auth`      | Authentication failed     | Re-login                         |
 
 ### HTTP Error Status Codes
 
@@ -436,22 +370,11 @@ For creating custom error objects in advanced scenarios, see [Error Factories](.
 ### Map Technical Errors to User Messages
 
 ```typescript
-function getUserFriendlyError(result: ApiResponseResult<unknown>): string {
-  if (isApiResultOperationError(result)) {
-    switch (result.error.type) {
-      case 'extension_error':
-        return 'Browser extension not installed. Please install the Bodhi Browser extension.';
-      case 'network_error':
-        return 'Cannot connect to local AI server. Please ensure it is running.';
-      case 'timeout_error':
-        return 'Request took too long. Please try again.';
-      default:
-        return 'Connection error. Please check your setup.';
-    }
-  }
+import { BodhiError, BodhiApiError } from '@bodhiapp/bodhi-js-react';
 
-  if (isApiResultError(result)) {
-    switch (result.status) {
+function getUserFriendlyError(err: unknown): string {
+  if (err instanceof BodhiApiError) {
+    switch (err.status) {
       case 401:
         return 'Please login to continue.';
       case 404:
@@ -461,7 +384,20 @@ function getUserFriendlyError(result: ApiResponseResult<unknown>): string {
       case 500:
         return 'Server error. Please try again later.';
       default:
-        return `Server error (${result.status}). Please try again.`;
+        return `Server error (${err.status}). Please try again.`;
+    }
+  }
+
+  if (err instanceof BodhiError) {
+    switch (err.code) {
+      case 'extension':
+        return 'Browser extension not installed. Please install the Bodhi Browser extension.';
+      case 'network':
+        return 'Cannot connect to local AI server. Please ensure it is running.';
+      case 'timeout':
+        return 'Request took too long. Please try again.';
+      default:
+        return 'Connection error. Please check your setup.';
     }
   }
 
@@ -472,20 +408,17 @@ function getUserFriendlyError(result: ApiResponseResult<unknown>): string {
 ### Error Display Component
 
 ```typescript
+import { BodhiError } from '@bodhiapp/bodhi-js-react';
+
 interface ErrorMessageProps {
-  result: ApiResponseResult<unknown>;
+  err: unknown;
   onRetry?: () => void;
   onDismiss?: () => void;
 }
 
-function ErrorMessage({ result, onRetry, onDismiss }: ErrorMessageProps) {
-  const message = getUserFriendlyError(result);
-
-  // Determine severity
-  let severity: 'error' | 'warning' = 'error';
-  if (isApiResultOperationError(result)) {
-    severity = result.error.type === 'extension_error' ? 'warning' : 'error';
-  }
+function ErrorMessage({ err, onRetry, onDismiss }: ErrorMessageProps) {
+  const message = getUserFriendlyError(err);
+  const severity = err instanceof BodhiError && err.code === 'extension' ? 'warning' : 'error';
 
   return (
     <Alert severity={severity} onClose={onDismiss}>
@@ -498,30 +431,32 @@ function ErrorMessage({ result, onRetry, onDismiss }: ErrorMessageProps) {
 
 ## Best Practices
 
-### 1. Always Use Type Guards
+### 1. Use instanceof for Discrimination
 
 ```typescript
 // ❌ DON'T check properties directly
-if ('error' in result) {
-  // Unsafe - could be ApiError or OperationError
+if ('code' in err) {
+  // Unsafe — could be any error
 }
 
-// ✅ DO use type guards
-if (isApiResultOperationError(result)) {
-  // TypeScript knows result.error exists
+// ✅ DO use instanceof
+if (err instanceof BodhiApiError) {
+  // TypeScript knows err.status, err.body, err.headers exist
+} else if (err instanceof BodhiError) {
+  // TypeScript knows err.code exists
 }
 ```
 
-### 2. Check Operation Errors First
+### 2. Check BodhiApiError Before BodhiError
 
 ```typescript
-// ✅ Check operation errors before HTTP errors
-if (isApiResultOperationError(result)) {
-  // No HTTP response
-} else if (isApiResultError(result)) {
-  // Has HTTP response
-} else if (isApiResultSuccess(result)) {
-  // Success
+// ✅ Check BodhiApiError first (it extends BodhiError)
+if (err instanceof BodhiApiError) {
+  // Has HTTP response: err.status, err.body
+} else if (err instanceof BodhiError) {
+  // Operational error: err.code
+} else {
+  throw err; // Re-throw unexpected errors
 }
 ```
 
@@ -538,13 +473,13 @@ setError('Cannot connect to local server. Please ensure it is running on port 11
 ### 4. Log Errors for Debugging
 
 ```typescript
-if (isApiResultError(result)) {
+if (err instanceof BodhiApiError) {
   console.error('API Error:', {
-    status: result.status,
-    error: result.body.error,
-    headers: result.headers,
+    status: err.status,
+    error: err.body.error,
+    headers: err.headers,
   });
-  setUserError(getUserFriendlyError(result));
+  setUserError(getUserFriendlyError(err));
 }
 ```
 
@@ -572,72 +507,48 @@ function ModelList() {
 
 ## Streaming vs Non-Streaming Error Handling
 
-**Important**: Streaming methods have different error patterns than non-streaming API requests.
+Both streaming and non-streaming methods throw `BodhiError` and `BodhiApiError` directly.
 
 ### Non-Streaming API Requests
 
-Non-streaming methods return `ApiResponseResult<T>`:
+`sendApiRequest` throws `BodhiError` on operational failures. Use `unwrapResponse` to throw `BodhiApiError` on HTTP errors:
 
 ```typescript
-// Returns ApiResponseResult<T>
-const result = await client.sendApiRequest('GET', '/v1/models');
+import { BodhiError, BodhiApiError, unwrapResponse } from '@bodhiapp/bodhi-js-react';
 
-if (isApiResultOperationError(result)) {
-  // Network/extension error
-  console.error(result.error.message);
-} else if (isApiResultError(result)) {
-  // HTTP error
-  console.error(`HTTP ${result.status}:`, result.body.error.message);
-} else if (isApiResultSuccess(result)) {
-  // Success
-  console.log(result.body);
+try {
+  const response = await client.sendApiRequest('GET', '/v1/models');
+  const body = unwrapResponse(response); // throws BodhiApiError on 4xx/5xx
+  console.log(body);
+} catch (err) {
+  if (err instanceof BodhiApiError) {
+    console.error(`HTTP ${err.status}:`, err.body.error.message);
+  } else if (err instanceof BodhiError) {
+    console.error(`Operational error [${err.code}]:`, err.message);
+  }
 }
 ```
 
 ### Streaming Requests
 
-Streaming methods (`stream()`, `client.chat.completions.create({ stream: true })`) throw `Error` objects directly:
+Streaming methods (`stream()`, `client.chat.completions.create({ stream: true })`) throw `BodhiError` or `BodhiApiError` directly from iteration:
 
 ```typescript
-// Throws Error objects
 try {
-  const stream = client.chat.completions.create({
+  for await (const chunk of client.chat.completions.create({
     model,
     messages: [{ role: 'user', content: prompt }],
     stream: true,
-  });
-  for await (const chunk of stream) {
+  })) {
     // Process...
   }
 } catch (err) {
-  if (err instanceof Error) {
-    // HTTP errors: "HTTP 404: ..." format
-    // Network errors: "Network error: ..." format
-    console.error('Stream error:', err.message);
-  }
-}
-```
-
-**Real-World Example** (from sdk-test-app):
-
-```typescript
-// ChatSection.tsx pattern
-try {
-  const stream = client.chat.completions.create({
-    model,
-    messages: [{ role: 'user', content: prompt }],
-    stream: true,
-  });
-  for await (const chunk of stream) {
-    const content = chunk.choices?.[0]?.delta?.content || '';
-    setResponse(prev => prev + content);
-  }
-} catch (err) {
-  // Streaming throws Error, not ApiResponseResult
-  if (err instanceof Error) {
-    setError(`Stream error: ${err.message}`);
-  } else {
-    setError('Unknown error occurred');
+  if (err instanceof BodhiApiError) {
+    // HTTP error during SSE (e.g. model not found)
+    console.error('HTTP error:', err.status, err.body.error.message);
+  } else if (err instanceof BodhiError) {
+    // Connection error
+    console.error('Connection error:', err.code, err.message);
   }
 }
 ```

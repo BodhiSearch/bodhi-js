@@ -11,8 +11,6 @@ Complete reference documentation for all Bodhi JS SDK packages.
 - [Types](#types)
 - [Type Guards](#type-guards)
 - [Error Factories](#error-factories)
-- [OAuth Utilities](#oauth-utilities)
-- [Constants](#constants)
 
 ---
 
@@ -86,12 +84,12 @@ async sendApiRequest<TReq, TRes>(
   body?: TReq,
   headers?: Record<string, string>,
   authenticated?: boolean
-): Promise<ApiResponseResult<TRes>>
+): Promise<ApiResponse<TRes>>
 ```
 
-Make API request to local LLM server.
+Make API request to local LLM server. Throws `BodhiError` on operational failures. Returns `ApiResponse<TRes>` for any HTTP response. Use `unwrapResponse()` to extract the body and throw `BodhiApiError` on 4xx/5xx.
 
-**Returns**: `Promise<ApiResponseResult<TRes>>`
+**Returns**: `Promise<ApiResponse<TRes>>`
 
 #### stream()
 
@@ -105,9 +103,73 @@ stream<TReq, TRes>(
 ): AsyncGenerator<TRes>
 ```
 
-Stream API response.
+Stream API response. Throws `BodhiError` or `BodhiApiError` directly from iteration.
 
 **Returns**: `AsyncGenerator<TRes>`
+
+#### streamText()
+
+```typescript
+streamText<TReq>(
+  method: string,
+  endpoint: string,
+  body?: TReq,
+  headers?: Record<string, string>,
+  authenticated?: boolean
+): Promise<StreamTextResult>
+```
+
+Stream raw text (SSE lines) from an endpoint. Non-2xx responses are returned as data rather than thrown.
+
+```typescript
+interface StreamTextResult {
+  status: number;
+  headers: Record<string, string>;
+  body: AsyncGenerator<string>;
+}
+```
+
+**Returns**: `Promise<StreamTextResult>`
+
+#### serialize()
+
+```typescript
+serialize(): SerializedClientState
+```
+
+Serialize the current client state for persistence (e.g. `localStorage`). Can be restored via `init({ savedState })`.
+
+**Returns**: `SerializedClientState`
+
+#### debug()
+
+```typescript
+debug(): object
+```
+
+Return internal state snapshot for diagnostics and troubleshooting.
+
+**Returns**: `object`
+
+#### getExtensionState()
+
+```typescript
+getExtensionState(): ExtensionState | null
+```
+
+Get the current extension connection state, or `null` if not in extension mode.
+
+**Returns**: `ExtensionState | null`
+
+#### getDirectState()
+
+```typescript
+getDirectState(): DirectState | null
+```
+
+Get the current direct HTTP connection state, or `null` if not in direct mode.
+
+**Returns**: `DirectState | null`
 
 ---
 
@@ -286,26 +348,26 @@ Initiate OAuth login flow with optional configuration.
 #### requestAccess()
 
 ```typescript
-async requestAccess(body: CreateAccessRequest): Promise<ApiResponseResult<CreateAccessRequestResponse>>
+async requestAccess(body: CreateAccessRequest): Promise<ApiResponse<CreateAccessRequestResponse>>
 ```
 
-Request access to resources on behalf of the app.
+Request access to resources on behalf of the app. Throws `BodhiError` on operational failures; throws `BodhiApiError` on HTTP errors.
 
 **Endpoint**: `POST /bodhi/v1/apps/request-access`
 
-**Returns**: `Promise<ApiResponseResult<CreateAccessRequestResponse>>`
+**Returns**: `Promise<ApiResponse<CreateAccessRequestResponse>>`
 
 #### getAccessRequestStatus()
 
 ```typescript
-async getAccessRequestStatus(requestId: string): Promise<ApiResponseResult<AccessRequestStatusResponse>>
+async getAccessRequestStatus(requestId: string): Promise<ApiResponse<AccessRequestStatusResponse>>
 ```
 
-Check the status of an access request.
+Check the status of an access request. Throws `BodhiError` on operational failures; throws `BodhiApiError` on HTTP errors.
 
 **Endpoint**: `GET /bodhi/v1/apps/access-requests/{requestId}?app_client_id=xxx`
 
-**Returns**: `Promise<ApiResponseResult<AccessRequestStatusResponse>>`
+**Returns**: `Promise<ApiResponse<AccessRequestStatusResponse>>`
 
 #### pollAccessRequestStatus()
 
@@ -717,39 +779,60 @@ interface UserInfo {
 }
 ```
 
-### ApiResponseResult
+### ApiResponse
 
 ```typescript
-type ApiResponseResult<T> = ApiResponse<T> | { error: OperationErrorResponse };
-
 interface ApiResponse<T> {
   body: T;
   status: number;
   headers?: Record<string, string>;
 }
-
-interface OperationErrorResponse {
-  message: string;
-  type: string;
-}
 ```
 
-### ApiError & OperationError
+Returned by `sendApiRequest`. Use `unwrapResponse()` to extract the body and throw `BodhiApiError` on HTTP errors:
 
 ```typescript
-interface ApiError extends Error {
-  response: {
-    status: number;
-    body: OpenAiApiError;
-    headers?: Record<string, string>;
-  };
+function unwrapResponse<T>(response: ApiResponse<T>): T; // throws BodhiApiError on status >= 400
+```
+
+### BodhiError & BodhiApiError
+
+```typescript
+type BodhiErrorCode = 'network' | 'timeout' | 'extension' | 'auth';
+
+class BodhiError extends Error {
+  readonly code: BodhiErrorCode;
 }
 
-interface OperationError extends Error {
+class BodhiApiError extends BodhiError {
+  readonly status: number;
+  readonly body: OpenAiApiError;
+  readonly headers?: Record<string, string>;
+}
+
+interface OpenAiApiError {
   error: {
     message: string;
     type: string;
+    code?: string;
+    param?: string;
   };
+}
+```
+
+Use `instanceof` to discriminate:
+
+```typescript
+import { BodhiError, BodhiApiError } from '@bodhiapp/bodhi-js-react';
+
+try {
+  const body = unwrapResponse(await client.sendApiRequest('GET', '/v1/models'));
+} catch (err) {
+  if (err instanceof BodhiApiError) {
+    /* HTTP error */
+  } else if (err instanceof BodhiError) {
+    /* operational error */
+  }
 }
 ```
 
@@ -853,16 +936,6 @@ type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 From `@bodhiapp/bodhi-js-react`:
 
-### API Result Type Guards
-
-```typescript
-function isApiResultSuccess<T>(result: ApiResponseResult<T>): result is ApiResponse<T>;
-
-function isApiResultError<T>(result: ApiResponseResult<T>): result is ApiResponse<T>;
-
-function isApiResultOperationError<T>(result: ApiResponseResult<T>): result is { error: OperationErrorResponse };
-```
-
 ### Client State Type Guards
 
 ```typescript
@@ -899,33 +972,34 @@ function isAuthError(auth: AuthState): boolean;
 function isWebUIClient(client: UIClient): client is IWebUIClient;
 ```
 
-### Error Type Guards
-
-```typescript
-function isOperationError(err: Error): err is OperationError;
-```
-
 ---
 
 ## Error Factories
 
 From `@bodhiapp/bodhi-js-core`:
 
-### createApiError
+### BodhiApiError constructor
 
 ```typescript
-function createApiError(message: string, status: number, body: OpenAiApiError, headers?: Record<string, string>): ApiError;
+new BodhiApiError(
+  message: string,
+  status: number,
+  body: OpenAiApiError,
+  headers?: Record<string, string>
+): BodhiApiError
 ```
 
-Create HTTP error.
+Create an HTTP error instance for testing or custom middleware.
 
-### createOperationError
+### BodhiError constructor
 
 ```typescript
-function createOperationError(message: string, type: string): OperationError;
+new BodhiError(message: string, code: BodhiErrorCode): BodhiError
 ```
 
-Create operation error.
+Create an operational error instance.
+
+For advanced factory helpers, see [Core Utilities](./advanced/core-utilities.md#error-factories).
 
 ---
 
@@ -935,13 +1009,8 @@ Create operation error.
 
 ```typescript
 import { WebUIClient } from '@bodhiapp/bodhi-js';
-import { BodhiProvider, useBodhi } from '@bodhiapp/bodhi-js-react';
-import {
-  isApiResultSuccess,
-  isApiResultOperationError,
-  type CreateChatCompletionRequest,
-  type CreateChatCompletionResponse,
-} from '@bodhiapp/bodhi-js-react';
+import { BodhiProvider, useBodhi, BodhiError, BodhiApiError, unwrapResponse } from '@bodhiapp/bodhi-js-react';
+import type { CreateChatCompletionRequest, CreateChatCompletionResponse } from '@bodhiapp/bodhi-js-react/api/openai';
 
 // Create client (minimal - uses defaults)
 const client = new WebUIClient('client-id');
@@ -972,26 +1041,28 @@ function ChatApp() {
 
 // API call
 async function sendMessage(client: UIClient, prompt: string) {
-  const result = await client.sendApiRequest<
-    CreateChatCompletionRequest,
-    CreateChatCompletionResponse
-  >(
-    'POST',
-    '/v1/chat/completions',
-    {
-      model: 'gemma-3n-e4b-it',
-      messages: [{ role: 'user', content: prompt }],
-    },
-    undefined,
-    true  // authenticated
-  );
-
-  if (isApiResultOperationError(result)) {
-    throw new Error(result.error.message);
-  }
-
-  if (isApiResultSuccess(result)) {
-    return result.body.choices[0].message.content;
+  try {
+    const response = await client.sendApiRequest<
+      CreateChatCompletionRequest,
+      CreateChatCompletionResponse
+    >(
+      'POST',
+      '/v1/chat/completions',
+      {
+        model: 'gemma-3n-e4b-it',
+        messages: [{ role: 'user', content: prompt }],
+      },
+      undefined,
+      true  // authenticated
+    );
+    return unwrapResponse(response).choices[0].message.content;
+  } catch (err) {
+    if (err instanceof BodhiApiError) {
+      throw new Error(`HTTP ${err.status}: ${err.body.error.message}`);
+    } else if (err instanceof BodhiError) {
+      throw new Error(`Connection error [${err.code}]: ${err.message}`);
+    }
+    throw err;
   }
 }
 ```

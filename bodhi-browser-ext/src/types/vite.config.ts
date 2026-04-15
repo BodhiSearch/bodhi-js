@@ -14,7 +14,7 @@ export default defineConfig({
     emptyOutDir: true,
     minify: false,
     rollupOptions: {
-      external: ['@bodhiapp/ts-client'],
+      external: [/^@bodhiapp\/ts-client(\/.*)?$/],
     },
   },
   plugins: [

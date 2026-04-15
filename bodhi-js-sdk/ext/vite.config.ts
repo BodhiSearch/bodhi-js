@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => {
         external: [
           'chrome',
           '@bodhiapp/bodhi-js-core',
-          '@bodhiapp/ts-client',
+          /^@bodhiapp\/ts-client(\/.*)?$/,
           '@bodhiapp/bodhi-browser-types',
         ],
       },

@@ -7,6 +7,7 @@
  * - client.embeddings.create()
  */
 
+import type { ListMcpsResponse } from '@bodhiapp/ts-client';
 import type {
   CreateChatCompletionRequest,
   CreateChatCompletionResponse,
@@ -15,8 +16,7 @@ import type {
   CreateEmbeddingResponse,
   Model,
   ListModelsResponse,
-  ListMcpsResponse,
-} from '@bodhiapp/ts-client';
+} from '@bodhiapp/ts-client/openai';
 import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
 import { unwrapResponse } from '@bodhiapp/bodhi-browser-types';
 

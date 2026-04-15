@@ -173,3 +173,31 @@ function DebugPanel() {
   );
 }
 ```
+
+For deeper introspection, use `client.debug()` — it returns internal state including connection details, token expiry, and extension info:
+
+```tsx
+const info = await client.debug();
+console.log(JSON.stringify(info, null, 2));
+```
+
+## Error Handling
+
+Errors use `instanceof` discrimination — there are no `isApiResult*` type guards:
+
+```tsx
+import { BodhiError, BodhiApiError } from '@bodhiapp/bodhi-js-react';
+
+try {
+  const result = await client.sendApiRequest('GET', '/bodhi/v1/info');
+  const body = unwrapResponse(result); // throws BodhiApiError on status >= 400
+} catch (err) {
+  if (err instanceof BodhiApiError) {
+    // HTTP error: err.status (number), err.body (response body), err.headers
+    console.error('HTTP', err.status, err.body);
+  } else if (err instanceof BodhiError) {
+    // Operational error: err.code, err.message
+    console.error('Operational', err.code, err.message);
+  }
+}
+```

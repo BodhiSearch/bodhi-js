@@ -94,7 +94,9 @@ Automatically detects:
 // Platform detection happens automatically
 const { clientState } = useBodhi();
 
-if (clientState.mode === 'extension') {
+if (clientState.mode === null) {
+  // Mode not yet selected (initializing or not configured)
+} else if (clientState.mode === 'extension') {
   // Extension-based connection
 } else if (clientState.mode === 'direct') {
   // Direct HTTP connection

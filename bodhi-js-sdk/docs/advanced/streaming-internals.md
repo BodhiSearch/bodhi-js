@@ -1,8 +1,83 @@
 # Advanced Streaming Patterns
 
-Advanced patterns for managing streaming chat completions.
+Advanced patterns for managing streaming chat completions and custom SSE endpoints.
 
 > **Note**: Most applications can use `client.chat.completions.create({ stream: true })` directly. This guide covers advanced patterns for production use cases.
+
+## Streaming Architecture
+
+### Chat Completions SSE Parsing
+
+`client.chat.completions.create({ stream: true })` returns an `AsyncGenerator` backed by SSE parsing in `core/src/openai-client-compat.ts`. Each yielded chunk is an OpenAI-compatible `ChatCompletionChunk` with `choices[].delta.content` (and `choices[].delta.tool_calls` for tool calls).
+
+### Generic SSE Endpoint: client.stream()
+
+Use `client.stream()` for custom SSE endpoints that return newline-delimited JSON:
+
+```typescript
+const stream = client.stream<MyResponseType>('/bodhi/v1/custom-stream', {
+  method: 'POST',
+  body: JSON.stringify({ param: 'value' }),
+});
+
+for await (const event of stream) {
+  // event is MyResponseType
+  console.log(event);
+}
+```
+
+Returns `AsyncGenerator<TRes>`. Each SSE `data:` line is parsed as JSON and yielded as `TRes`.
+
+### Raw Text Stream: client.streamText()
+
+Use `client.streamText()` for endpoints that stream raw text (no SSE parsing):
+
+```typescript
+const result = await client.streamText('/bodhi/v1/raw-stream', {
+  method: 'POST',
+  body: JSON.stringify({ prompt: 'Hello' }),
+});
+
+// result.text: string — full accumulated text
+// result.chunks: string[] — individual chunks as received
+console.log(result.text);
+```
+
+Returns `Promise<StreamTextResult>`.
+
+### Tool-Call Accumulation
+
+For agentic patterns where the LLM returns tool calls via streaming, the SDK accumulates deltas index-keyed across chunks:
+
+```typescript
+const stream = client.chat.completions.create({
+  model: 'your-model',
+  messages,
+  tools,
+  stream: true,
+});
+
+const toolCallDeltas: Record<number, any> = {};
+
+for await (const chunk of stream) {
+  const delta = chunk.choices?.[0]?.delta;
+  if (delta?.tool_calls) {
+    for (const tc of delta.tool_calls) {
+      // tc.index identifies which tool call this delta belongs to
+      if (!toolCallDeltas[tc.index]) {
+        toolCallDeltas[tc.index] = { id: tc.id, name: tc.function?.name, arguments: '' };
+      }
+      toolCallDeltas[tc.index].arguments += tc.function?.arguments || '';
+    }
+  }
+}
+
+// After stream ends, parse accumulated tool calls
+const toolCalls = Object.values(toolCallDeltas).map(tc => ({
+  ...tc,
+  arguments: JSON.parse(tc.arguments),
+}));
+```
 
 ## Stream Cancellation
 

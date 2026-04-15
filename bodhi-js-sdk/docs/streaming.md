@@ -110,8 +110,7 @@ interface CreateChatCompletionStreamResponse {
 
 ```typescript
 import { useState } from 'react';
-import { useBodhi } from '@bodhiapp/bodhi-js-react';
-import { isApiResultOperationError } from '@bodhiapp/bodhi-js-react';
+import { useBodhi, BodhiError, BodhiApiError } from '@bodhiapp/bodhi-js-react';
 
 function Chat() {
   const { client } = useBodhi();
@@ -149,10 +148,10 @@ function Chat() {
         }
       }
     } catch (err) {
-      if (isApiResultOperationError(err)) {
-        setError(`Connection error: ${err.error.message}`);
-      } else if (err instanceof Error) {
-        setError(err.message);
+      if (err instanceof BodhiApiError) {
+        setError(`HTTP ${err.status}: ${err.body.error.message}`);
+      } else if (err instanceof BodhiError) {
+        setError(`Connection error [${err.code}]: ${err.message}`);
       } else {
         setError('Unknown error occurred');
       }
@@ -183,34 +182,31 @@ function Chat() {
 
 ## Error Handling
 
-> **Important**: Streaming methods (`stream()`, `chat.completions.create({ stream: true })`) throw `Error` objects directly, NOT `ApiResponseResult`. This is different from non-streaming API requests.
+Streaming methods (`stream()`, `chat.completions.create({ stream: true })`) throw `BodhiError` or `BodhiApiError` directly from iteration. Use `instanceof` to discriminate.
 
 ### Handling Stream Errors
 
 ```typescript
+import { BodhiError, BodhiApiError } from '@bodhiapp/bodhi-js-react';
+
 async function handleStream(model: string, prompt: string) {
   try {
-    const stream = client.chat.completions.create({
+    for await (const chunk of client.chat.completions.create({
       model,
       messages: [{ role: 'user', content: prompt }],
       stream: true,
-    });
-
-    for await (const chunk of stream) {
+    })) {
       console.log(chunk.choices?.[0]?.delta?.content);
     }
   } catch (err) {
-    // Streaming throws Error objects, not ApiResponseResult
-    if (err instanceof Error) {
-      // Check for HTTP errors (format: "HTTP 404: ...")
-      const httpMatch = err.message.match(/^HTTP (\d+):/);
-      if (httpMatch) {
-        const status = parseInt(httpMatch[1]);
-        console.error(`HTTP ${status}:`, err.message);
-      } else {
-        // Network/connection errors
-        console.error('Stream error:', err.message);
-      }
+    if (err instanceof BodhiApiError) {
+      // HTTP error during SSE (e.g. model not found, auth failure)
+      console.error(`HTTP ${err.status}:`, err.body.error.message);
+    } else if (err instanceof BodhiError) {
+      // Operational error (extension not found, network failure, timeout)
+      console.error(`Connection error [${err.code}]:`, err.message);
+    } else {
+      throw err; // Re-throw unexpected errors
     }
   }
 }
@@ -219,35 +215,21 @@ async function handleStream(model: string, prompt: string) {
 ### Common Stream Error Scenarios
 
 ```typescript
-// Extension not available (from extension client)
-// Error message: "Extension not detected"
+// Extension not available → BodhiError with code 'extension'
+// HTTP 404: Model not found → BodhiApiError with status 404
+// Network error → BodhiError with code 'network'
+// Request timeout → BodhiError with code 'timeout'
 
-// HTTP 404: Model not found
-// Error message: "HTTP 404: {\"error\":{\"message\":\"Model not found\",\"code\":\"model_not_found\"}}"
+import { BodhiError, BodhiApiError } from '@bodhiapp/bodhi-js-react';
 
-// Network error
-// Error message: "Network error: Failed to fetch"
-
-// Parse error message to extract details
-function parseStreamError(err: Error): {
-  type: 'http' | 'network' | 'unknown';
-  status?: number;
-  message: string;
-} {
-  const httpMatch = err.message.match(/^HTTP (\d+):/);
-  if (httpMatch) {
-    return {
-      type: 'http',
-      status: parseInt(httpMatch[1]),
-      message: err.message,
-    };
+function describeStreamError(err: unknown): string {
+  if (err instanceof BodhiApiError) {
+    return `HTTP ${err.status}: ${err.body.error.message}`;
   }
-
-  if (err.message.includes('Network') || err.message.includes('fetch')) {
-    return { type: 'network', message: err.message };
+  if (err instanceof BodhiError) {
+    return `[${err.code}] ${err.message}`;
   }
-
-  return { type: 'unknown', message: err.message };
+  return 'Unknown error';
 }
 ```
 

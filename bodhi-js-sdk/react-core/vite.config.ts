@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
         entry: {
           index: resolve(__dirname, 'src/index.ts'),
           'api/index': resolve(__dirname, 'src/api/index.ts'),
+          'api/openai': resolve(__dirname, 'src/api/openai.ts'),
         },
         name: 'BodhiReactCore',
         formats: ['es', 'cjs'],
@@ -36,8 +37,9 @@ export default defineConfig(({ mode }) => {
           'react-dom',
           '@bodhiapp/bodhi-js-core',
           '@bodhiapp/bodhi-js-core/api',
+          '@bodhiapp/bodhi-js-core/api/openai',
           '@bodhiapp/bodhi-js-core/types',
-          '@bodhiapp/ts-client',
+          /^@bodhiapp\/ts-client(\/.*)?$/,
           '@bodhiapp/bodhi-browser-types',
           '@bodhiapp/setup-modal-types',
         ],

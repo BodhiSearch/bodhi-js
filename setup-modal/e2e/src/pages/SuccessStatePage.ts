@@ -5,6 +5,7 @@
 
 import { type Page } from '@playwright/test';
 import { BaseModalPage } from './BaseModalPage.js';
+import { clickViaDispatch } from '../utils/clickViaDispatch.js';
 
 export class SuccessStatePage extends BaseModalPage {
   constructor(page: Page, iframeSelector?: string) {
@@ -169,14 +170,14 @@ export class SuccessStatePage extends BaseModalPage {
    * Click LNA connection radio to select LNA path
    */
   async selectLnaConnection(): Promise<void> {
-    await this.getLnaRadio().click();
+    await clickViaDispatch(this.getLnaRadio());
   }
 
   /**
    * Click Extension connection radio to select Extension path
    */
   async selectExtensionConnection(): Promise<void> {
-    await this.getExtensionRadio().click();
+    await clickViaDispatch(this.getExtensionRadio());
   }
 
   /**

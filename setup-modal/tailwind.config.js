@@ -1,5 +1,5 @@
 export default {
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  content: ['./index.html', './src/**/*.{ts,tsx}', '!./src/types/node_modules/**'],
   // Safelist classes that are assembled dynamically via variables in JSX
   // to ensure they are not purged by Tailwind's content scanner
   safelist: ['w-6', 'h-6', 'w-8', 'h-8'],

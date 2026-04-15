@@ -143,6 +143,20 @@ And in `index.html`, add a script to restore the path:
 </script>
 ```
 
+## Multi-Tenant Detection
+
+The server reports its deployment mode in `BackendServerState`. Check this to conditionally adjust your UI:
+
+```tsx
+const { clientState } = useBodhi();
+const deployment = clientState.server.deployment; // 'standalone' | 'multi_tenant' | null
+
+if (deployment === 'multi_tenant') {
+  // Show tenant selector, or use client_id from BackendServerState for routing
+  const clientId = clientState.server.client_id;
+}
+```
+
 ## Multi-Tenant Deployment
 
 Isolate storage and routing per tenant using `basePath`:

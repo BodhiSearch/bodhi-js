@@ -6,7 +6,7 @@
  * unwrapResponse - Utility to extract body or throw on error status
  */
 
-import type { OpenAiApiError } from '@bodhiapp/ts-client';
+import type { ErrorResponse } from '@bodhiapp/ts-client/openai';
 import type { ApiResponse } from './bodhiext';
 
 /**
@@ -50,10 +50,10 @@ export class BodhiError extends Error {
  */
 export class BodhiApiError extends BodhiError {
   readonly status: number;
-  readonly body: OpenAiApiError;
+  readonly body: ErrorResponse;
   readonly headers?: Record<string, string>;
 
-  constructor(status: number, body: OpenAiApiError, message: string, headers?: Record<string, string>) {
+  constructor(status: number, body: ErrorResponse, message: string, headers?: Record<string, string>) {
     super('api_error', message);
     this.status = status;
     this.body = body;
@@ -68,7 +68,7 @@ export class BodhiApiError extends BodhiError {
  */
 export function unwrapResponse<T>(response: ApiResponse<T>): T {
   if (response.status >= 400) {
-    const body = response.body as OpenAiApiError;
+    const body = response.body as ErrorResponse;
     const message = body?.error?.message || `HTTP ${response.status}`;
     throw new BodhiApiError(response.status, body, message, response.headers);
   }

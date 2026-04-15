@@ -2,6 +2,20 @@
 
 Complete client API surface. All methods accessed via `client` from `useBodhi()`.
 
+## Type Import Subpaths
+
+The SDK exposes two subpath imports for API types (re-exports from `@bodhiapp/ts-client`):
+
+```typescript
+// Bodhi management API types (apps, MCPs, access requests, server info)
+import type { ListMcpsResponse, BackendServerState } from '@bodhiapp/bodhi-js-react/api';
+
+// OpenAI-compatible API types (chat, models, embeddings)
+import type { ChatCompletionRequestMessage, CreateChatCompletionStreamResponse } from '@bodhiapp/bodhi-js-react/api/openai';
+```
+
+Same subpaths exist on all packages: `@bodhiapp/bodhi-js/api`, `@bodhiapp/bodhi-js-react-ext/api`, `@bodhiapp/bodhi-js-cli/api`, etc.
+
 ## Namespaced APIs (OpenAI-Compatible)
 
 ### client.chat.completions
@@ -192,10 +206,18 @@ interface RequestedResourcesV1 {
 
 // LoginOptionsBuilder — fluent builder (recommended):
 new LoginOptionsBuilder()
-  .setRole('scope_user_power_user')
-  .addMcpServer('https://mcp.exa.ai/mcp')
+  .setRole('scope_user_power_user')   // requestedRole(scope: UserScope)
+  .addMcpServer('https://mcp.exa.ai/mcp') // adds to mcp_servers
   .setFlowType('popup')
   .build() // → LoginOptions
+
+// AccessRequestBuilder — low-level builder (used by LoginOptionsBuilder):
+import { AccessRequestBuilder } from '@bodhiapp/bodhi-js-react';
+const body = new AccessRequestBuilder()
+  .requestedRole('scope_user_power_user')
+  .requested({ mcp_servers: [{ url: 'https://mcp.exa.ai/mcp' }] })
+  .addMcpServer('http://localhost:3001')  // adds individual MCP server
+  .build(); // → CreateAccessRequest
 
 // Logout and clear tokens
 await client.logout();
@@ -248,6 +270,38 @@ const state = await client.getServerState();
 // BackendServerState: { status, version, error, deployment?, client_id? }
 ```
 
+## Advanced Client Methods
+
+```typescript
+// Raw text stream — returns body as AsyncGenerator<string>
+const { status, headers, body } = await client.streamText(
+  method: string,
+  endpoint: string,
+  body?: unknown,
+  headers?: Record<string, string>,
+  auth?: boolean,
+);
+for await (const chunk of body) { /* chunk is a raw string */ }
+
+// Extension ext2ext request — only valid in extension mode
+import { isExtension } from '@bodhiapp/bodhi-js-react';
+if (client.getConnectionMode() === 'extension') {
+  const result = await client.sendExtRequest('ping', {});
+}
+
+// Async introspection — useful for debugging
+const info = await client.debug(); // Record<string, unknown>
+
+// Persistence — serialize current state for storage/restore
+const snapshot = client.serialize();
+
+// State change notifications — useful for CLI apps
+client.setStateCallback((state) => {
+  // Called whenever clientState or auth changes
+  saveToStorage(client.serialize());
+});
+```
+
 ## Key Types
 
 ### ApiResponseResult<T>
@@ -275,6 +329,9 @@ import {
   user: { sub, email, name, given_name, family_name, preferred_username } | null;
   accessToken: string | null;
   error: { message: string; type: string } | null;
+  refreshToken: string | null;
+  expiresAt: number | null;    // unix ms timestamp
+  isTokenRefresh: boolean;     // true when a token refresh is in flight
 }
 
 // Type guard

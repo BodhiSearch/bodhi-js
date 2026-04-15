@@ -187,7 +187,7 @@ Extensions use `chrome.identity.launchWebAuthFlow()` for OAuth:
 ### Automatic OAuth (Recommended)
 
 ```typescript
-import { useBodhi } from '@bodhiapp/bodhi-js-react';
+import { useBodhi } from '@bodhiapp/bodhi-js-react-ext';
 
 function LoginButton() {
   const { login, isAuthenticated } = useBodhi();
@@ -297,8 +297,7 @@ chrome.storage.session.get(['bodhi-js-sdk:ext:ext:ACCESS_TOKEN'], (result) => {
 ```typescript
 // popup.tsx
 import { useState } from 'react';
-import { ExtUIClient } from '@bodhiapp/bodhi-js-ext';
-import { BodhiProvider, useBodhi } from '@bodhiapp/bodhi-js-react';
+import { ExtUIClient, BodhiProvider, useBodhi } from '@bodhiapp/bodhi-js-react-ext';
 
 const client = new ExtUIClient('ext-client-id');
 
@@ -317,7 +316,7 @@ function ChatPopup() {
 
   const handleSubmit = async () => {
     setResponse('');
-    const stream = client.stream('/v1/chat/completions', {
+    const stream = client.chat.completions.create({
       model: 'gemma-3n-e4b-it',
       messages: [{ role: 'user', content: prompt }],
       stream: true,
@@ -357,8 +356,7 @@ export default Popup;
 
 ```typescript
 // options.tsx
-import { ExtUIClient } from '@bodhiapp/bodhi-js-ext';
-import { BodhiProvider, useBodhi } from '@bodhiapp/bodhi-js-react';
+import { ExtUIClient, BodhiProvider, useBodhi } from '@bodhiapp/bodhi-js-react-ext';
 
 const client = new ExtUIClient('ext-client-id');
 

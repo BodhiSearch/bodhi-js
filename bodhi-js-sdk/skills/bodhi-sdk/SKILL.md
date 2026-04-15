@@ -153,7 +153,7 @@ const {
   showSetup, // Opens setup wizard modal
   hideSetup,
   clientState, // { status, mode, extensionId, url, server, error }
-  auth, // { status, user, accessToken, error }
+  auth, // { status, user, accessToken, error, refreshToken, expiresAt, isTokenRefresh }
   setupState, // 'ready' | 'loading' | 'loaded'
 } = useBodhi();
 ```
@@ -325,18 +325,28 @@ const embedding = response.data[0].embedding; // number[]
 
 ## Error Handling
 
-```tsx
-import { isApiResultSuccess, isApiResultOperationError } from '@bodhiapp/bodhi-js-react';
+Use `instanceof` to discriminate errors. `BodhiApiError` (HTTP 4xx/5xx) extends `BodhiError` (operational: network, timeout, extension, auth):
 
-const result = await client.sendApiRequest('GET', '/v1/models');
-if (isApiResultSuccess(result)) {
-  console.log(result.body);
-} else if (isApiResultOperationError(result)) {
-  console.error(result.error.message, result.error.type);
+```tsx
+import { BodhiError, BodhiApiError, unwrapResponse } from '@bodhiapp/bodhi-js-react';
+
+// Pattern 1: unwrapResponse — throws BodhiApiError on status >= 400
+const result = await client.sendApiRequest('GET', '/bodhi/v1/info');
+const body = unwrapResponse(result); // throws BodhiApiError if error
+
+// Pattern 2: instanceof discrimination
+try {
+  const body = unwrapResponse(result);
+} catch (err) {
+  if (err instanceof BodhiApiError) {
+    console.error('HTTP error', err.status, err.body);
+  } else if (err instanceof BodhiError) {
+    console.error('Operational error', err.code, err.message);
+  }
 }
 ```
 
-For streaming, errors are thrown — use try/catch:
+For streaming, errors are thrown during iteration — use try/catch:
 
 ```tsx
 try {
@@ -344,7 +354,11 @@ try {
     /* ... */
   }
 } catch (err) {
-  console.error('Stream error:', err instanceof Error ? err.message : err);
+  if (err instanceof BodhiApiError) {
+    console.error('Stream HTTP error:', err.status);
+  } else if (err instanceof BodhiError) {
+    console.error('Stream error:', err.message);
+  }
 }
 ```
 

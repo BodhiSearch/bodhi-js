@@ -86,11 +86,17 @@ function ExtensionUI() {
 
 ### Quick Setup Props
 
+The `clientConfig` prop type differs between packages:
+
+- `@bodhiapp/bodhi-js-react` accepts `clientConfig?: WebUIClientParams`
+- `@bodhiapp/bodhi-js-react-ext` accepts `clientConfig?: ExtUIClientParams`
+
 ```typescript
 interface BodhiProviderProps {
-  authClientId: string; // Your OAuth client ID (required)
+  authClientId?: string; // Your OAuth client ID
+  client?: UIClient; // Pre-created client instance (alternative to authClientId)
   children: ReactNode; // Your app components
-  clientConfig?: ClientParams; // Optional custom configuration
+  clientConfig?: WebUIClientParams; // Optional custom configuration (web) / ExtUIClientParams (ext)
   modalHtmlPath?: string; // Path to setup modal HTML
   handleCallback?: boolean; // Auto-handle OAuth callback (default: true)
   callbackPath?: string; // OAuth callback path (auto-computed from basePath if not provided)
@@ -101,19 +107,20 @@ interface BodhiProviderProps {
 
 **Prop Details**:
 
-| Prop             | Type            | Default                                | Description                                                                                                              |
-| ---------------- | --------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `authClientId`   | `string`        | Required                               | Your OAuth client ID                                                                                                     |
-| `children`       | `ReactNode`     | Required                               | Your application components                                                                                              |
-| `clientConfig`   | `ClientParams?` | undefined                              | Optional custom client configuration                                                                                     |
-| `handleCallback` | `boolean?`      | `true`                                 | Automatically handle OAuth redirect callbacks                                                                            |
-| `callbackPath`   | `string?`       | Auto-computed (`${basePath}/callback`) | OAuth callback path. Auto-computed from basePath if not provided. When provided, used as-is (include basePath if needed) |
-| `basePath`       | `string?`       | `/`                                    | Application base path for routing                                                                                        |
-| `logLevel`       | `LogLevel?`     | `warn`                                 | Logging verbosity                                                                                                        |
+| Prop             | Type                                        | Default                                | Description                                                                                                              |
+| ---------------- | ------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `authClientId`   | `string?`                                   | undefined                              | Your OAuth client ID (used to auto-create client)                                                                        |
+| `client`         | `UIClient?`                                 | undefined                              | Pre-created client instance (alternative to authClientId)                                                                |
+| `children`       | `ReactNode`                                 | Required                               | Your application components                                                                                              |
+| `clientConfig`   | `WebUIClientParams?` / `ExtUIClientParams?` | undefined                              | Optional custom client configuration                                                                                     |
+| `handleCallback` | `boolean?`                                  | `true`                                 | Automatically handle OAuth redirect callbacks                                                                            |
+| `callbackPath`   | `string?`                                   | Auto-computed (`${basePath}/callback`) | OAuth callback path. Auto-computed from basePath if not provided. When provided, used as-is (include basePath if needed) |
+| `basePath`       | `string?`                                   | `/`                                    | Application base path for routing                                                                                        |
+| `logLevel`       | `LogLevel?`                                 | `warn`                                 | Logging verbosity                                                                                                        |
 
 ### Advanced: Custom Client Configuration
 
-If you need custom client configuration, you can pass a `clientConfig` object:
+If you need custom client configuration, you can pass a `clientConfig` object (type is `WebUIClientParams` for web, `ExtUIClientParams` for extension):
 
 ```typescript
 import { BodhiProvider } from '@bodhiapp/bodhi-js-react';
@@ -121,7 +128,6 @@ import { BodhiProvider } from '@bodhiapp/bodhi-js-react';
 <BodhiProvider
   authClientId="your-client-id"
   clientConfig={{
-    redirectUri: 'https://myapp.com/callback',
     basePath: '/tenant-123',
     logLevel: 'debug',
   }}
@@ -136,7 +142,6 @@ Or use the dependency injection pattern for full control:
 import { BodhiProvider, WebUIClient } from '@bodhiapp/bodhi-js-react';
 
 const client = new WebUIClient('client-id', {
-  redirectUri: 'https://myapp.com/callback',
   basePath: '/tenant-123',
 });
 
@@ -186,7 +191,7 @@ interface BodhiContext {
   isAuthLoading: boolean; // Auth operation in progress
 
   // Setup modal
-  setupState: SetupState; // 'ready' | 'loading' | 'loaded'
+  setupState: 'ready' | 'loading' | 'loaded'; // Modal lifecycle state
   showSetup: () => Promise<void>; // Open setup wizard
   hideSetup: () => void; // Close setup wizard
 

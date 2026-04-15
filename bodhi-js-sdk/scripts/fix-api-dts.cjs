@@ -12,45 +12,66 @@ const fixes = [
   {
     file: 'core/dist/api/index.d.ts',
     content: `/**
- * Re-export all OpenAI-compatible types from @bodhiapp/ts-client
- *
- * Usage:
- * import type { CreateChatCompletionRequest, Model } from '@bodhiapp/bodhi-js-core/api';
+ * Re-export BodhiApp management API types.
+ * For OpenAI-compatible types use '@bodhiapp/bodhi-js-core/api/openai'.
  */
 export * from '@bodhiapp/ts-client';
 `,
   },
   {
+    file: 'core/dist/api/openai.d.ts',
+    content: `/**
+ * Re-export OpenAI-compatible API types.
+ */
+export * from '@bodhiapp/ts-client/openai';
+`,
+  },
+  {
     file: 'react-core/dist/api/index.d.ts',
     content: `/**
- * Re-export all OpenAI-compatible types from @bodhiapp/bodhi-js-core/api
- *
- * Usage:
- * import type { CreateChatCompletionRequest, Model } from '@bodhiapp/bodhi-js-react-core/api';
+ * Re-export management API types from @bodhiapp/bodhi-js-core/api.
  */
 export * from '@bodhiapp/bodhi-js-core/api';
+`,
+  },
+  {
+    file: 'react-core/dist/api/openai.d.ts',
+    content: `/**
+ * Re-export OpenAI API types from @bodhiapp/bodhi-js-core/api/openai.
+ */
+export * from '@bodhiapp/bodhi-js-core/api/openai';
 `,
   },
   {
     file: 'react/dist/api/index.d.ts',
     content: `/**
- * Re-export all OpenAI-compatible types from @bodhiapp/bodhi-js-core/api
- *
- * Usage:
- * import type { CreateChatCompletionRequest, Model } from '@bodhiapp/bodhi-js-react/api';
+ * Re-export management API types from @bodhiapp/bodhi-js-core/api.
  */
 export * from '@bodhiapp/bodhi-js-core/api';
 `,
   },
   {
+    file: 'react/dist/api/openai.d.ts',
+    content: `/**
+ * Re-export OpenAI API types from @bodhiapp/bodhi-js-core/api/openai.
+ */
+export * from '@bodhiapp/bodhi-js-core/api/openai';
+`,
+  },
+  {
     file: 'react-ext/dist/api/index.d.ts',
     content: `/**
- * Re-export all OpenAI-compatible types from @bodhiapp/bodhi-js-core/api
- *
- * Usage:
- * import type { CreateChatCompletionRequest, Model } from '@bodhiapp/bodhi-js-react-ext/api';
+ * Re-export management API types from @bodhiapp/bodhi-js-core/api.
  */
 export * from '@bodhiapp/bodhi-js-core/api';
+`,
+  },
+  {
+    file: 'react-ext/dist/api/openai.d.ts',
+    content: `/**
+ * Re-export OpenAI API types from @bodhiapp/bodhi-js-core/api/openai.
+ */
+export * from '@bodhiapp/bodhi-js-core/api/openai';
 `,
   },
 ];

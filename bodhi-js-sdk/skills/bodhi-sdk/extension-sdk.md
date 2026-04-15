@@ -138,7 +138,18 @@ for await (const chunk of stream) {
 
 ## Extension ↔ Extension Communication (ext2ext)
 
-Direct messaging to the Bodhi Browser extension:
+Direct messaging to the Bodhi Browser extension using `sendExtRequest`. Always guard with a mode check — this method throws if called in direct mode:
+
+```typescript
+import { ExtUIClient } from '@bodhiapp/bodhi-js-ext';
+
+// Mode-guarded ext2ext request
+if (client.getConnectionMode() === 'extension') {
+  const result = await client.sendExtRequest('ping', {});
+}
+```
+
+Low-level direct ext2ext via `BodhiExtClient`:
 
 ```typescript
 import { BodhiExtClient } from '@bodhiapp/bodhi-js-ext';
@@ -146,6 +157,15 @@ import { BodhiExtClient } from '@bodhiapp/bodhi-js-ext';
 const extClient = new BodhiExtClient();
 await extClient.init();
 const result = await extClient.sendExtRequest('ping', {});
+```
+
+## Debugging Extension State
+
+Use `client.debug()` for async introspection of internal client state:
+
+```typescript
+const info = await client.debug();
+console.log(info); // Record<string, unknown> — connection mode, extension ID, token expiry, etc.
 ```
 
 ## Debugging

@@ -32,7 +32,7 @@ export default defineConfig(({ mode }) => {
         external: [
           '@bodhiapp/bodhi-js-core',
           '@bodhiapp/bodhi-js-core/mcp',
-          '@bodhiapp/ts-client',
+          /^@bodhiapp\/ts-client(\/.*)?$/,
           '@bodhiapp/bodhi-browser-types',
           '@modelcontextprotocol/sdk',
           /^@modelcontextprotocol\/sdk\//,
