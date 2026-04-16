@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-react-core",
-  "version": "0.0.34-dev",
+  "version": "0.0.35-dev",
   "description": "Core React bindings for Bodhi Browser SDK (dependency injection)",
   "type": "module",
   "main": "dist/bodhi-react-core.cjs.js",
@@ -20,6 +20,16 @@
       "types": "./dist/api/openai.d.ts",
       "import": "./dist/api/openai.esm.js",
       "require": "./dist/api/openai.cjs.js"
+    },
+    "./api/anthropic": {
+      "types": "./dist/api/anthropic.d.ts",
+      "import": "./dist/api/anthropic.esm.js",
+      "require": "./dist/api/anthropic.cjs.js"
+    },
+    "./api/gemini": {
+      "types": "./dist/api/gemini.d.ts",
+      "import": "./dist/api/gemini.esm.js",
+      "require": "./dist/api/gemini.cjs.js"
     }
   },
   "files": [
@@ -50,7 +60,7 @@
     "@bodhiapp/bodhi-browser-types": "file:../../bodhi-browser-ext/src/types",
     "@bodhiapp/setup-modal-types": "file:../../setup-modal/src/types",
     "@bodhiapp/bodhi-js-core": "file:../core",
-    "@bodhiapp/ts-client": "0.1.29"
+    "@bodhiapp/ts-client": "0.1.31"
   },
   "peerDependencies": {
     "react": "^18.3.0 || ^19.0.0"

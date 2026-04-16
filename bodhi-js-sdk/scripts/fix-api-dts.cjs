@@ -27,6 +27,22 @@ export * from '@bodhiapp/ts-client/openai';
 `,
   },
   {
+    file: 'core/dist/api/anthropic.d.ts',
+    content: `/**
+ * Re-export Anthropic-compatible API types.
+ */
+export * from '@bodhiapp/ts-client/anthropic';
+`,
+  },
+  {
+    file: 'core/dist/api/gemini.d.ts',
+    content: `/**
+ * Re-export Gemini-compatible API types.
+ */
+export * from '@bodhiapp/ts-client/gemini';
+`,
+  },
+  {
     file: 'react-core/dist/api/index.d.ts',
     content: `/**
  * Re-export management API types from @bodhiapp/bodhi-js-core/api.
@@ -40,6 +56,22 @@ export * from '@bodhiapp/bodhi-js-core/api';
  * Re-export OpenAI API types from @bodhiapp/bodhi-js-core/api/openai.
  */
 export * from '@bodhiapp/bodhi-js-core/api/openai';
+`,
+  },
+  {
+    file: 'react-core/dist/api/anthropic.d.ts',
+    content: `/**
+ * Re-export Anthropic API types from @bodhiapp/bodhi-js-core/api/anthropic.
+ */
+export * from '@bodhiapp/bodhi-js-core/api/anthropic';
+`,
+  },
+  {
+    file: 'react-core/dist/api/gemini.d.ts',
+    content: `/**
+ * Re-export Gemini API types from @bodhiapp/bodhi-js-core/api/gemini.
+ */
+export * from '@bodhiapp/bodhi-js-core/api/gemini';
 `,
   },
   {
@@ -59,6 +91,22 @@ export * from '@bodhiapp/bodhi-js-core/api/openai';
 `,
   },
   {
+    file: 'react/dist/api/anthropic.d.ts',
+    content: `/**
+ * Re-export Anthropic API types from @bodhiapp/bodhi-js-core/api/anthropic.
+ */
+export * from '@bodhiapp/bodhi-js-core/api/anthropic';
+`,
+  },
+  {
+    file: 'react/dist/api/gemini.d.ts',
+    content: `/**
+ * Re-export Gemini API types from @bodhiapp/bodhi-js-core/api/gemini.
+ */
+export * from '@bodhiapp/bodhi-js-core/api/gemini';
+`,
+  },
+  {
     file: 'react-ext/dist/api/index.d.ts',
     content: `/**
  * Re-export management API types from @bodhiapp/bodhi-js-core/api.
@@ -72,6 +120,22 @@ export * from '@bodhiapp/bodhi-js-core/api';
  * Re-export OpenAI API types from @bodhiapp/bodhi-js-core/api/openai.
  */
 export * from '@bodhiapp/bodhi-js-core/api/openai';
+`,
+  },
+  {
+    file: 'react-ext/dist/api/anthropic.d.ts',
+    content: `/**
+ * Re-export Anthropic API types from @bodhiapp/bodhi-js-core/api/anthropic.
+ */
+export * from '@bodhiapp/bodhi-js-core/api/anthropic';
+`,
+  },
+  {
+    file: 'react-ext/dist/api/gemini.d.ts',
+    content: `/**
+ * Re-export Gemini API types from @bodhiapp/bodhi-js-core/api/gemini.
+ */
+export * from '@bodhiapp/bodhi-js-core/api/gemini';
 `,
   },
 ];

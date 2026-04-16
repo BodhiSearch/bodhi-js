@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-core",
-  "version": "0.0.34-dev",
+  "version": "0.0.35-dev",
   "description": "Core types and interfaces for Bodhi Browser SDK",
   "type": "module",
   "main": "dist/bodhi-core.cjs.js",
@@ -29,6 +29,16 @@
       "types": "./dist/api/openai.d.ts",
       "import": "./dist/api/openai.esm.js",
       "require": "./dist/api/openai.cjs.js"
+    },
+    "./api/anthropic": {
+      "types": "./dist/api/anthropic.d.ts",
+      "import": "./dist/api/anthropic.esm.js",
+      "require": "./dist/api/anthropic.cjs.js"
+    },
+    "./api/gemini": {
+      "types": "./dist/api/gemini.d.ts",
+      "import": "./dist/api/gemini.esm.js",
+      "require": "./dist/api/gemini.cjs.js"
     },
     "./mcp": {
       "types": "./dist/mcp.d.ts",
@@ -77,7 +87,7 @@
   "dependencies": {
     "@bodhiapp/bodhi-browser-types": "file:../../bodhi-browser-ext/src/types",
     "@bodhiapp/setup-modal-types": "file:../../setup-modal/src/types",
-    "@bodhiapp/ts-client": "0.1.29",
+    "@bodhiapp/ts-client": "0.1.31",
     "ua-parser-js": "^1.0.40"
   },
   "devDependencies": {

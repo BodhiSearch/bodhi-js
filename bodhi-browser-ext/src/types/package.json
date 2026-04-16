@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-browser-types",
-  "version": "0.0.34-dev",
+  "version": "0.0.35-dev",
   "description": "TypeScript types for Bodhi Browser Extension",
   "type": "module",
   "main": "dist/index.js",
@@ -19,7 +19,7 @@
     "clean": "rimraf dist"
   },
   "peerDependencies": {
-    "@bodhiapp/ts-client": "0.1.29"
+    "@bodhiapp/ts-client": "0.1.31"
   },
   "devDependencies": {
     "rimraf": "^6.0.1",

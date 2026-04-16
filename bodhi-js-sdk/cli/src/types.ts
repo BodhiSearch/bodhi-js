@@ -1,5 +1,5 @@
-import type { IStorage, InitialTokens, LogLevel, UserScope } from '@bodhiapp/bodhi-js-core';
-import type { RequestedResourcesV1 } from '@bodhiapp/ts-client';
+import type { IStorage, InitialTokens, LogLevel } from '@bodhiapp/bodhi-js-core';
+import type { RequestedResourcesV1, UserScope } from '@bodhiapp/bodhi-js-core/api';
 
 /**
  * Configuration for CliClient

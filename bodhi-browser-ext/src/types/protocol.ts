@@ -6,7 +6,7 @@
  * Used primarily by background/*, content.ts files.
  */
 
-import type { ErrorResponse } from '@bodhiapp/ts-client/openai';
+import type { BodhiErrorResponse } from '@bodhiapp/ts-client';
 import type { ApiResponse, ServerStateInfo } from './bodhiext';
 
 //-----------------------------------------------------------------------------------
@@ -22,10 +22,10 @@ function isNonNullObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Validate OpenAI API error body structure
+ * Validate Bodhi API error body structure
  * { error: { message: string, type: string } }
  */
-export function isOpenAiApiErrorBody(body: unknown): body is ErrorResponse {
+export function isBodhiErrorResponseBody(body: unknown): body is BodhiErrorResponse {
   return (
     isNonNullObject(body) &&
     'error' in body &&
@@ -85,7 +85,7 @@ export interface ApiRequestMessage<TReq = unknown> {
 
 /**
  * Operation-level error response (network unreachable, timeout, extension error)
- * NOT an API error (those come through ApiResponse with ErrorResponse body)
+ * NOT an API error (those come through ApiResponse with BodhiErrorResponse body)
  * This is a response type, not a thrown error
  */
 export interface OperationErrorResponse {
@@ -125,10 +125,10 @@ export function isOperationErrorResponse(msg: ApiResponseMessage): msg is Operat
 
 /**
  * Type guard to check if response is an API error (4xx/5xx)
- * Narrows body type to ErrorResponse
+ * Narrows body type to BodhiErrorResponse
  */
-export function isApiErrorResponse<T>(response: ApiResponse<T>): response is ApiResponse<T> & { body: ErrorResponse; status: number } {
-  return isNonNullObject(response) && typeof response.status === 'number' && response.status >= 400 && isOpenAiApiErrorBody(response.body);
+export function isApiErrorResponse<T>(response: ApiResponse<T>): response is ApiResponse<T> & { body: BodhiErrorResponse; status: number } {
+  return isNonNullObject(response) && typeof response.status === 'number' && response.status >= 400 && isBodhiErrorResponseBody(response.body);
 }
 
 /**
@@ -160,7 +160,7 @@ export interface StreamChunkMessage<T = unknown> {
 export interface StreamApiErrorMessage {
   type: typeof MESSAGE_TYPES.STREAM_API_ERROR;
   requestId: string;
-  response: ApiResponse<ErrorResponse>;
+  response: ApiResponse<BodhiErrorResponse>;
 }
 
 /**

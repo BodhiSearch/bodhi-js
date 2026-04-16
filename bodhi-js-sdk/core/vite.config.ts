@@ -14,6 +14,8 @@ export default defineConfig(({ mode }) => {
           index: resolve(__dirname, 'src/index.ts'),
           'api/index': resolve(__dirname, 'src/api/index.ts'),
           'api/openai': resolve(__dirname, 'src/api/openai.ts'),
+          'api/anthropic': resolve(__dirname, 'src/api/anthropic.ts'),
+          'api/gemini': resolve(__dirname, 'src/api/gemini.ts'),
           'types/index': resolve(__dirname, 'src/types/index.ts'),
           mcp: resolve(__dirname, 'src/mcp.ts'),
         },

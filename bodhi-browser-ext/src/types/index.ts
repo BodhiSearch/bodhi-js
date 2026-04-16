@@ -3,8 +3,8 @@
 // between web pages, external extensions, and bodhi-browser-ext
 //
 // NOTE: API types are NOT re-exported. Import them directly:
-//   - Management types (PingResponse, AppInfo, AppStatus, ...) from '@bodhiapp/ts-client'
-//   - OpenAI-compatible types (CreateChatCompletionRequest, ErrorResponse, ...)
+//   - Management types (PingResponse, AppInfo, AppStatus, BodhiErrorResponse, ...) from '@bodhiapp/ts-client'
+//   - OpenAI-compatible types (CreateChatCompletionRequest, ...)
 //     from '@bodhiapp/ts-client/openai'
 
 //-----------------------------------------------------------------------------------
@@ -58,7 +58,7 @@ export {
   isStreamApiError,
   isStreamError,
   isExtError,
-  isOpenAiApiErrorBody,
+  isBodhiErrorResponseBody,
   isOperationErrorStructure,
 } from './protocol';
 

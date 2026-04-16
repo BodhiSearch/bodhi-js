@@ -1,10 +1,10 @@
 // Import types from local modules
 import type {
   AccessRequestStatusResponse,
+  BodhiErrorResponse,
   CreateAccessRequest,
   CreateAccessRequestResponse,
 } from '@bodhiapp/ts-client';
-import type { ErrorResponse } from '@bodhiapp/ts-client/openai';
 import {
   DISCOVERY_ATTEMPTS,
   DISCOVERY_ATTEMPT_TIMEOUT,
@@ -1421,7 +1421,7 @@ export class BodhiExtClient {
             uiPort.postMessage({
               type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_API_ERROR,
               requestId,
-              response: response as ApiResponse<ErrorResponse>,
+              response: response as ApiResponse<BodhiErrorResponse>,
             } satisfies ExtClientStreamApiErrorMessage);
             return false;
           } else if (responseBody?.done) {
@@ -1446,7 +1446,7 @@ export class BodhiExtClient {
           uiPort.postMessage({
             type: EXT2EXT_CLIENT_MESSAGE_TYPES.EXT2EXT_CLIENT_STREAM_API_ERROR,
             requestId,
-            response: streamMessage.response as ApiResponse<ErrorResponse>,
+            response: streamMessage.response as ApiResponse<BodhiErrorResponse>,
           } satisfies ExtClientStreamApiErrorMessage);
           return false;
         } else if (isStreamError(streamMessage)) {

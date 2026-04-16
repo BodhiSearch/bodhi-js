@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-ext",
-  "version": "0.0.34-dev",
+  "version": "0.0.35-dev",
   "description": "Extension SDK for Bodhi Browser - chrome.runtime communication",
   "type": "module",
   "main": "dist/bodhi-ext.cjs.js",
@@ -39,7 +39,7 @@
   "dependencies": {
     "@bodhiapp/bodhi-browser-types": "file:../../bodhi-browser-ext/src/types",
     "@bodhiapp/bodhi-js-core": "file:../core",
-    "@bodhiapp/ts-client": "0.1.29"
+    "@bodhiapp/ts-client": "0.1.31"
   },
   "devDependencies": {
     "@eslint/js": "^9.23.0",

@@ -82,6 +82,7 @@ export async function testServerConnectivity(
 
 import type {
   AccessRequestStatusResponse,
+  BodhiErrorResponse,
   CreateAccessRequest,
   CreateAccessRequestResponse,
   DeploymentMode,
@@ -466,10 +467,9 @@ export abstract class DirectClientBase implements IDirectClient {
     }
 
     if (!response.ok) {
-      // Try to parse error body as OpenAI API error format
-      let errorBody: any;
+      let errorBody: BodhiErrorResponse;
       try {
-        errorBody = await response.json();
+        errorBody = (await response.json()) as BodhiErrorResponse;
       } catch {
         errorBody = { error: { message: `HTTP ${response.status}`, type: 'api_error' } };
       }

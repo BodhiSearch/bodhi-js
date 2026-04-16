@@ -7,20 +7,20 @@
 
 import { BodhiError, BodhiApiError } from '@bodhiapp/bodhi-browser-types';
 import type { BodhiErrorCode } from '@bodhiapp/bodhi-browser-types';
-import type { ErrorResponse } from '@bodhiapp/ts-client/openai';
+import type { BodhiErrorResponse } from '@bodhiapp/ts-client';
 
 /**
  * Create API error (HTTP 4xx/5xx from server)
  * Extracts Error.message from body.error.message automatically.
  *
  * @param status - HTTP status code
- * @param body - Error body from server (OpenAI error format)
+ * @param body - Error body from server (Bodhi error format, superset of OpenAI)
  * @param headers - Optional response headers
  * @returns BodhiApiError instance
  */
 export const createApiError = (
   status: number,
-  body: ErrorResponse,
+  body: BodhiErrorResponse,
   headers?: Record<string, string>
 ): BodhiApiError => {
   const message = body?.error?.message || `HTTP ${status}`;

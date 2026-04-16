@@ -24,7 +24,7 @@
     "typecheck": "npm run typecheck --workspaces"
   },
   "devDependencies": {
-    "@bodhiapp/ts-client": "0.1.29",
+    "@bodhiapp/ts-client": "0.1.31",
     "prettier": "^3.4.2",
     "typescript": "^5.8.3"
   },

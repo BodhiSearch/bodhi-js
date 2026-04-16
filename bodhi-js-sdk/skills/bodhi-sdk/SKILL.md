@@ -38,6 +38,30 @@ Apps don't get automatic access to a user's LLMs or MCPs. Instead:
 
 For extension development, see [extension-sdk.md](./extension-sdk.md).
 
+## Type Import Paths
+
+The SDK mirrors `@bodhiapp/ts-client`'s subpath layout. Never add `@bodhiapp/ts-client` as a direct dependency — every type you need is re-exported via the SDK package you already depend on.
+
+| Import path                              | Contents                                                                                                                                                                          |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@bodhiapp/bodhi-js-react`               | App-facing types/classes: `BodhiProvider`, `useBodhi`, `BodhiError`, `BodhiApiError`, `unwrapResponse`, `AuthState`, `ClientState`, `UIClient`, `LoginOptions`, state/type guards |
+| `@bodhiapp/bodhi-js-react/api`           | All ts-client management types: `ApiFormat`, `UserScope`, `FlowType`, `RequestedResourcesV1`, `PaginatedAliasResponse`, `AliasResponse`, `Alias`, `ApiModel`, `Mcp`, …            |
+| `@bodhiapp/bodhi-js-react/api/openai`    | OpenAI-compat spec types                                                                                                                                                          |
+| `@bodhiapp/bodhi-js-react/api/anthropic` | Anthropic spec types                                                                                                                                                              |
+| `@bodhiapp/bodhi-js-react/api/gemini`    | Gemini spec types                                                                                                                                                                 |
+
+(Same subpath layout for `@bodhiapp/bodhi-js-react-ext`, `@bodhiapp/bodhi-js`, `@bodhiapp/bodhi-js-ext`, `@bodhiapp/bodhi-js-core`.)
+
+```ts
+import { BodhiProvider, useBodhi, BodhiError } from '@bodhiapp/bodhi-js-react';
+import type { ApiFormat, PaginatedAliasResponse } from '@bodhiapp/bodhi-js-react/api';
+import type { UserScope, FlowType, RequestedResourcesV1 } from '@bodhiapp/bodhi-js-react/api';
+import type { components as Anthropic } from '@bodhiapp/bodhi-js-react/api/anthropic';
+import type { components as Gemini } from '@bodhiapp/bodhi-js-react/api/gemini';
+```
+
+**Smell**: if you find yourself adding `@bodhiapp/ts-client` to your `package.json` or redefining a ts-client type locally, stop — the type is reachable via one of the `/api/*` subpaths above. If it genuinely is missing, file an SDK issue.
+
 ## Quick Start (React + Vite)
 
 ### 1. Install

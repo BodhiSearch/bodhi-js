@@ -62,9 +62,6 @@ export type {
   LoginOptions,
   LoginProgressCallback,
   LoginProgressStage,
-  UserScope,
-  FlowType,
-  RequestedResourcesV1,
 } from '@bodhiapp/bodhi-js-core';
 
 // Builders

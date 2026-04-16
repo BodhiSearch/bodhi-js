@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-react-ext",
-  "version": "0.0.34-dev",
+  "version": "0.0.35-dev",
   "description": "React bindings for Bodhi Browser SDK with ExtUIClient preset (Chrome Extension)",
   "type": "module",
   "main": "dist/bodhi-react-ext.cjs.js",
@@ -20,6 +20,16 @@
       "types": "./dist/api/openai.d.ts",
       "import": "./dist/api/openai.esm.js",
       "require": "./dist/api/openai.cjs.js"
+    },
+    "./api/anthropic": {
+      "types": "./dist/api/anthropic.d.ts",
+      "import": "./dist/api/anthropic.esm.js",
+      "require": "./dist/api/anthropic.cjs.js"
+    },
+    "./api/gemini": {
+      "types": "./dist/api/gemini.d.ts",
+      "import": "./dist/api/gemini.esm.js",
+      "require": "./dist/api/gemini.cjs.js"
     },
     "./mcp": {
       "types": "./dist/mcp.d.ts",

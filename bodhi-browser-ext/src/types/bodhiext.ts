@@ -5,8 +5,8 @@
  * Used primarily by inject.ts to create the window.bodhiext API surface.
  */
 
-import type { AppStatus, PingResponse } from '@bodhiapp/ts-client';
-import type { ErrorResponse, CreateChatCompletionRequest, CreateChatCompletionResponse, CreateChatCompletionStreamResponse } from '@bodhiapp/ts-client/openai';
+import type { AppStatus, BodhiErrorResponse, PingResponse } from '@bodhiapp/ts-client';
+import type { CreateChatCompletionRequest, CreateChatCompletionResponse, CreateChatCompletionStreamResponse } from '@bodhiapp/ts-client/openai';
 
 //-----------------------------------------------------------------------------------
 // HTTP RESPONSE TYPES
@@ -17,7 +17,7 @@ import type { ErrorResponse, CreateChatCompletionRequest, CreateChatCompletionRe
  * Use isApiErrorResponse() to narrow the type based on status
  */
 export interface ApiResponse<T = unknown> {
-  body: T | ErrorResponse;
+  body: T | BodhiErrorResponse;
   status: number;
   headers: Record<string, string>;
 }
@@ -172,7 +172,7 @@ export interface BodhiExtPublicApi {
    * Simple health check to verify extension connectivity.
    *
    * Returns ApiResponse - caller should check status to determine success/error.
-   * On success (2xx), body is PingResponse. On error (4xx/5xx), body is ErrorResponse.
+   * On success (2xx), body is PingResponse. On error (4xx/5xx), body is BodhiErrorResponse.
    *
    * @returns Promise resolving to ApiResponse<PingResponse>
    */
