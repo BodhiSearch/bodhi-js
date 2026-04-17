@@ -229,8 +229,8 @@ type ClientContextStatus =
   | 'not-initialized' // Client not yet created
   | 'initializing' // client.init() in progress
   | 'extension-not-found' // Extension mode - extension not detected
-  | 'direct-not-connected' // Direct mode - URL not configured
-  | 'ready'; // Ready for API calls
+  | 'direct-not-connected' // Direct mode - URL unset, OR server.status is 'not-reachable'/'not-connected'
+  | 'ready'; // Ready for API calls (extension mode: handle present; direct mode: URL committed AND server responded)
 ```
 
 ### Comparing SDK ClientState vs React ClientContextState
@@ -280,7 +280,7 @@ The `useBodhi()` hook provides computed boolean properties for common state chec
 
 ```typescript
 const {
-  isReady, // Client has extension handle or direct URL configured
+  isReady, // Ready for API calls: extension mode needs a handle; direct mode needs URL committed AND server reachable
   isServerReady, // Server status is 'ready' (operational)
   isOverallReady, // Both client AND server ready (most common check)
   isInitializing, // client.init() in progress

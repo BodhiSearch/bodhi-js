@@ -351,6 +351,9 @@ import { isAuthenticated } from '@bodhiapp/bodhi-js-react';
 }
 ```
 
+**Direct mode status derivation** — `status === 'direct-not-connected'` when any of:
+`url === null`, or `server.status === 'not-reachable'` (probe failed), or `server.status === 'not-connected'` (never probed). Otherwise `'ready'`. This ensures consumers that auto-open setup via `status === 'direct-not-connected'` also trigger when setup-modal-v2's eager auto-probe fails against an offline server.
+
 ### BackendServerState
 
 ```typescript

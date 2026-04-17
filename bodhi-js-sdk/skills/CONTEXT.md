@@ -43,7 +43,7 @@
 - hideSetup(): void
 - isAuthenticated: boolean (auth.status === 'authenticated')
 - canLogin: boolean (isReady && !isAuthLoading)
-- isReady: boolean (clientState.status === 'ready')
+- isReady: boolean (clientState.status === 'ready'; in direct mode also requires server.status not 'not-reachable'/'not-connected')
 - isServerReady: boolean (clientState.server.status === 'ready')
 - isOverallReady: boolean (isReady && isServerReady)
 - isInitializing: boolean (clientState.status === 'initializing')

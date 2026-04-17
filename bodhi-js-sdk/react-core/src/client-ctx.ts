@@ -86,7 +86,12 @@ export function clientStateToContextState(state: ClientState): ClientContextStat
       error: state.server.error,
     };
   } else {
-    const status: ClientContextStatus = state.url === null ? 'direct-not-connected' : 'ready'; // Single ready status
+    const status: ClientContextStatus =
+      state.url === null ||
+      state.server.status === 'not-reachable' ||
+      state.server.status === 'not-connected'
+        ? 'direct-not-connected'
+        : 'ready';
 
     return {
       status,

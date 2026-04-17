@@ -145,15 +145,37 @@ Extension mode but extension not detected:
 
 ### direct-not-connected
 
-Direct mode but no server URL configured:
+Direct mode where the client is not ready to call APIs. Produced when:
+
+- `url === null` (no server URL configured — setup never committed), OR
+- `server.status === 'not-reachable'` (auto-probe committed URL but server did not respond), OR
+- `server.status === 'not-connected'` (URL committed but not yet probed — e.g., transient during reload before async server-state refresh completes).
+
+Consumers typically use this status to auto-open the setup modal and disable login buttons.
 
 ```typescript
+// No URL configured
 {
   status: 'direct-not-connected',
   mode: 'direct',
   extensionId: null,
   url: null,
   server: { status: 'not-connected', version: null, deployment: null, client_id: null, error: null }
+}
+
+// URL committed by V2 auto-probe, but server not running
+{
+  status: 'direct-not-connected',
+  mode: 'direct',
+  extensionId: null,
+  url: 'http://localhost:1135',
+  server: {
+    status: 'not-reachable',
+    version: null,
+    deployment: null,
+    client_id: null,
+    error: { message: 'server is not reachable on given url', type: 'network_error' }
+  }
 }
 ```
 
@@ -308,14 +330,16 @@ not-initialized
     ↓ (client created)
 initializing
     ↓ (init() called)
-direct-not-connected (if no URL)
+direct-not-connected (if no URL, or URL committed but server not-reachable/not-connected)
     OR
-ready (if URL configured)
-    ↓ (server check)
+ready (URL committed AND server responded: ready/setup/resource_admin/error)
+    ↓ (server check refines server.status)
 ready + server: ready
     OR
 ready + server: setup (needs configuration)
 ```
+
+Note: with setup-modal-v2's eager auto-probe, a failed probe commits the URL but leaves `server.status === 'not-reachable'` — the mapping produces `'direct-not-connected'`, not `'ready'`, so downstream consumers (setup-modal auto-open, login-button gating) behave correctly.
 
 ## Checking State
 
