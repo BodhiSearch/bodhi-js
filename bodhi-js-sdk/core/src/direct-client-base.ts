@@ -151,6 +151,7 @@ export abstract class DirectClientBase implements IDirectClient {
   protected state: DirectState = DIRECT_STATE_NOT_INITIALIZED;
   private onStateChange: StateChangeCallback;
   private refreshPromise: Promise<string | null> | null = null;
+  private initPromise: Promise<DirectState> | null = null;
   private apiTimeoutMs: number;
   private initialTokens: InitialTokens | undefined;
 
@@ -211,6 +212,10 @@ export abstract class DirectClientBase implements IDirectClient {
 
     // IDEMPOTENCY: If already initialized with same URL and not testing, skip
     if (this.serverUrl && this.serverUrl === serverUrl && !params.testConnection) {
+      if (this.initPromise && params.selectedConnection) {
+        this.logger.debug('Init in-flight for same URL, awaiting existing init');
+        return this.initPromise;
+      }
       this.logger.debug('Already initialized with serverUrl, skipping init');
       return this.state;
     }
@@ -225,41 +230,47 @@ export abstract class DirectClientBase implements IDirectClient {
     this.logger.info('Initializing with serverUrl:', this.serverUrl);
     // testConnection: true → initialize AND test server (regardless of selectedConnection)
     if (params.testConnection) {
-      const connectivity = await this.testConnectivity();
-      let serverState: BackendServerState;
+      this.initPromise = (async () => {
+        try {
+          const connectivity = await this.testConnectivity();
+          let serverState: BackendServerState;
 
-      if (connectivity.success && connectivity.serverInfo) {
-        // Parse server info to determine state
-        const status = connectivity.serverInfo.status;
-        const version = connectivity.serverInfo.version;
+          if (connectivity.success && connectivity.serverInfo) {
+            const status = connectivity.serverInfo.status;
+            const version = connectivity.serverInfo.version;
 
-        if (status === 'ready') {
-          serverState = {
-            status: 'ready',
-            version,
-            error: null,
-            deployment: connectivity.serverInfo.deployment ?? null,
-            client_id: connectivity.serverInfo.client_id ?? null,
-          };
-        } else if (status === 'setup' || status === 'resource_admin' || status === 'error') {
-          serverState = backendServerNotReady(
-            status,
-            version,
-            undefined,
-            connectivity.serverInfo.deployment,
-            connectivity.serverInfo.client_id
-          );
-        } else {
-          serverState = BACKEND_SERVER_NOT_REACHABLE;
+            if (status === 'ready') {
+              serverState = {
+                status: 'ready',
+                version,
+                error: null,
+                deployment: connectivity.serverInfo.deployment ?? null,
+                client_id: connectivity.serverInfo.client_id ?? null,
+              };
+            } else if (status === 'setup' || status === 'resource_admin' || status === 'error') {
+              serverState = backendServerNotReady(
+                status,
+                version,
+                undefined,
+                connectivity.serverInfo.deployment,
+                connectivity.serverInfo.client_id
+              );
+            } else {
+              serverState = BACKEND_SERVER_NOT_REACHABLE;
+            }
+          } else {
+            this.logger.warn('Connection failed:', connectivity.error);
+            serverState = BACKEND_SERVER_NOT_REACHABLE;
+          }
+
+          this.setState({ type: 'direct', url: serverUrl!, server: serverState });
+          this.logger.info('Initialized with testConnection, server state:', serverState.status);
+          return this.state;
+        } finally {
+          this.initPromise = null;
         }
-      } else {
-        this.logger.warn('Connection failed:', connectivity.error);
-        serverState = BACKEND_SERVER_NOT_REACHABLE;
-      }
-
-      this.setState({ type: 'direct', url: serverUrl!, server: serverState });
-      this.logger.info('Initialized with testConnection, server state:', serverState.status);
-      return this.state;
+      })();
+      return this.initPromise;
     }
 
     // testConnection: false, selectedConnection: false → not-initialized

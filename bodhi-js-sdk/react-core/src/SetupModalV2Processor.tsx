@@ -203,6 +203,8 @@ export function SetupModalV2Processor({
 
   // Effect 2: Modal visibility
   useEffect(() => {
+    let cancelled = false;
+
     if (isVisible && modalRef.current) {
       modalRef.current.showLoading();
 
@@ -212,17 +214,23 @@ export function SetupModalV2Processor({
       } else {
         buildInitialState()
           .then((state) => {
+            if (cancelled) return;
             currentStateRef.current = state;
             modalRef.current?.updateState(state);
             onSetupReady?.();
           })
           .catch((error) => {
+            if (cancelled) return;
             logger.error('buildInitialState failed:', error);
           });
       }
     } else if (!isVisible && modalRef.current) {
       modalRef.current.destroy();
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [isVisible, buildInitialState, onSetupReady, logger]);
 
   return null;
