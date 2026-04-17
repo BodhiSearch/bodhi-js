@@ -1,0 +1,72 @@
+{
+  "name": "@bodhiapp/setup-modal-v2",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./types": {
+      "types": "./src/types/index.ts",
+      "import": "./src/types/index.ts",
+      "default": "./src/types/index.ts"
+    }
+  },
+  "scripts": {
+    "dev": "npx vite",
+    "clean": "rimraf dist",
+    "build:types": "cd src/types && npm run build",
+    "build": "npm run build:types && npx vite build && npm run lint:fix",
+    "ci:build": "npm run build:types && npx vite build",
+    "dev:build": "node ../scripts/build-fast.mjs setup-modal-v2 'npm run build' src package.json vite.config.ts",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx && prettier --check .",
+    "lint:fix": "prettier --write . && eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:ci": "cross-env CI=true vitest run",
+    "test:watch": "vitest --watch",
+    "test:ui": "vitest --ui"
+  },
+  "dependencies": {
+    "clsx": "latest",
+    "lucide-react": "^0.441.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "latest",
+    "zustand": "^5.0.9"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.23.0",
+    "@testing-library/jest-dom": "^6.4.2",
+    "@testing-library/react": "^14.2.1",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/node": "^20.19.10",
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.1",
+    "@typescript-eslint/eslint-plugin": "8.28.0",
+    "@typescript-eslint/parser": "8.28.0",
+    "@vitejs/plugin-react": "^5.1.2",
+    "autoprefixer": "latest",
+    "cross-env": "^7.0.3",
+    "eslint": "9.32.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.17",
+    "globals": "^16.0.0",
+    "jsdom": "^24.0.0",
+    "postcss": "latest",
+    "prettier": "3.6.2",
+    "rimraf": "^6.0.1",
+    "tailwindcss": "3.4.17",
+    "terser": "^5.43.1",
+    "typescript": "^5.8.3",
+    "vite": "^7.1.12",
+    "vite-plugin-singlefile": "^2.3.0",
+    "vitest": "^4.0.16"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-darwin-arm64": "^4.52.0",
+    "@rollup/rollup-darwin-x64": "^4.52.0",
+    "@rollup/rollup-linux-x64-gnu": "^4.52.0",
+    "@rollup/rollup-linux-x64-musl": "^4.52.0",
+    "@rollup/rollup-win32-x64-msvc": "^4.52.0"
+  }
+}

@@ -17,6 +17,7 @@ export {
   useBodhi,
   type BodhiContext,
   type SetupState,
+  type SetupModalVariant,
   type ClientContextState,
   type ClientContextStatus,
   INITIAL_CLIENT_CONTEXT_STATE,

@@ -6,6 +6,11 @@ const files = [
     target: 'src/onboarding/modal.html',
     description: 'Setup modal HTML',
   },
+  {
+    source: '../../setup-modal-v2/dist/index.html',
+    target: 'src/onboarding/modal-v2.html',
+    description: 'Setup modal v2 HTML',
+  },
 ];
 
 // Ensure target directories exist

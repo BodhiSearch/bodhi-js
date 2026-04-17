@@ -155,6 +155,7 @@ const stream = client.chat.completions.create({
   callbackPath="/callback"              // OAuth callback route (auto-computed from basePath)
   handleCallback={true}                 // Auto-handle OAuth redirect (default: true)
   logLevel="warn"
+  autoProbe={true}                      // Eagerly probe server on mount (default: true)
 >
 ```
 
@@ -398,11 +399,62 @@ function App() {
 }
 ```
 
+## Setup Modal
+
+The SDK includes a built-in setup modal that guides users through connecting to a Bodhi App server. It handles server discovery, URL configuration, and connectivity verification.
+
+### Auto-Probe Behavior
+
+By default, `autoProbe={true}` causes the SDK to probe the server on mount (before the modal is shown). If the server is reachable and ready, the app proceeds without showing any modal. If the server is unreachable, the modal shows the connection status when opened via `showSetup()`.
+
+To disable headless probing (e.g., if you manage connectivity yourself):
+
+```tsx
+<BodhiProvider authClientId="your-client-id" autoProbe={false}>
+```
+
+### Opening the Setup Modal
+
+Use `showSetup()` from `useBodhi()` to open the modal when there's a connectivity issue:
+
+```tsx
+const { isOverallReady, showSetup } = useBodhi();
+
+if (!isOverallReady) {
+  return <button onClick={showSetup}>Configure Connection</button>;
+}
+```
+
+The modal provides:
+
+- Server URL input with Connect button
+- Radio selection for local install vs cloud signup
+- Status indicators (probing, connected, not-ready, error, network-error)
+- Continue button (green when connected)
+
+### Typical Integration Pattern
+
+```tsx
+function App() {
+  const { isOverallReady, isAuthenticated, showSetup, login } = useBodhi();
+
+  if (!isOverallReady) return <button onClick={showSetup}>Setup Required</button>;
+  if (!isAuthenticated) return <button onClick={() => login()}>Login</button>;
+  return <YourAppContent />;
+}
+```
+
+When `autoProbe` is true (default), the happy path (server already running) never shows the modal — the app goes straight to the login/content state.
+
+### Limitation: Direct Mode Only
+
+The setup modal only supports direct connection mode (HTTP to localhost via LNA). It does not support extension-based connections. If your app targets browsers without LNA support (e.g., Firefox, Safari, older Chrome) and relies on the Bodhi Browser extension for connectivity (`connectionMode: 'extension'`), do not use the built-in setup modal. Instead, manage connection setup in your own UI using `client.setConnectionMode('extension')` and `client.testExtensionConnectivity()`.
+
 ## Connection Modes
 
 - **Extension mode** (recommended): Via Bodhi Browser extension. SDK auto-detects `window.bodhiext`.
 - **Direct mode** (experimental): Direct HTTP to `http://localhost:1135`. Requires Chrome 130+ LNA.
-- SDK auto-detects best mode. Setup wizard (`showSetup()`) guides installation.
+- SDK auto-detects best mode. The setup modal guides server configuration.
 
 ## Reference Files
 

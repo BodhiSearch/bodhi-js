@@ -22,6 +22,7 @@ import {
   type ReactNode,
 } from 'react';
 import { SetupModalProcessor } from './SetupModalProcessor';
+import { SetupModalV2Processor } from './SetupModalV2Processor';
 import {
   clientStateToContextState,
   INITIAL_CLIENT_CONTEXT_STATE,
@@ -31,6 +32,14 @@ import {
 
 export type SetupState = 'ready' | 'loading' | 'loaded';
 
+/**
+ * Which setup-modal variant to mount.
+ * - 'setup-modal-v2' (default): eager LNA-first flow with cloud signup fallback.
+ * - 'setup-modal': legacy multi-step wizard retained for opt-out and extension-
+ *   heavy flows.
+ */
+export type SetupModalVariant = 'setup-modal' | 'setup-modal-v2';
+
 export interface BodhiProviderProps {
   children: ReactNode;
   client: UIClient;
@@ -39,6 +48,8 @@ export interface BodhiProviderProps {
   callbackPath?: string;
   basePath?: string;
   logLevel?: LogLevel;
+  setupModal?: SetupModalVariant;
+  autoProbe?: boolean;
 }
 
 export interface BodhiContext {
@@ -76,6 +87,8 @@ export function BodhiProvider({
   callbackPath: userCallbackPath,
   basePath = '/',
   logLevel = 'warn',
+  setupModal = 'setup-modal-v2',
+  autoProbe = true,
 }: BodhiProviderProps) {
   const normalizedBasePath = basePath === '/' ? '' : basePath.replace(/\/$/, '');
   const callbackPath = userCallbackPath ?? `${normalizedBasePath}/callback`;
@@ -323,9 +336,11 @@ export function BodhiProvider({
     };
   }, [client, clientState, auth, isAuthLoading, setupState, login, logout, showSetup, hideSetup]);
 
+  const SetupProcessor = setupModal === 'setup-modal' ? SetupModalProcessor : SetupModalV2Processor;
+
   return (
     <BodhiReactContext.Provider value={contextValue}>
-      <SetupModalProcessor
+      <SetupProcessor
         client={client}
         modalHtmlPath={modalHtmlPath}
         hideSetup={hideSetup}
@@ -333,6 +348,7 @@ export function BodhiProvider({
         setupState={setupState}
         basePath={basePath}
         logLevel={logLevel}
+        autoProbe={autoProbe}
       />
       {children}
     </BodhiReactContext.Provider>

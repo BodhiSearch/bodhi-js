@@ -28,6 +28,7 @@
 - handleCallback?: boolean (default: true)
 - modalHtmlPath?: string
 - logLevel?: LogLevel (default: 'warn')
+- autoProbe?: boolean (default: true) — eagerly probe server connectivity on mount (before modal is shown)
 
 ### useBodhi() returns (react-core/src/BodhiProvider.tsx:43-65)
 

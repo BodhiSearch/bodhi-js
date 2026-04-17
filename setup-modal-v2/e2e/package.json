@@ -1,0 +1,38 @@
+{
+  "name": "@bodhiapp/setup-modal-v2-e2e",
+  "version": "1.0.0",
+  "description": "Page Object Model for setup-modal-v2 Playwright tests",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "rimraf dist",
+    "build": "tsc",
+    "dev:build": "node ../../scripts/build-fast.mjs setup-modal-v2/e2e 'npm run build' src package.json tsconfig.json",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.0",
+    "@types/node": "^20.19.10",
+    "@typescript-eslint/eslint-plugin": "^8.28.0",
+    "@typescript-eslint/parser": "^8.28.0",
+    "eslint": "^9.32.0",
+    "eslint-config-prettier": "^9.1.0",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.8.3"
+  },
+  "keywords": [
+    "testing",
+    "playwright",
+    "page-object-model",
+    "e2e"
+  ],
+  "author": "Bodhi Search",
+  "license": "ISC",
+  "private": true
+}

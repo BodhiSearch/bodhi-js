@@ -12,6 +12,7 @@ export {
   type BodhiContext,
   type BodhiProviderProps,
   type SetupState,
+  type SetupModalVariant,
 } from './BodhiProvider';
 
 // Marketing Components

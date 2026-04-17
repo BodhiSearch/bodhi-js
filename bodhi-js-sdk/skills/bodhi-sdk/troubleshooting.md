@@ -30,24 +30,24 @@
 
 **Solutions:**
 
-1. Verify Bodhi App is running at `http://localhost:1135`
-2. Check server health: `curl http://localhost:1135/bodhi/v1/info`
-3. Direct mode is experimental — prefer extension mode
+1. Call `showSetup()` to open the setup modal — it lets the user enter a server URL and verify connectivity
+2. Verify Bodhi App is running at `http://localhost:1135`
+3. Check server health: `curl http://localhost:1135/bodhi/v1/info`
 
 ### Server status: 'not-reachable'
 
 `clientState.server.status === 'not-reachable'`
 
 - Server is down or unreachable at configured URL
-- Check that Bodhi App is running
-- Verify no firewall blocking localhost:1135
+- Call `showSetup()` �� the setup modal shows the error and lets the user enter a different URL or retry
+- Verify Bodhi App is running and no firewall is blocking the port
 
 ### Server status: 'setup'
 
 `clientState.server.status === 'setup'`
 
 - Server is installed but needs initial configuration
-- The setup wizard handles this — call `showSetup()`
+- Call `showSetup()` — the modal shows "not-ready" status with a Refresh button so the user can complete setup in the Bodhi App UI and retry
 
 ### Server status: 'resource_admin'
 

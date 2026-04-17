@@ -34,12 +34,14 @@ const packageNameMap = {
 const typePackages = [
   { name: '@bodhiapp/bodhi-browser-types', path: '../bodhi-browser-ext/src/types' },
   { name: '@bodhiapp/setup-modal-types', path: '../setup-modal/src/types' },
+  { name: '@bodhiapp/setup-modal-v2-types', path: '../setup-modal-v2/src/types' },
 ];
 
 // Map type package name to file: path for dependency management
 const typePackageMap = {
   '@bodhiapp/bodhi-browser-types': 'file:../../bodhi-browser-ext/src/types',
   '@bodhiapp/setup-modal-types': 'file:../../setup-modal/src/types',
+  '@bodhiapp/setup-modal-v2-types': 'file:../../setup-modal-v2/src/types',
 };
 
 async function updatePackage(packageName, version, mode) {

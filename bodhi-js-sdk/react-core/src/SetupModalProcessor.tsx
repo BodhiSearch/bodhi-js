@@ -42,6 +42,7 @@ interface SetupModalProcessorProps {
   setupState: SetupState;
   basePath?: string;
   logLevel?: LogLevel;
+  autoProbe?: boolean;
 }
 
 /**

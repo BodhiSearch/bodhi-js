@@ -36,12 +36,14 @@ lint-fix: ## Fix ESLint and formatting issues
 	npm run lint:fix
 	npm run typecheck
 
-dependencies: ## Build dependencies (setup-modal) and install
+dependencies: ## Build dependencies (setup-modal, setup-modal-v2) and install
 	$(MAKE) -C ../setup-modal build
+	$(MAKE) -C ../setup-modal-v2 build
 	npm install
 
 dev.dependencies: ## Dev: Build dependencies with caching
 	$(MAKE) -C ../setup-modal dev.build
+	$(MAKE) -C ../setup-modal-v2 dev.build
 	npm install
 
 release: ## Create and push tag for bodhi-js-sdk release

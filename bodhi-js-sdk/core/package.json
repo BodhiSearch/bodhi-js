@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-core",
-  "version": "0.0.35-dev",
+  "version": "0.0.36-dev",
   "description": "Core types and interfaces for Bodhi Browser SDK",
   "type": "module",
   "main": "dist/bodhi-core.cjs.js",
@@ -61,7 +61,7 @@
     "access": "public"
   },
   "scripts": {
-    "clean": "rimraf dist src/onboarding/modal.html",
+    "clean": "rimraf dist src/onboarding/modal.html src/onboarding/modal-v2.html",
     "copy-deps": "node scripts/copy-deps.js",
     "build-cli": "vite build --config vite.config.cli.ts",
     "prebuild": "make dependencies",
@@ -87,6 +87,7 @@
   "dependencies": {
     "@bodhiapp/bodhi-browser-types": "file:../../bodhi-browser-ext/src/types",
     "@bodhiapp/setup-modal-types": "file:../../setup-modal/src/types",
+    "@bodhiapp/setup-modal-v2-types": "file:../../setup-modal-v2/src/types",
     "@bodhiapp/ts-client": "0.1.31",
     "ua-parser-js": "^1.0.40"
   },
