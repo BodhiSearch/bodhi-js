@@ -11,7 +11,7 @@ import {
   DirectClientBase,
   STORAGE_PREFIXES,
   createOperationError,
-  createStoragePrefixWithBasePath,
+  createStoragePrefixWithNamespace,
   generateCodeChallenge,
   generateCodeVerifier,
   unwrapResponse,
@@ -43,7 +43,7 @@ export interface DirectExtClientConfig {
  */
 export class DirectExtClient extends DirectClientBase {
   constructor(config: DirectExtClientConfig, onStateChange?: StateChangeCallback) {
-    const storagePrefix = createStoragePrefixWithBasePath(
+    const storagePrefix = createStoragePrefixWithNamespace(
       config.basePath,
       STORAGE_PREFIXES.EXT_DIRECT
     );

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DirectClientBase } from './direct-client-base';
+import { createStorageKeys, createStoragePrefixWithServerUrl } from './storage';
 import { InMemoryStorage } from './types/storage';
 import type { AuthState, StateChangeCallback, StateChange, LoginOptions } from './types';
 
@@ -132,15 +133,18 @@ describe('DirectClientBase', () => {
         },
       });
 
+      const serverUrl = 'http://localhost:1135';
       await client.init({
-        serverUrl: 'http://localhost:1135',
+        serverUrl,
         selectedConnection: true,
         testConnection: false,
       });
 
+      const keys = createStorageKeys(createStoragePrefixWithServerUrl('test', serverUrl));
+
       // Verify tokens are stored
-      expect(await storage.get('test:access_token')).toBe(accessToken);
-      expect(await storage.get('test:refresh_token')).toBe('refresh-123');
+      expect(await storage.get(keys.ACCESS_TOKEN)).toBe(accessToken);
+      expect(await storage.get(keys.REFRESH_TOKEN)).toBe('refresh-123');
 
       const logoutResult = await client.logout();
       expect(logoutResult.status).toBe('unauthenticated');
@@ -149,9 +153,9 @@ describe('DirectClientBase', () => {
       expect(logoutResult.isTokenRefresh).toBe(false);
 
       // Verify storage is cleared
-      expect(await storage.get('test:access_token')).toBeNull();
-      expect(await storage.get('test:refresh_token')).toBeNull();
-      expect(await storage.get('test:expires_at')).toBeNull();
+      expect(await storage.get(keys.ACCESS_TOKEN)).toBeNull();
+      expect(await storage.get(keys.REFRESH_TOKEN)).toBeNull();
+      expect(await storage.get(keys.EXPIRES_AT)).toBeNull();
 
       // Verify revocation was attempted
       expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -257,7 +261,80 @@ describe('DirectClientBase', () => {
         undefined
       );
 
+      // storageKeys are built on init(); call init first so getAuthState reaches
+      // _storageGet and exercises the no-storage guard rather than short-circuiting
+      // on the pre-init serverUrl check.
+      await client.init({
+        serverUrl: 'http://localhost:1135',
+        selectedConnection: true,
+        testConnection: false,
+      });
+
       await expect(client.getAuthState()).rejects.toThrow('No storage adapter configured');
+    });
+  });
+
+  describe('Server URL namespacing', () => {
+    it('clears tokens from previous server on URL switch', async () => {
+      const authChanges: AuthState[] = [];
+      const accessToken = createTestJwt(3600);
+      const expiresAt = Date.now() + 3600 * 1000;
+
+      // Mock fetch for token revocation
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true });
+
+      const { client, storage } = createClient({
+        initialTokens: { accessToken, refreshToken: 'refresh-A', expiresAt },
+        onStateChange: (change: StateChange) => {
+          if (change.type === 'auth-state') authChanges.push(change.state);
+        },
+      });
+
+      const serverA = 'http://localhost:1135';
+      const serverB = 'http://localhost:2222';
+
+      // Authenticate against server A
+      await client.init({ serverUrl: serverA, selectedConnection: true, testConnection: false });
+      const keysA = createStorageKeys(createStoragePrefixWithServerUrl('test', serverA));
+      expect(await storage.get(keysA.ACCESS_TOKEN)).toBe(accessToken);
+      expect((await client.getAuthState()).status).toBe('authenticated');
+
+      // Switch to server B (no initial tokens for B)
+      await client.init({ serverUrl: serverB, selectedConnection: true, testConnection: false });
+
+      // Server A's tokens are purged for security
+      expect(await storage.get(keysA.ACCESS_TOKEN)).toBeNull();
+      expect(await storage.get(keysA.REFRESH_TOKEN)).toBeNull();
+      expect(await storage.get(keysA.EXPIRES_AT)).toBeNull();
+
+      // Client reports unauthenticated under the new server's namespace
+      expect((await client.getAuthState()).status).toBe('unauthenticated');
+
+      // Revocation was attempted against the previous server's refresh token
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/revoke'),
+        expect.objectContaining({ method: 'POST' })
+      );
+
+      globalThis.fetch = originalFetch;
+    });
+
+    it('keeps tokens isolated between concurrent per-server namespaces', async () => {
+      const { storage } = createClient();
+      const serverA = 'http://a.example:1111';
+      const serverB = 'http://b.example:2222';
+
+      const keysA = createStorageKeys(createStoragePrefixWithServerUrl('test', serverA));
+      const keysB = createStorageKeys(createStoragePrefixWithServerUrl('test', serverB));
+
+      // Two distinct URLs must produce distinct ACCESS_TOKEN keys
+      expect(keysA.ACCESS_TOKEN).not.toBe(keysB.ACCESS_TOKEN);
+
+      // Writing to A's namespace must not be visible under B's namespace
+      await storage.set({ [keysA.ACCESS_TOKEN]: 'token-for-A' });
+      expect(await storage.get(keysA.ACCESS_TOKEN)).toBe('token-for-A');
+      expect(await storage.get(keysB.ACCESS_TOKEN)).toBeNull();
     });
   });
 });

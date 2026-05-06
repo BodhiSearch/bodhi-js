@@ -7,7 +7,7 @@
 
 import {
   BaseFacadeClient,
-  createStoragePrefixWithBasePath,
+  createStoragePrefixWithNamespace,
   Logger,
   STORAGE_PREFIXES,
   type InitialTokens,
@@ -97,7 +97,7 @@ export class ExtUIClient
   }
 
   protected createStoragePrefix(config: ExtUIClientConfig): string {
-    return createStoragePrefixWithBasePath(config.basePath, STORAGE_PREFIXES.EXT);
+    return createStoragePrefixWithNamespace(config.basePath, STORAGE_PREFIXES.EXT);
   }
 
   protected createExtClient(

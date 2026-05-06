@@ -12,7 +12,7 @@ import {
   STORAGE_PREFIXES,
   throwAccessRequestDenialError,
   unwrapResponse,
-  createStoragePrefixWithBasePath,
+  createStoragePrefixWithNamespace,
   generateCodeChallenge,
   generateCodeVerifier,
   openPopupReview,
@@ -48,7 +48,7 @@ export class DirectWebClient extends DirectClientBase {
   private redirectUri: string;
 
   constructor(config: DirectWebClientConfig, onStateChange?: StateChangeCallback) {
-    const storagePrefix = createStoragePrefixWithBasePath(
+    const storagePrefix = createStoragePrefixWithNamespace(
       config.basePath,
       STORAGE_PREFIXES.WEB_DIRECT
     );

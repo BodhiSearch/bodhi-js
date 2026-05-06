@@ -37,31 +37,45 @@ console.log(STORAGE_PREFIXES.EXT_EXT); // 'bodhi-js-sdk:ext:ext:'
 
 ### Storage Key Generation
 
-The SDK generates namespaced storage keys by combining the prefix with the base path and key name:
+OAuth storage keys are namespaced on three dimensions, composed in order:
+
+1. **basePath** (fixed per app) — via `createStoragePrefixWithNamespace(basePath, modePrefix)`
+2. **serverUrl** (variable — one app, many servers over its lifetime) — via `createStoragePrefixWithServerUrl(basePrefix, serverUrl)`
+3. **key name** (per-field) — via `createStorageKeys(fullPrefix)`
+
+The serverUrl segment exists so tokens issued by server A are never presented to server B: when the user switches backends, the new server's storage namespace starts empty (and the SDK actively purges the old server's tokens on switch for security — see [URL switch & per-server scoping](#url-switch--per-server-scoping)).
 
 ```typescript
-import { createStorageKeys, createStoragePrefixWithBasePath, STORAGE_PREFIXES } from '@bodhiapp/bodhi-js-core';
+import { createStorageKeys, createStoragePrefixWithNamespace, createStoragePrefixWithServerUrl, STORAGE_PREFIXES } from '@bodhiapp/bodhi-js-core';
 
-// Create prefix with basePath isolation
-const prefix = createStoragePrefixWithBasePath('/', STORAGE_PREFIXES.WEB_DIRECT);
-// Result: '/:bodhi-js-sdk:web:direct:'
+// Level 1 — scope by basePath
+const basePrefix = createStoragePrefixWithNamespace('/', STORAGE_PREFIXES.WEB_DIRECT);
+// '/:bodhi-js-sdk:web:direct:'
 
-const keys = createStorageKeys(prefix);
+// Level 2 — scope by server URL (adds '::<encoded-url>:' suffix)
+const fullPrefix = createStoragePrefixWithServerUrl(basePrefix, 'http://localhost:1135');
+// '/:bodhi-js-sdk:web:direct::http%3A%2F%2Flocalhost%3A1135:'
+
+// Level 3 — per-field keys
+const keys = createStorageKeys(fullPrefix);
 // {
-//   ACCESS_TOKEN:      '/:bodhi-js-sdk:web:direct::access_token',
-//   REFRESH_TOKEN:     '/:bodhi-js-sdk:web:direct::refresh_token',
-//   EXPIRES_AT:        '/:bodhi-js-sdk:web:direct::expires_at',
-//   CODE_VERIFIER:     '/:bodhi-js-sdk:web:direct::code_verifier',
-//   STATE:             '/:bodhi-js-sdk:web:direct::state',
-//   ACCESS_REQUEST_ID: '/:bodhi-js-sdk:web:direct::access_request_id',
+//   ACCESS_TOKEN:      '/:bodhi-js-sdk:web:direct::http%3A%2F%2Flocalhost%3A1135:access_token',
+//   REFRESH_TOKEN:     '/:bodhi-js-sdk:web:direct::http%3A%2F%2Flocalhost%3A1135:refresh_token',
+//   EXPIRES_AT:        '/:bodhi-js-sdk:web:direct::http%3A%2F%2Flocalhost%3A1135:expires_at',
+//   CODE_VERIFIER:     '/:bodhi-js-sdk:web:direct::http%3A%2F%2Flocalhost%3A1135:code_verifier',
+//   STATE:             '/:bodhi-js-sdk:web:direct::http%3A%2F%2Flocalhost%3A1135:state',
+//   ACCESS_REQUEST_ID: '/:bodhi-js-sdk:web:direct::http%3A%2F%2Flocalhost%3A1135:access_request_id',
 // }
 ```
+
+The `::` boundary between the basePath/mode prefix and the encoded server URL is a unique parseable marker — the URL itself is percent-encoded so `:` and `/` inside it don't collide with the prefix separators.
 
 ### Web Applications (localStorage)
 
 ```typescript
-// Storage keys (web direct mode, basePath='/')
-const keys = createStorageKeys(createStoragePrefixWithBasePath('/', STORAGE_PREFIXES.WEB_DIRECT));
+// Build full prefix for web direct mode against localhost:1135
+const prefix = createStoragePrefixWithServerUrl(createStoragePrefixWithNamespace('/', STORAGE_PREFIXES.WEB_DIRECT), 'http://localhost:1135');
+const keys = createStorageKeys(prefix);
 
 // Store token
 localStorage.setItem(keys.ACCESS_TOKEN, accessToken);
@@ -75,8 +89,8 @@ const expiresAt = parseInt(localStorage.getItem(keys.EXPIRES_AT) || '0');
 ### Chrome Extensions (chrome.storage.session)
 
 ```typescript
-// Storage keys (extension direct mode)
-const keys = createStorageKeys(createStoragePrefixWithBasePath('/', STORAGE_PREFIXES.EXT_DIRECT));
+const prefix = createStoragePrefixWithServerUrl(createStoragePrefixWithNamespace('/', STORAGE_PREFIXES.EXT_DIRECT), 'http://localhost:1135');
+const keys = createStorageKeys(prefix);
 
 // Store token (async)
 await chrome.storage.session.set({
@@ -88,6 +102,18 @@ await chrome.storage.session.set({
 const result = await chrome.storage.session.get([keys.ACCESS_TOKEN]);
 const token = result[keys.ACCESS_TOKEN];
 ```
+
+### URL switch & per-server scoping
+
+When `DirectClient.init()` is called with a serverUrl that differs from the previously
+committed one, the SDK:
+
+1. Attempts to revoke the previous server's refresh token at its revoke endpoint (best-effort — failures are logged and ignored).
+2. Removes all OAuth keys (`ACCESS_TOKEN`, `REFRESH_TOKEN`, `EXPIRES_AT`, `CODE_VERIFIER`, `STATE`, `ACCESS_REQUEST_ID`) from the previous server's namespace.
+3. Emits an `unauthenticated` auth-state change so the UI reflects the logged-out state.
+4. Rebuilds `storageKeys` under the new server's namespace.
+
+Tokens at the new URL's namespace start empty, so `getAuthState()` returns `unauthenticated` until the user completes an OAuth flow against the new server.
 
 ---
 
@@ -148,8 +174,8 @@ async function ensureValidToken(accessToken: string, refreshToken: string, expir
   const endpoints = createOAuthEndpoints('https://id.getbodhi.app/realms/bodhi');
   const tokens = await refreshAccessToken(endpoints.token, refreshToken, clientId);
 
-  // Store new tokens
-  const keys = createStorageKeys(createStoragePrefixWithBasePath('/', STORAGE_PREFIXES.WEB_DIRECT));
+  // Store new tokens (must match the server URL the tokens were issued for)
+  const keys = createStorageKeys(createStoragePrefixWithServerUrl(createStoragePrefixWithNamespace('/', STORAGE_PREFIXES.WEB_DIRECT), 'http://localhost:1135'));
   localStorage.setItem(keys.ACCESS_TOKEN, tokens.access_token);
   localStorage.setItem(keys.EXPIRES_AT, String(Date.now() + tokens.expires_in * 1000));
 
@@ -516,8 +542,8 @@ interface BackendServerState {
 ### 1. Token Security
 
 ```typescript
-// DO use the SDK's namespaced storage keys
-const keys = createStorageKeys(createStoragePrefixWithBasePath('/', STORAGE_PREFIXES.WEB_DIRECT));
+// DO use the SDK's namespaced storage keys (basePath → serverUrl → key name)
+const keys = createStorageKeys(createStoragePrefixWithServerUrl(createStoragePrefixWithNamespace('/', STORAGE_PREFIXES.WEB_DIRECT), 'http://localhost:1135'));
 localStorage.setItem(keys.ACCESS_TOKEN, token); // Same-origin protected
 
 // DON'T expose tokens

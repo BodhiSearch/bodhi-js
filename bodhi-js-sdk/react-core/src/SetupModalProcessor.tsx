@@ -17,7 +17,7 @@ import {
   Logger,
   OS_CONFIGS,
   OnboardingModal,
-  createStoragePrefixWithBasePath,
+  createStoragePrefixWithNamespace,
   detectBrowser,
   detectOS,
   getServerUrl,
@@ -61,7 +61,7 @@ export function SetupModalProcessor({
   const logger = useMemo(() => new Logger('SetupModalProcessor', logLevel), [logLevel]);
   const modalRef = useRef<OnboardingModal | null>(null);
   const prefs = useMemo(
-    () => new BodhiClientUserPrefsManager(createStoragePrefixWithBasePath(basePath, 'bodhijs:')),
+    () => new BodhiClientUserPrefsManager(createStoragePrefixWithNamespace(basePath, 'bodhijs:')),
     [basePath]
   );
   const currentStateRef = useRef<ModalTypes.SetupState | null>(null);

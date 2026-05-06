@@ -1,4 +1,5 @@
 src/onboarding/modal.html
+src/onboarding/modal-v2.html
 # Build outputs
 dist/
 build/

@@ -102,7 +102,7 @@ import {
   type OAuthEndpoints,
   type RefreshTokenResponse,
 } from './oauth';
-import { createStorageKeys, type StorageKeys } from './storage';
+import { createStorageKeys, createStoragePrefixWithServerUrl, type StorageKeys } from './storage';
 import {
   type AuthState,
   type BackendServerState,
@@ -147,7 +147,18 @@ export abstract class DirectClientBase implements IDirectClient {
   protected authServerUrl: string;
   protected authEndpoints: OAuthEndpoints;
   protected storage: IStorage | null = null;
-  protected storageKeys: StorageKeys;
+  /**
+   * Base prefix for OAuth storage keys (pre-serverUrl scope).
+   * Captured from config; combined with current serverUrl to build `storageKeys`.
+   */
+  private basePrefix: string;
+  /**
+   * OAuth storage keys scoped by (basePrefix, serverUrl). Rebuilt in `init()` whenever
+   * serverUrl is committed — tokens are namespaced per server to avoid presenting
+   * tokens issued by server A as though they were valid for server B.
+   * Undefined until `serverUrl` is set; guard auth-path access with `this.serverUrl`.
+   */
+  protected storageKeys!: StorageKeys;
   protected state: DirectState = DIRECT_STATE_NOT_INITIALIZED;
   private onStateChange: StateChangeCallback;
   private refreshPromise: Promise<string | null> | null = null;
@@ -166,7 +177,7 @@ export abstract class DirectClientBase implements IDirectClient {
     this.authClientId = config.authClientId;
     this.authServerUrl = config.authServerUrl;
     this.authEndpoints = createOAuthEndpoints(this.authServerUrl);
-    this.storageKeys = createStorageKeys(config.storagePrefix);
+    this.basePrefix = config.storagePrefix;
     this.onStateChange = onStateChange ?? NOOP_STATE_CALLBACK;
     this.apiTimeoutMs = config.apiTimeoutMs ?? DEFAULT_API_TIMEOUT_MS;
     this.storage = config.storage ?? null;
@@ -200,12 +211,6 @@ export abstract class DirectClientBase implements IDirectClient {
   // ============================================================================
 
   async init(params: InitParams): Promise<DirectState> {
-    // Bootstrap auth from initial tokens (consumed once, not re-applied on re-init)
-    if (this.initialTokens) {
-      await this._bootstrapInitialTokens(this.initialTokens);
-      this.initialTokens = undefined;
-    }
-
     // Priority: explicit serverUrl > savedState.url > this.serverUrl
     const serverUrl =
       params.serverUrl ?? (params.savedState as SerializedDirectState)?.url ?? this.serverUrl;
@@ -220,11 +225,30 @@ export abstract class DirectClientBase implements IDirectClient {
       return this.state;
     }
 
+    // Server URL changed mid-session: clear tokens issued by the previous server
+    // before rebinding. Tokens are namespaced per server so the new URL's storage
+    // starts empty, but we also actively purge the old namespace for security
+    // (do not leave credentials behind for a server the user is no longer using).
+    if (this.serverUrl && serverUrl && this.serverUrl !== serverUrl) {
+      this.logger.info('serverUrl changed, clearing tokens from previous server');
+      await this.clearPreviousServerTokens(this.serverUrl);
+    }
+
     this.serverUrl = serverUrl;
 
     if (!this.serverUrl) {
       this.logger.info('No serverUrl provided, returning not-initialized state');
       return DIRECT_STATE_NOT_INITIALIZED;
+    }
+
+    // Rebuild OAuth storage keys under the new (basePrefix, serverUrl) namespace.
+    this.rebuildStorageKeys();
+
+    // Bootstrap auth from initial tokens (consumed once, not re-applied on re-init).
+    // Runs after storageKeys is rebuilt so tokens land at serverUrl-scoped keys.
+    if (this.initialTokens) {
+      await this._bootstrapInitialTokens(this.initialTokens);
+      this.initialTokens = undefined;
     }
 
     this.logger.info('Initializing with serverUrl:', this.serverUrl);
@@ -683,6 +707,19 @@ export abstract class DirectClientBase implements IDirectClient {
   protected abstract performOAuthPkce(scope: string): Promise<AuthState>;
 
   async getAuthState(): Promise<AuthState> {
+    // storageKeys is built lazily in init() once serverUrl is known — guard against
+    // pre-init calls so we don't read from undefined keys.
+    if (!this.serverUrl) {
+      return {
+        status: 'unauthenticated',
+        user: null,
+        accessToken: null,
+        error: null,
+        refreshToken: null,
+        expiresAt: null,
+        isTokenRefresh: false,
+      };
+    }
     const accessToken = await this._getAccessTokenRaw();
     if (!accessToken) {
       return {
@@ -710,8 +747,6 @@ export abstract class DirectClientBase implements IDirectClient {
   }
 
   async logout(): Promise<AuthState> {
-    await this.revokeRefreshToken();
-    await this.clearAuthStorage();
     const state: AuthState = {
       status: 'unauthenticated',
       user: null,
@@ -721,6 +756,11 @@ export abstract class DirectClientBase implements IDirectClient {
       expiresAt: null,
       isTokenRefresh: false,
     };
+    // Nothing to revoke/clear pre-init — storageKeys isn't built until init().
+    if (this.serverUrl) {
+      await this.revokeRefreshToken();
+      await this.clearAuthStorage();
+    }
     this.setAuthState(state);
     return state;
   }
@@ -885,8 +925,8 @@ export abstract class DirectClientBase implements IDirectClient {
     }
   }
 
-  protected async revokeRefreshToken(): Promise<void> {
-    const refreshToken = await this._storageGet(this.storageKeys.REFRESH_TOKEN);
+  protected async revokeRefreshToken(keys: StorageKeys = this.storageKeys): Promise<void> {
+    const refreshToken = await this._storageGet(keys.REFRESH_TOKEN);
 
     if (refreshToken) {
       try {
@@ -907,12 +947,50 @@ export abstract class DirectClientBase implements IDirectClient {
     }
   }
 
-  protected async clearAuthStorage(): Promise<void> {
+  protected async clearAuthStorage(keys: StorageKeys = this.storageKeys): Promise<void> {
+    await this._storageRemove([keys.ACCESS_TOKEN, keys.REFRESH_TOKEN, keys.EXPIRES_AT]);
+  }
+
+  /**
+   * Rebuild OAuth storage keys using the current serverUrl.
+   * Called after serverUrl is committed in `init()`. No-op if serverUrl is null.
+   */
+  private rebuildStorageKeys(): void {
+    if (!this.serverUrl) return;
+    const prefix = createStoragePrefixWithServerUrl(this.basePrefix, this.serverUrl);
+    this.storageKeys = createStorageKeys(prefix);
+  }
+
+  /**
+   * Revoke + purge OAuth tokens from a previous server URL's namespace. Called
+   * when the user switches servers: the new server would not recognize the old
+   * tokens anyway, and leaving them in storage is a security risk.
+   *
+   * Best-effort — if the old server is unreachable the revoke call fails silently
+   * (see `revokeRefreshToken`); storage is cleared regardless.
+   */
+  private async clearPreviousServerTokens(oldServerUrl: string): Promise<void> {
+    const oldKeys = createStorageKeys(
+      createStoragePrefixWithServerUrl(this.basePrefix, oldServerUrl)
+    );
+    await this.revokeRefreshToken(oldKeys);
     await this._storageRemove([
-      this.storageKeys.ACCESS_TOKEN,
-      this.storageKeys.REFRESH_TOKEN,
-      this.storageKeys.EXPIRES_AT,
+      oldKeys.ACCESS_TOKEN,
+      oldKeys.REFRESH_TOKEN,
+      oldKeys.EXPIRES_AT,
+      oldKeys.CODE_VERIFIER,
+      oldKeys.STATE,
+      oldKeys.ACCESS_REQUEST_ID,
     ]);
+    this.setAuthState({
+      status: 'unauthenticated',
+      user: null,
+      accessToken: null,
+      error: null,
+      refreshToken: null,
+      expiresAt: null,
+      isTokenRefresh: false,
+    });
   }
 
   // ============================================================================

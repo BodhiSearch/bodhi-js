@@ -3,7 +3,7 @@ import {
   BodhiClientUserPrefsManager,
   Logger,
   OnboardingModalV2,
-  createStoragePrefixWithBasePath,
+  createStoragePrefixWithNamespace,
   type AsyncRequestHandlersV2,
   type LogLevel,
 } from '@bodhiapp/bodhi-js-core';
@@ -67,11 +67,11 @@ export function SetupModalV2Processor({
   const modalRef = useRef<OnboardingModalV2 | null>(null);
   const currentStateRef = useRef<SetupStateV2 | null>(null);
   const prefs = useMemo(
-    () => new BodhiClientUserPrefsManager(createStoragePrefixWithBasePath(basePath, 'bodhijs:')),
+    () => new BodhiClientUserPrefsManager(createStoragePrefixWithNamespace(basePath, 'bodhijs:')),
     [basePath]
   );
   const cacheKey = useMemo(
-    () => `${createStoragePrefixWithBasePath(basePath, 'bodhijs:')}setup-v2.connection`,
+    () => `${createStoragePrefixWithNamespace(basePath, 'bodhijs:')}setup-v2.connection`,
     [basePath]
   );
 

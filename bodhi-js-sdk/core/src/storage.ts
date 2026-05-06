@@ -46,18 +46,40 @@ export const STORAGE_PREFIXES = {
 } as const;
 
 /**
- * Create storage prefix with basePath for path isolation
+ * Compose a storage prefix by joining a scope with an inner namespace segment.
  *
- * @param basePath - Base path of app (e.g., '/', '/app1/')
- * @param prefix - Storage prefix (e.g., 'bodhi:web', 'bodhijs:')
- * @returns Combined prefix with basePath isolation
+ * Generic namespace composer — used for any namespace dimension (basePath, serverUrl,
+ * tenant, etc.). The first segment is appended with ':' and then the inner namespace
+ * segment is appended as-is. Callers are responsible for ensuring the inner segment
+ * ends with ':' if it is intended to be consumed as a `createStorageKeys` prefix.
  *
  * Examples:
- * - createStoragePrefixWithBasePath('/', 'bodhi:web') => '/:bodhi:web'
- * - createStoragePrefixWithBasePath('/app1/', 'bodhi:web') => '/app1/:bodhi:web'
+ * - createStoragePrefixWithNamespace('/', 'bodhi:web:')         => '/:bodhi:web:'
+ * - createStoragePrefixWithNamespace('/app1/', 'bodhi:web:')    => '/app1/:bodhi:web:'
  */
-export function createStoragePrefixWithBasePath(basePath: string, prefix: string): string {
-  return `${basePath}:${prefix}`;
+export function createStoragePrefixWithNamespace(scope: string, namespace: string): string {
+  return `${scope}:${namespace}`;
+}
+
+/**
+ * Extend a storage prefix with an encoded server URL segment for per-server isolation.
+ *
+ * Uses '::' as a unique boundary marker between the base namespace and the server URL
+ * segment, so the URL segment is unambiguously parseable even when other segments contain
+ * ':'. The URL is normalized (trailing slashes stripped, percent-encoded) so that ':' /
+ * '/' inside the URL do not collide with the prefix separators.
+ *
+ * Example:
+ * - createStoragePrefixWithServerUrl('/:bodhi-js-sdk:web:direct:', 'http://localhost:1135')
+ *   => '/:bodhi-js-sdk:web:direct::http%3A%2F%2Flocalhost%3A1135:'
+ *
+ * @param basePrefix - Base prefix built with createStoragePrefixWithNamespace (ends with ':')
+ * @param serverUrl  - Raw backend server URL (e.g., 'http://localhost:1135')
+ */
+export function createStoragePrefixWithServerUrl(basePrefix: string, serverUrl: string): string {
+  const normalized = serverUrl.replace(/\/+$/, '');
+  const encoded = encodeURIComponent(normalized);
+  return `${basePrefix}:${encoded}:`;
 }
 
 /**

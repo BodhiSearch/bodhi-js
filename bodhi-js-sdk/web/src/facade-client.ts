@@ -7,7 +7,7 @@
 
 import {
   BaseFacadeClient,
-  createStoragePrefixWithBasePath,
+  createStoragePrefixWithNamespace,
   Logger,
   STORAGE_PREFIXES,
   type AuthState,
@@ -111,7 +111,7 @@ export class WebUIClient
   }
 
   protected createStoragePrefix(config: WebClientConfig): string {
-    return createStoragePrefixWithBasePath(config.basePath, STORAGE_PREFIXES.WEB);
+    return createStoragePrefixWithNamespace(config.basePath, STORAGE_PREFIXES.WEB);
   }
 
   protected createExtClient(

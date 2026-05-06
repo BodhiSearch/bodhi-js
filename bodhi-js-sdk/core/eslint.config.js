@@ -6,7 +6,12 @@ import globals from 'globals';
 
 export default [
   {
-    ignores: ['**/dist/**', '**/node_modules/**', 'src/onboarding/modal.html'],
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      'src/onboarding/modal.html',
+      'src/onboarding/modal-v2.html',
+    ],
   },
   eslint.configs.recommended,
   eslintConfigPrettier,

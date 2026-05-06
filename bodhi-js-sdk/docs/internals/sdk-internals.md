@@ -356,17 +356,35 @@ keys.DIRECT_STATUS; // 'custom-prefix:DIRECT_STATUS'
 keys.SERVER_INSTALL_CONFIRMED; // 'custom-prefix:SERVER_INSTALL_CONFIRMED'
 ```
 
-### Base Path Integration
+### Namespace Composition
+
+OAuth storage keys are composed left-to-right by dimension. Each helper takes the prior
+prefix and adds one more namespace segment. DirectClient OAuth tokens use all three:
 
 ```typescript
-import { createStoragePrefixWithBasePath } from '@bodhiapp/bodhi-js-core';
+import { createStorageKeys, createStoragePrefixWithNamespace, createStoragePrefixWithServerUrl, STORAGE_PREFIXES } from '@bodhiapp/bodhi-js-core';
 
-const prefix = createStoragePrefixWithBasePath('bodhi:web:', '/app/tenant1');
-// Returns: 'bodhi:web:/app/tenant1:'
+// 1. basePath (fixed per app) — scopes keys to a deployed app instance
+const level1 = createStoragePrefixWithNamespace('/app/tenant1', STORAGE_PREFIXES.WEB_DIRECT);
+// '/app/tenant1:bodhi-js-sdk:web:direct:'
 
-const keys = createStorageKeys(prefix);
-// keys.CONNECTION_MODE = 'bodhi:web:/app/tenant1:CONNECTION_MODE'
+// 2. serverUrl (variable — user may switch backends) — scopes OAuth tokens per server
+const level2 = createStoragePrefixWithServerUrl(level1, 'http://localhost:1135');
+// '/app/tenant1:bodhi-js-sdk:web:direct::http%3A%2F%2Flocalhost%3A1135:'
+
+// 3. per-field storage keys
+const keys = createStorageKeys(level2);
+// keys.ACCESS_TOKEN = '/app/tenant1:bodhi-js-sdk:web:direct::http%3A%2F%2Flocalhost%3A1135:access_token'
 ```
+
+`createStoragePrefixWithNamespace` is the generic composer — use it to add any new
+namespace dimension later (tenant, locale, etc.) without renaming the helper.
+
+`createStoragePrefixWithServerUrl` uses `::` as a unique boundary marker before the
+URL-encoded server URL, so the URL segment is unambiguously parseable.
+
+`BodhiClientUserPrefsManager` (non-OAuth preferences like `directStatus` and serialized
+client state) uses only level 1 — those values are not server-specific.
 
 ## State Serialization
 

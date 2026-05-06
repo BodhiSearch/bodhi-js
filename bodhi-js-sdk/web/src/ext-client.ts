@@ -21,7 +21,7 @@ import {
   createOAuthEndpoints,
   createOperationError,
   createStorageKeys,
-  createStoragePrefixWithBasePath,
+  createStoragePrefixWithNamespace,
   extractUserInfo,
   generateCodeChallenge,
   generateCodeVerifier,
@@ -115,7 +115,7 @@ export class WindowBodhiextClient implements IExtensionClient {
     this.config = config;
     this.authEndpoints = createOAuthEndpoints(this.config.authServerUrl);
     this.onStateChange = onStateChange ?? NOOP_STATE_CALLBACK;
-    const prefix = createStoragePrefixWithBasePath(config.basePath, STORAGE_PREFIXES.WEB_EXT);
+    const prefix = createStoragePrefixWithNamespace(config.basePath, STORAGE_PREFIXES.WEB_EXT);
     this.storageKeys = createStorageKeys(prefix);
     this.apiTimeoutMs = config.apiTimeoutMs ?? DEFAULT_API_TIMEOUT_MS;
   }
