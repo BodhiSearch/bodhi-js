@@ -955,7 +955,7 @@ export abstract class DirectClientBase implements IDirectClient {
    * Rebuild OAuth storage keys using the current serverUrl.
    * Called after serverUrl is committed in `init()`. No-op if serverUrl is null.
    */
-  private rebuildStorageKeys(): void {
+  protected rebuildStorageKeys(): void {
     if (!this.serverUrl) return;
     const prefix = createStoragePrefixWithServerUrl(this.basePrefix, this.serverUrl);
     this.storageKeys = createStorageKeys(prefix);

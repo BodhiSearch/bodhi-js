@@ -50,6 +50,7 @@ export interface BodhiProviderProps {
   logLevel?: LogLevel;
   setupModal?: SetupModalVariant;
   autoProbe?: boolean;
+  defaultHost?: string;
 }
 
 export interface BodhiContext {
@@ -89,6 +90,7 @@ export function BodhiProvider({
   logLevel = 'warn',
   setupModal = 'setup-modal-v2',
   autoProbe = true,
+  defaultHost,
 }: BodhiProviderProps) {
   const normalizedBasePath = basePath === '/' ? '' : basePath.replace(/\/$/, '');
   const callbackPath = userCallbackPath ?? `${normalizedBasePath}/callback`;
@@ -336,20 +338,32 @@ export function BodhiProvider({
     };
   }, [client, clientState, auth, isAuthLoading, setupState, login, logout, showSetup, hideSetup]);
 
-  const SetupProcessor = setupModal === 'setup-modal' ? SetupModalProcessor : SetupModalV2Processor;
-
   return (
     <BodhiReactContext.Provider value={contextValue}>
-      <SetupProcessor
-        client={client}
-        modalHtmlPath={modalHtmlPath}
-        hideSetup={hideSetup}
-        onSetupReady={onSetupReady}
-        setupState={setupState}
-        basePath={basePath}
-        logLevel={logLevel}
-        autoProbe={autoProbe}
-      />
+      {setupModal === 'setup-modal' ? (
+        <SetupModalProcessor
+          client={client}
+          modalHtmlPath={modalHtmlPath}
+          hideSetup={hideSetup}
+          onSetupReady={onSetupReady}
+          setupState={setupState}
+          basePath={basePath}
+          logLevel={logLevel}
+          autoProbe={autoProbe}
+        />
+      ) : (
+        <SetupModalV2Processor
+          client={client}
+          modalHtmlPath={modalHtmlPath}
+          hideSetup={hideSetup}
+          onSetupReady={onSetupReady}
+          setupState={setupState}
+          basePath={basePath}
+          logLevel={logLevel}
+          autoProbe={autoProbe}
+          defaultHost={defaultHost}
+        />
+      )}
       {children}
     </BodhiReactContext.Provider>
   );

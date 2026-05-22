@@ -45,8 +45,11 @@ export class CliClient extends DirectClientBase {
     super(baseConfig, onStateChange);
     this._serverUrl = config.serverUrl;
     // Set base class serverUrl immediately so sendApiRequest works before init()
-    // (login() calls requestAccess which uses sendApiRequest)
+    // (login() calls requestAccess which uses sendApiRequest). Also build the
+    // serverUrl-scoped OAuth storage keys now: login() persists CODE_VERIFIER/STATE
+    // during the access-request callback, which runs before init() rebuilds them.
     this.serverUrl = config.serverUrl;
+    this.rebuildStorageKeys();
   }
 
   /**

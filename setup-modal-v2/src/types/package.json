@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/setup-modal-v2-types",
-  "version": "0.0.39-dev",
+  "version": "0.0.40-dev",
   "description": "TypeScript types for Bodhi Setup Modal v2",
   "type": "module",
   "main": "dist/index.js",

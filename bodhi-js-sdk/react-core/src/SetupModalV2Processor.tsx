@@ -21,6 +21,7 @@ interface SetupModalV2ProcessorProps {
   basePath?: string;
   logLevel?: LogLevel;
   autoProbe?: boolean;
+  defaultHost?: string;
 }
 
 const LNA_MIN_CHROME = 130;
@@ -61,6 +62,7 @@ export function SetupModalV2Processor({
   basePath = '/',
   logLevel = 'warn',
   autoProbe = true,
+  defaultHost,
 }: SetupModalV2ProcessorProps) {
   const isVisible = setupState !== 'ready';
   const logger = useMemo(() => new Logger('SetupModalV2Processor', logLevel), [logLevel]);
@@ -147,9 +149,9 @@ export function SetupModalV2Processor({
 
   const buildInitialState = useCallback(async (): Promise<SetupStateV2> => {
     const cached = readCache();
-    const urlToProbe = cached?.serverUrl ?? DEFAULT_LOCAL_URL;
+    const urlToProbe = cached?.serverUrl ?? defaultHost ?? DEFAULT_LOCAL_URL;
     return probeServer(urlToProbe);
-  }, [probeServer, readCache]);
+  }, [probeServer, readCache, defaultHost]);
 
   const handlers = useMemo<AsyncRequestHandlersV2>(
     () => ({
