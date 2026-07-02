@@ -38,6 +38,9 @@ export * from './oauth';
 // Re-export direct client base
 export * from './direct-client-base';
 
+// Re-export concrete headless direct client (worker/server/test use, token injection)
+export * from './direct-client';
+
 // Re-export facade
 export * from './facade-client-base';
 
