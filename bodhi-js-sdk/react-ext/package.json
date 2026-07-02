@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-react-ext",
-  "version": "0.0.40-dev",
+  "version": "0.0.41-dev",
   "description": "React bindings for Bodhi Browser SDK with ExtUIClient preset (Chrome Extension)",
   "type": "module",
   "main": "dist/bodhi-react-ext.cjs.js",

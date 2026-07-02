@@ -12,10 +12,6 @@ class TestDirectClient extends DirectClientBase {
     throw new Error('Not implemented in test');
   }
 
-  protected async performOAuthPkce(_scope: string): Promise<AuthState> {
-    throw new Error('Not implemented in test');
-  }
-
   protected _getRedirectUri(): string {
     return 'http://test/callback';
   }

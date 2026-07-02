@@ -191,30 +191,32 @@ await client.login(options?: LoginOptions);
 // LoginOptions — all fields optional:
 interface LoginOptions {
   userRole?: UserScope;               // Default: 'scope_user_user'. Alternative: 'scope_user_power_user'
-  requested?: RequestedResourcesV1;   // MCPs your app needs (version auto-injected by SDK)
-  flowType?: FlowType;                // 'popup' (default) | 'redirect'
-  redirectUrl?: string;               // Return URL for redirect flow
-  onProgress?: LoginProgressCallback; // (stage: 'requesting'|'reviewing'|'authenticating') => void
-  pollIntervalMs?: number;            // Polling interval, default: 2000ms
-  pollTimeoutMs?: number;             // Polling timeout, default: 300000ms (5min)
+  requested?: RequestedResourcesV1;   // Resource envelope (version auto-injected by SDK)
+  onProgress?: LoginProgressCallback; // (stage: 'requesting'|'reviewing') => void
 }
 
-// RequestedResourcesV1 — what your app needs access to:
+// RequestedResourcesV1 — UI-driver flags (which consent controls to render) + slotted MCPs.
+// Pass through only: the SDK adds no defaults; the backend decides what to show/grant.
 interface RequestedResourcesV1 {
-  mcp_servers?: Array<{ url: string }>;
+  models_access?: boolean;   // show model All/Specific access selector
+  models_list?: boolean;     // show "list all models" toggle
+  mcps_access?: boolean;     // show MCP All/Specific access selector
+  mcps_list?: boolean;       // show "list all MCPs" toggle
+  mcp_servers?: Array<{ url: string }>; // slotted by-url MCP requests
 }
 
 // LoginOptionsBuilder — fluent builder (recommended):
 new LoginOptionsBuilder()
   .setRole('scope_user_power_user')   // requestedRole(scope: UserScope)
+  .setModelsAccess()                  // .setModelsList() / .setMcpsAccess() / .setMcpsList()
   .addMcpServer('https://mcp.exa.ai/mcp') // adds to mcp_servers
-  .setFlowType('popup')
   .build() // → LoginOptions
 
 // AccessRequestBuilder — low-level builder (used by LoginOptionsBuilder):
 import { AccessRequestBuilder } from '@bodhiapp/bodhi-js-react';
-const body = new AccessRequestBuilder()
+const body = new AccessRequestBuilder(appClientId)
   .requestedRole('scope_user_power_user')
+  .modelsAccess()                        // .modelsList() / .mcpsAccess() / .mcpsList()
   .requested({ mcp_servers: [{ url: 'https://mcp.exa.ai/mcp' }] })
   .addMcpServer('http://localhost:3001')  // adds individual MCP server
   .build(); // → CreateAccessRequest
@@ -226,17 +228,15 @@ await client.logout();
 const auth = await client.getAuthState();
 // auth: { status, user, accessToken, error }
 
-// Low-level access request methods (login() wraps these automatically):
+// Low-level access request (login() wraps this automatically):
 const result = await client.requestAccess(body: CreateAccessRequest);
-const status = await client.pollAccessRequestStatus(
-  requestId: string,
-  options?: { intervalMs?: number, timeoutMs?: number }
-);
 
-// For web apps using redirect flow — handle return from review page:
+// Single-step flow: login() builds the Keycloak authorize URL + error URL up front, sends the
+// user through the Bodhi review page to Keycloak, and returns to your redirect_uri with the code.
+// Web apps handle that final callback via BodhiProvider (or client.handleOAuthCallback(code, state)).
 import { isWebUIClient } from '@bodhiapp/bodhi-js-react';
 if (isWebUIClient(client)) {
-  await client.handleAccessRequestCallback(requestId);
+  await client.handleOAuthCallback(code, state);
 }
 ```
 
@@ -369,15 +369,14 @@ import { isAuthenticated } from '@bodhiapp/bodhi-js-react';
 
 ## Endpoints Reference
 
-| Method | Endpoint                            | SDK Method                       |
-| ------ | ----------------------------------- | -------------------------------- |
-| POST   | /v1/chat/completions                | client.chat.completions.create() |
-| GET    | /v1/models                          | client.models.list()             |
-| GET    | /v1/models/{id}                     | client.models.retrieve(id)       |
-| POST   | /v1/embeddings                      | client.embeddings.create()       |
-| GET    | /bodhi/v1/apps/mcps                 | client.mcps.list()               |
-| POST   | /bodhi/v1/apps/request-access       | client.requestAccess()           |
-| GET    | /bodhi/v1/apps/access-requests/{id} | client.getAccessRequestStatus()  |
-| GET    | /bodhi/v1/info                      | client.getServerState()          |
+| Method | Endpoint                      | SDK Method                       |
+| ------ | ----------------------------- | -------------------------------- |
+| POST   | /v1/chat/completions          | client.chat.completions.create() |
+| GET    | /v1/models                    | client.models.list()             |
+| GET    | /v1/models/{id}               | client.models.retrieve(id)       |
+| POST   | /v1/embeddings                | client.embeddings.create()       |
+| GET    | /bodhi/v1/apps/mcps           | client.mcps.list()               |
+| POST   | /bodhi/v1/apps/request-access | client.requestAccess()           |
+| GET    | /bodhi/v1/info                | client.getServerState()          |
 
 > **Note**: MCP tool operations (list tools, refresh, execute) are handled via `@modelcontextprotocol/sdk` using `createMcpClient(client, mcp.path)`.

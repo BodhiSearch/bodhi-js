@@ -18,17 +18,24 @@
 
 ## Public API Surface (VERIFIED from source code)
 
-### BodhiProvider props (react/src/BodhiProvider.tsx)
+### BodhiProvider props (react/src/BodhiProvider.tsx preset extends react-core/src/BodhiProvider.tsx)
+
+Preset-only (react/react-ext, auto-create the client):
 
 - authClientId?: string — for auto-creation of WebUIClient
-- clientConfig?: WebUIClientParams — optional config (authServerUrl, redirectUri, basePath, logLevel)
+- clientConfig?: WebUIClientParams — optional (authServerUrl, redirectUri, basePath, logLevel, apiTimeoutMs, storage, initialTokens, initParams)
 - client?: UIClient — custom client override (skips auto-creation)
+
+Core (forwarded from react-core BodhiProvider):
+
 - basePath?: string (default: '/')
 - callbackPath?: string (auto-computed from basePath + '/callback')
 - handleCallback?: boolean (default: true)
 - modalHtmlPath?: string
 - logLevel?: LogLevel (default: 'warn')
-- autoProbe?: boolean (default: true) — eagerly probe server connectivity on mount (before modal is shown)
+- setupModal?: SetupModalVariant (default: 'setup-modal-v2') — 'setup-modal-v2' (eager direct/LNA flow + cloud-signup fallback) or 'setup-modal' (legacy multi-step wizard, handles extension install)
+- autoProbe?: boolean (default: true) — eager headless server probe on mount; if ready the app proceeds with no modal
+- defaultHost?: string — probe target when no cached URL exists; falls back to DEFAULT_LOCAL_URL ('http://localhost:1135'). Probe precedence: cached localStorage URL → defaultHost → DEFAULT_LOCAL_URL
 
 ### useBodhi() returns (react-core/src/BodhiProvider.tsx:43-65)
 
@@ -73,8 +80,6 @@
 - logout() → Promise<AuthState>
 - getAuthState() → Promise<AuthState>
 - requestAccess(body: CreateAccessRequest) → Promise<ApiResponse<CreateAccessRequestResponse>>
-- getAccessRequestStatus(requestId) → Promise<ApiResponse<AccessRequestStatusResponse>>
-- pollAccessRequestStatus(requestId, options?) → Promise<AccessRequestStatusResponse>
 
 ### UIClient facade methods (core/src/interface.ts)
 
@@ -94,7 +99,6 @@
 ### IWebUIClient (web only, via isWebUIClient() guard)
 
 - handleOAuthCallback(code, state) → Promise<AuthState>
-- handleAccessRequestCallback(requestId) → Promise<AuthState>
 
 ### State types
 
@@ -126,9 +130,9 @@
 
 ## Connection Modes
 
-- Extension mode: via Bodhi Browser extension (recommended)
-- Direct mode: via LNA to localhost (experimental, Chrome 130+)
-- SDK auto-detects; setup wizard guides installation
+- Direct mode: HTTP to localhost via LNA (Chrome 130+ / Edge 143+). Default web path; what setup-modal-v2 configures.
+- Extension mode: via Bodhi Browser extension (window.bodhiext). Used by \*-ext packages and browsers without LNA.
+- Default setup-modal-v2 is direct-only (no extension-install guidance); legacy setup-modal handles extension install.
 
 ## Key Patterns
 
@@ -181,7 +185,9 @@ for (const mcp of mcps.mcps) {
 - bodhi-js-sdk/cli/src/cli-client.ts (CliClient with createMcpTransportConfig)
 - bodhi-js-sdk/core/src/access-request.ts (AccessRequestBuilder, LoginOptionsBuilder)
 - bodhi-js-sdk/core/src/types/ (ClientState, AuthState, LoginOptions)
-- bodhi-js-sdk/react-core/src/BodhiProvider.tsx (React provider)
+- bodhi-js-sdk/react-core/src/BodhiProvider.tsx (React provider; mounts setupModal variant, default 'setup-modal-v2')
+- bodhi-js-sdk/react-core/src/SetupModalV2Processor.tsx (default modal: auto-probe, defaultHost, cache, direct/LNA flow)
+- bodhi-js-sdk/core/src/onboarding/modal-v2.ts (OnboardingModalV2 iframe lifecycle)
 - bodhi-js-sdk/react-core/src/client-ctx.ts (useBodhi context)
 - sdk-test-app/web/src/ (reference app using full SDK)
 - Per-package CLAUDE.md files (core, web, ext, react-core, react, react-ext)

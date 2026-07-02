@@ -20,7 +20,7 @@ This is the central concept for any Bodhi App integration. Understanding this is
 Apps don't get automatic access to a user's LLMs or MCPs. Instead:
 
 1. **App declares what it needs** — during `login()`, the app specifies which resources it requires (MCP servers, user role)
-2. **User reviews and consents** — a popup shows the user what the app is requesting; the user can approve all, partially approve, or deny
+2. **User reviews and consents** — the SDK sends the user to a Bodhi review screen (web: full-page redirect; Chrome extension: `chrome.identity` window) showing what the app is requesting; the user can approve all, partially approve, or deny
 3. **App receives scoped access** — only approved resources are accessible via SDK APIs; unapproved ones are filtered out server-side
 4. **Token carries claims** — the OAuth token includes claims for approved resources, enforced on every API call
 
@@ -45,7 +45,7 @@ The SDK mirrors `@bodhiapp/ts-client`'s subpath layout. Never add `@bodhiapp/ts-
 | Import path                              | Contents                                                                                                                                                                          |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@bodhiapp/bodhi-js-react`               | App-facing types/classes: `BodhiProvider`, `useBodhi`, `BodhiError`, `BodhiApiError`, `unwrapResponse`, `AuthState`, `ClientState`, `UIClient`, `LoginOptions`, state/type guards |
-| `@bodhiapp/bodhi-js-react/api`           | All ts-client management types: `ApiFormat`, `UserScope`, `FlowType`, `RequestedResourcesV1`, `PaginatedAliasResponse`, `AliasResponse`, `Alias`, `ApiModel`, `Mcp`, …            |
+| `@bodhiapp/bodhi-js-react/api`           | All ts-client management types: `ApiFormat`, `UserScope`, `RequestedResourcesV1`, `PaginatedAliasResponse`, `AliasResponse`, `Alias`, `ApiModel`, `Mcp`, …                        |
 | `@bodhiapp/bodhi-js-react/api/openai`    | OpenAI-compat spec types                                                                                                                                                          |
 | `@bodhiapp/bodhi-js-react/api/anthropic` | Anthropic spec types                                                                                                                                                              |
 | `@bodhiapp/bodhi-js-react/api/gemini`    | Gemini spec types                                                                                                                                                                 |
@@ -55,7 +55,7 @@ The SDK mirrors `@bodhiapp/ts-client`'s subpath layout. Never add `@bodhiapp/ts-
 ```ts
 import { BodhiProvider, useBodhi, BodhiError } from '@bodhiapp/bodhi-js-react';
 import type { ApiFormat, PaginatedAliasResponse } from '@bodhiapp/bodhi-js-react/api';
-import type { UserScope, FlowType, RequestedResourcesV1 } from '@bodhiapp/bodhi-js-react/api';
+import type { UserScope, RequestedResourcesV1 } from '@bodhiapp/bodhi-js-react/api';
 import type { components as Anthropic } from '@bodhiapp/bodhi-js-react/api/anthropic';
 import type { components as Gemini } from '@bodhiapp/bodhi-js-react/api/gemini';
 ```
@@ -116,7 +116,7 @@ function MainContent() {
 }
 ```
 
-The `requested` field tells Bodhi App what resources your app needs. The user sees a consent popup listing these and can approve, modify, or deny each one. You can also construct LoginOptions directly:
+The `requested` field tells Bodhi App what resources your app needs. The user sees a consent screen listing these and can approve, modify, or deny each one. You can also construct LoginOptions directly:
 
 ```tsx
 login({
@@ -155,16 +155,17 @@ const stream = client.chat.completions.create({
   callbackPath="/callback"              // OAuth callback route (auto-computed from basePath)
   handleCallback={true}                 // Auto-handle OAuth redirect (default: true)
   logLevel="warn"
-  autoProbe={true}                      // Eagerly probe server on mount (default: true)
 >
 ```
+
+Most apps only need `authClientId` (plus `clientConfig.authServerUrl` for dev). Everything else has sensible defaults. The setup-modal props (`setupModal`, `autoProbe`, `defaultHost`) are covered in [Setup Modal](#setup-modal) — defaults are correct for the common case, so you usually don't set them.
 
 ## useBodhi() Hook
 
 ```tsx
 const {
   client, // SDK client — all API calls go through this
-  isOverallReady, // Client + server ready (use as main gate) — see caveat below
+  isOverallReady, // Client + server ready (use as main gate)
   isReady, // Client connected (extension or direct)
   isServerReady, // Server responding with status 'ready'
   isInitializing, // client.init() in progress
@@ -189,44 +190,55 @@ Every app that uses MCPs should request them during login:
 
 ```tsx
 await login({
-  // What resources your app needs
+  // What resources your app needs. The four booleans are UI drivers: they tell the
+  // consent screen which controls to render; the user picks the actual grant (All / Specific).
   requested: {
+    models_access: true, // show the model All/Specific access selector
+    models_list: true, // show the "list all models" toggle
+    mcps_access: true, // show the MCP All/Specific access selector
+    mcps_list: true, // show the "list all MCPs" toggle
     mcp_servers: [
-      { url: 'https://mcp.exa.ai/mcp' }, // Web search
+      { url: 'https://mcp.exa.ai/mcp' }, // Web search — slotted by-url MCP request
       { url: 'http://localhost:3001' }, // Local MCP server
     ],
   },
 
   // Optional overrides
   userRole: 'scope_user_power_user', // Default: 'scope_user_user'
-  flowType: 'popup', // Default: 'popup' (alternative: 'redirect')
 
   // Progress tracking
   onProgress: stage => {
-    // 'requesting' → 'reviewing' → 'authenticating'
+    // 'requesting' → 'reviewing'
     setLoginStage(stage);
   },
 });
 ```
 
-### What Happens During Login
+### What Happens During Login (single-step)
 
-1. **`requesting`** — SDK posts to `/bodhi/v1/apps/request-access` with your app's client ID, requested resources, and flow type. This endpoint is anonymous — any app can request.
-2. **`reviewing`** — A popup opens at the returned `review_url`. The user sees what resources your app is requesting and can approve all, approve some, or deny. SDK polls for the decision.
-3. **`authenticating`** — Once approved, SDK performs OAuth 2.0 + PKCE with the granted scope. The token carries claims for approved resources.
-4. **Done** — `isAuthenticated` becomes true. Approved resources are now available via `client.mcps.list()`.
+1. **`requesting`** — SDK generates PKCE + state up front, builds the full Keycloak authorize URL, and posts to `/bodhi/v1/apps/request-access` with your app's client ID and requested resources. This endpoint is anonymous — any app can request.
+2. **`reviewing`** — SDK sends the user to the returned `review_url` (web: full-page redirect; Chrome extension: `chrome.identity` window), passing the authorize URL and an error URL as query params. The user sees the requested controls and approves (all/some) or denies.
+3. **Approve → Keycloak → back to your app** — On approve, the review page appends the freshly minted `scope_access_request:<id>` to the authorize URL and redirects straight to Keycloak; Keycloak returns to your registered `redirect_uri` with the code, which the SDK exchanges for tokens. There is **no polling and no intermediate callback into your app** between review and Keycloak.
+4. **Deny/failure** — the review page redirects to your callback with an OAuth-style error (`error_source=bodhi`), which surfaces as an auth error.
+5. **Done** — `isAuthenticated` becomes true. Approved resources are available via `client.mcps.list()`.
 
 ### LoginOptions Reference
 
-| Field            | Type                   | Default             | Description                                      |
-| ---------------- | ---------------------- | ------------------- | ------------------------------------------------ |
-| `requested`      | `RequestedResourcesV1` | none                | MCPs your app needs (version auto-injected)      |
-| `userRole`       | `UserScope`            | `'scope_user_user'` | `'scope_user_user'` or `'scope_user_power_user'` |
-| `flowType`       | `FlowType`             | `'popup'`           | `'popup'` or `'redirect'`                        |
-| `redirectUrl`    | `string`               | client redirectUri  | Return URL for redirect flow                     |
-| `onProgress`     | `(stage) => void`      | none                | Progress callback                                |
-| `pollIntervalMs` | `number`               | `2000`              | Polling interval (popup flow)                    |
-| `pollTimeoutMs`  | `number`               | `300000`            | Polling timeout (popup flow, 5min)               |
+| Field        | Type                   | Default             | Description                                          |
+| ------------ | ---------------------- | ------------------- | ---------------------------------------------------- |
+| `requested`  | `RequestedResourcesV1` | none                | Resource envelope (see below; version auto-injected) |
+| `userRole`   | `UserScope`            | `'scope_user_user'` | `'scope_user_user'` or `'scope_user_power_user'`     |
+| `onProgress` | `(stage) => void`      | none                | Progress callback (`'requesting'` → `'reviewing'`)   |
+
+`RequestedResourcesV1` fields (pass through only — the SDK adds no defaults; the backend decides what to show/grant):
+
+| Field           | Type                | Description                                                         |
+| --------------- | ------------------- | ------------------------------------------------------------------- |
+| `models_access` | `boolean`           | Render the model All/Specific access selector on the consent screen |
+| `models_list`   | `boolean`           | Render the "list all models" toggle (list even non-granted models)  |
+| `mcps_access`   | `boolean`           | Render the MCP All/Specific access selector                         |
+| `mcps_list`     | `boolean`           | Render the "list all MCPs" toggle                                   |
+| `mcp_servers`   | `{ url: string }[]` | Slotted by-url MCP requests (unchanged)                             |
 
 ### LoginOptionsBuilder (Recommended)
 
@@ -237,9 +249,12 @@ import { LoginOptionsBuilder } from '@bodhiapp/bodhi-js-react';
 
 const opts = new LoginOptionsBuilder()
   .setRole('scope_user_power_user')
+  .setModelsAccess() // show model access selector
+  .setModelsList() // show list-all-models toggle
+  .setMcpsAccess()
+  .setMcpsList()
   .addMcpServer('https://mcp.exa.ai/mcp')
   .addMcpServer('http://localhost:3001')
-  .setFlowType('popup')
   .setOnProgress(stage => console.log(stage))
   .build();
 
@@ -401,38 +416,16 @@ function App() {
 
 ## Setup Modal
 
-The SDK includes a built-in setup modal that guides users through connecting to a Bodhi App server. It handles server discovery, URL configuration, and connectivity verification.
+The SDK ships with a built-in setup modal that connects the user to a Bodhi App server. `BodhiProvider` mounts it for you — you never render it. You only interact with it through two things from `useBodhi()`: the `isOverallReady` gate and `showSetup()`.
 
-### Auto-Probe Behavior
+### Default behavior (you don't configure anything)
 
-By default, `autoProbe={true}` causes the SDK to probe the server on mount (before the modal is shown). If the server is reachable and ready, the app proceeds without showing any modal. If the server is unreachable, the modal shows the connection status when opened via `showSetup()`.
+With defaults (`setupModal='setup-modal-v2'`, `autoProbe={true}`), on mount the SDK silently probes for a running server. The probe target is, in order: a previously-confirmed URL cached in `localStorage` → the `defaultHost` prop → `http://localhost:1135`.
 
-To disable headless probing (e.g., if you manage connectivity yourself):
+- **Server is up and ready** → `isOverallReady` becomes true, no modal is ever shown. This is the happy path.
+- **Server not found / not ready** → `isOverallReady` stays false. Call `showSetup()` to open the modal; the user confirms a server URL and connects, or follows the cloud-signup link. On success the modal closes itself and `isOverallReady` flips to true.
 
-```tsx
-<BodhiProvider authClientId="your-client-id" autoProbe={false}>
-```
-
-### Opening the Setup Modal
-
-Use `showSetup()` from `useBodhi()` to open the modal when there's a connectivity issue:
-
-```tsx
-const { isOverallReady, showSetup } = useBodhi();
-
-if (!isOverallReady) {
-  return <button onClick={showSetup}>Configure Connection</button>;
-}
-```
-
-The modal provides:
-
-- Server URL input with Connect button
-- Radio selection for local install vs cloud signup
-- Status indicators (probing, connected, not-ready, error, network-error)
-- Continue button (green when connected)
-
-### Typical Integration Pattern
+That is the entire integration — the conditional-render gate already covers it:
 
 ```tsx
 function App() {
@@ -444,17 +437,27 @@ function App() {
 }
 ```
 
-When `autoProbe` is true (default), the happy path (server already running) never shows the modal — the app goes straight to the login/content state.
+### The two override props (most apps need neither)
 
-### Limitation: Direct Mode Only
+- **`defaultHost`** — change the URL probed when nothing is cached (e.g. a non-default port). Production omits it and gets `http://localhost:1135`.
 
-The setup modal only supports direct connection mode (HTTP to localhost via LNA). It does not support extension-based connections. If your app targets browsers without LNA support (e.g., Firefox, Safari, older Chrome) and relies on the Bodhi Browser extension for connectivity (`connectionMode: 'extension'`), do not use the built-in setup modal. Instead, manage connection setup in your own UI using `client.setConnectionMode('extension')` and `client.testExtensionConnectivity()`.
+  ```tsx
+  <BodhiProvider authClientId="your-client-id" defaultHost="http://localhost:8080">
+  ```
+
+- **`autoProbe={false}`** — skip the headless probe on mount (use when you drive connectivity yourself). The modal still probes when opened via `showSetup()`.
+
+### setup-modal-v2 vs the legacy wizard
+
+`setup-modal-v2` (default) is a direct-connection (LNA) flow: probe localhost, and if that fails, offer cloud signup. **It does not handle extension installation.** If your app connects via the Bodhi Browser extension (`connectionMode: 'extension'`, e.g. for browsers without LNA), either:
+
+- set `setupModal="setup-modal"` to use the legacy multi-step wizard (which guides extension install), or
+- manage setup in your own UI with `client.setConnectionMode('extension')` + `client.testExtensionConnectivity()`.
 
 ## Connection Modes
 
-- **Extension mode** (recommended): Via Bodhi Browser extension. SDK auto-detects `window.bodhiext`.
-- **Direct mode** (experimental): Direct HTTP to `http://localhost:1135`. Requires Chrome 130+ LNA.
-- SDK auto-detects best mode. The setup modal guides server configuration.
+- **Direct mode** (default for web apps): HTTP to `http://localhost:1135` via Chrome 130+ LNA. This is what setup-modal-v2 configures.
+- **Extension mode**: via the Bodhi Browser extension (SDK auto-detects `window.bodhiext`). Used by the `*-ext` packages and browsers without LNA.
 
 ## Reference Files
 
@@ -470,9 +473,11 @@ The setup modal only supports direct connection mode (HTTP to localhost via LNA)
 - `bodhi-js-sdk/core/src/openai-client-compat.ts` — Chat, Models, Embeddings, Mcps (list only)
 - `bodhi-js-sdk/core/src/mcp.ts` — createMcpClient factory, McpTransportProvider interface
 - `bodhi-js-sdk/cli/src/cli-client.ts` — CliClient with login(), createMcpTransportConfig()
-- `bodhi-js-sdk/core/src/access-request.ts` — AccessRequestBuilder, LoginOptionsBuilder, polling logic
+- `bodhi-js-sdk/core/src/access-request.ts` — AccessRequestBuilder, LoginOptionsBuilder
+- `bodhi-js-sdk/core/src/oauth.ts` — PKCE, buildAuthorizeUrl/buildReviewUrl/buildErrorUrl (single-step flow)
 - `bodhi-js-sdk/web/src/direct-client.ts` — login() implementation with access request flow
 - `bodhi-js-sdk/core/src/types/index.ts` — LoginOptions, LoginProgressStage
-- `bodhi-js-sdk/react-core/src/BodhiProvider.tsx` — React provider, callback handling
+- `bodhi-js-sdk/react-core/src/BodhiProvider.tsx` — React provider, callback handling, setupModal variant selection
+- `bodhi-js-sdk/react-core/src/SetupModalV2Processor.tsx` — default setup modal: auto-probe, defaultHost, connection cache
 - `sdk-test-app/web/src/` — Reference app with full integration
 - BodhiApp OpenAPI spec: https://github.com/BodhiSearch/BodhiApp/blob/main/openapi.json

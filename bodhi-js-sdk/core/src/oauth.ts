@@ -96,6 +96,52 @@ export function createOAuthEndpoints(authServerUrl: string): OAuthEndpoints {
 }
 
 // ============================================================================
+// Single-step access-request authorize URL
+// ============================================================================
+
+// Excludes the dynamic scope_access_request:<id>, which the Bodhi review screen appends on approval
+// — state must not depend on the requested resource scopes.
+export const BASE_OAUTH_SCOPE = 'openid profile email roles';
+
+// Marks a callback as a Bodhi deny/failure redirect (vs a Keycloak success/error) via ?bodhi_flow=.
+export const ACCESS_REQUEST_ERROR_MARKER = 'access_request_error';
+
+// Must match the server's auth_endpoint (origin+path) and carry the params the review page validates.
+export function buildAuthorizeUrl(
+  endpoints: OAuthEndpoints,
+  params: {
+    clientId: string;
+    redirectUri: string;
+    scope: string;
+    state: string;
+    codeChallenge: string;
+  }
+): string {
+  const url = new URL(endpoints.authorize);
+  url.searchParams.set('client_id', params.clientId);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('redirect_uri', params.redirectUri);
+  url.searchParams.set('scope', params.scope);
+  url.searchParams.set('code_challenge', params.codeChallenge);
+  url.searchParams.set('code_challenge_method', 'S256');
+  url.searchParams.set('state', params.state);
+  return url.toString();
+}
+
+export function buildReviewUrl(reviewUrl: string, authUrl: string, errorUrl: string): string {
+  const url = new URL(reviewUrl);
+  url.searchParams.set('auth_url', authUrl);
+  url.searchParams.set('error_url', errorUrl);
+  return url.toString();
+}
+
+export function buildErrorUrl(redirectUri: string): string {
+  const url = new URL(redirectUri);
+  url.searchParams.set('bodhi_flow', ACCESS_REQUEST_ERROR_MARKER);
+  return url.toString();
+}
+
+// ============================================================================
 // Token Refresh
 // ============================================================================
 

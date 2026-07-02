@@ -1,5 +1,4 @@
 import type {
-  AccessRequestStatusResponse,
   CreateAccessRequest,
   CreateAccessRequestResponse,
   PingResponse,
@@ -7,9 +6,10 @@ import type {
 import {
   AccessRequestBuilder,
   BACKEND_SERVER_NOT_REACHABLE,
-  DEFAULT_POLL_INTERVAL_MS,
-  DEFAULT_POLL_TIMEOUT_MS,
-  pollAccessRequestUntilResolved,
+  BASE_OAUTH_SCOPE,
+  buildAuthorizeUrl,
+  buildErrorUrl,
+  buildReviewUrl,
   EXTENSION_STATE_NOT_FOUND,
   EXTENSION_STATE_NOT_INITIALIZED,
   Logger,
@@ -25,9 +25,7 @@ import {
   extractUserInfo,
   generateCodeChallenge,
   generateCodeVerifier,
-  openPopupReview,
   refreshAccessToken,
-  throwAccessRequestDenialError,
   BodhiError,
   BodhiApiError,
   unwrapResponse,
@@ -359,60 +357,32 @@ export class WindowBodhiextClient implements IExtensionClient {
     this.ensureBodhiext();
 
     const userRole = options?.userRole ?? 'scope_user_user';
-    const flowType = options?.flowType ?? 'popup';
+    const redirectUri = this.config.redirectUri;
 
-    // Step 1: Create access request
     options?.onProgress?.('requesting');
-    const builder = new AccessRequestBuilder(this.authClientId)
-      .requestedRole(userRole)
-      .flowType(flowType);
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    const state = generateCodeVerifier();
+    localStorage.setItem(this.storageKeys.CODE_VERIFIER, codeVerifier);
+    localStorage.setItem(this.storageKeys.STATE, state);
 
-    if (options?.requested) {
-      builder.requested(options.requested);
-    }
-    if (flowType === 'redirect') {
-      const redirectUrl = options?.redirectUrl ?? this.config.redirectUri;
-      builder.redirectUrl(redirectUrl);
-    }
+    const authUrl = buildAuthorizeUrl(this.authEndpoints, {
+      clientId: this.authClientId,
+      redirectUri,
+      scope: BASE_OAUTH_SCOPE,
+      state,
+      codeChallenge,
+    });
+    const errorUrl = buildErrorUrl(redirectUri);
 
-    const accessRequestBody = builder.build();
-    const accessRequestResult = await this.requestAccess(accessRequestBody);
+    const builder = new AccessRequestBuilder(this.authClientId).requestedRole(userRole);
+    if (options?.requested) builder.requested(options.requested);
+    const accessRequestResult = await this.requestAccess(builder.build());
+    const { review_url: reviewUrl } = unwrapResponse(accessRequestResult);
 
-    const { id: requestId, review_url: reviewUrl } = unwrapResponse(accessRequestResult);
     options?.onProgress?.('reviewing');
-
-    let accessRequestScope: string | null | undefined;
-
-    if (flowType === 'popup') {
-      // Popup flow: open review popup and poll
-      const pollFn = async () => {
-        const statusResult = await this.getAccessRequestStatus(requestId);
-        if (statusResult.status >= 400) return null;
-        const { status, access_request_scope } = statusResult.body as AccessRequestStatusResponse;
-        if (status === 'approved')
-          return { approved: true, accessRequestScope: access_request_scope ?? undefined };
-        if (['denied', 'failed', 'expired'].includes(status)) return { approved: false, status };
-        return null; // still pending
-      };
-
-      const reviewResult = await openPopupReview(reviewUrl, pollFn, {
-        intervalMs: options?.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
-        timeoutMs: options?.pollTimeoutMs ?? DEFAULT_POLL_TIMEOUT_MS,
-      });
-
-      if (!reviewResult.approved) {
-        throwAccessRequestDenialError(reviewResult.status ?? 'unknown');
-      }
-      accessRequestScope = reviewResult.accessRequestScope;
-    } else {
-      // Redirect flow: store requestId and redirect
-      localStorage.setItem(this.storageKeys.ACCESS_REQUEST_ID, requestId);
-      window.location.href = reviewUrl;
-      return new Promise(() => {}); // never resolves
-    }
-
-    options?.onProgress?.('authenticating');
-    return this.performOAuthPkce(`openid profile email roles ${accessRequestScope ?? ''}`.trim());
+    window.location.href = buildReviewUrl(reviewUrl, authUrl, errorUrl);
+    return new Promise(() => {});
   }
 
   /**
@@ -919,62 +889,6 @@ export class WindowBodhiextClient implements IExtensionClient {
       {},
       false
     );
-  }
-
-  async getAccessRequestStatus(
-    requestId: string
-  ): Promise<ApiResponse<AccessRequestStatusResponse>> {
-    return this.sendApiRequest<void, AccessRequestStatusResponse>(
-      'GET',
-      `/bodhi/v1/apps/access-requests/${requestId}?app_client_id=${encodeURIComponent(this.authClientId)}`,
-      undefined,
-      {},
-      false
-    );
-  }
-
-  async pollAccessRequestStatus(
-    requestId: string,
-    options?: { intervalMs?: number; timeoutMs?: number }
-  ): Promise<AccessRequestStatusResponse> {
-    return pollAccessRequestUntilResolved(
-      (id) => this.getAccessRequestStatus(id),
-      requestId,
-      options
-    );
-  }
-
-  private async performOAuthPkce(scope: string): Promise<AuthState> {
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
-    const state = generateCodeVerifier();
-
-    localStorage.setItem(this.storageKeys.CODE_VERIFIER, codeVerifier);
-    localStorage.setItem(this.storageKeys.STATE, state);
-
-    const scopes = scope.split(' ').filter(Boolean);
-    const params = new URLSearchParams({
-      response_type: 'code',
-      client_id: this.authClientId,
-      redirect_uri: this.config.redirectUri,
-      scope: scopes.join(' '),
-      state: state,
-      code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
-    });
-
-    window.location.href = `${this.authEndpoints.authorize}?${params}`;
-    return new Promise(() => {});
-  }
-
-  async handleAccessRequestCallback(requestId: string): Promise<AuthState> {
-    const statusResult = await this.getAccessRequestStatus(requestId);
-    const { status, access_request_scope } = unwrapResponse(statusResult);
-    // Clean up localStorage on ALL paths (not just success)
-    localStorage.removeItem(this.storageKeys.ACCESS_REQUEST_ID);
-    if (status !== 'approved') throwAccessRequestDenialError(status);
-    const scope = `openid profile email roles ${access_request_scope ?? ''}`.trim();
-    return this.performOAuthPkce(scope);
   }
 
   /**

@@ -81,7 +81,6 @@ export async function testServerConnectivity(
 }
 
 import type {
-  AccessRequestStatusResponse,
   BodhiErrorResponse,
   CreateAccessRequest,
   CreateAccessRequestResponse,
@@ -91,7 +90,6 @@ import type {
 import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
 import { BodhiError, BodhiApiError } from '@bodhiapp/bodhi-browser-types';
 import { DEFAULT_API_TIMEOUT_MS } from './constants';
-import { pollAccessRequestUntilResolved } from './access-request';
 import type { IDirectClient, StreamTextResult } from './interface';
 import { Logger } from './logger';
 import { Chat, Models, Embeddings, Mcps } from './openai-client-compat';
@@ -676,35 +674,11 @@ export abstract class DirectClientBase implements IDirectClient {
     );
   }
 
-  async getAccessRequestStatus(
-    requestId: string
-  ): Promise<ApiResponse<AccessRequestStatusResponse>> {
-    return this.sendApiRequest<void, AccessRequestStatusResponse>(
-      'GET',
-      `/bodhi/v1/apps/access-requests/${requestId}?app_client_id=${encodeURIComponent(this.authClientId)}`,
-      undefined,
-      {},
-      false
-    );
-  }
-
-  async pollAccessRequestStatus(
-    requestId: string,
-    options?: { intervalMs?: number; timeoutMs?: number }
-  ): Promise<AccessRequestStatusResponse> {
-    return pollAccessRequestUntilResolved(
-      (id) => this.getAccessRequestStatus(id),
-      requestId,
-      options
-    );
-  }
-
   // ============================================================================
   // Abstract Methods (Platform-Specific)
   // ============================================================================
 
   abstract login(): Promise<AuthState>;
-  protected abstract performOAuthPkce(scope: string): Promise<AuthState>;
 
   async getAuthState(): Promise<AuthState> {
     // storageKeys is built lazily in init() once serverUrl is known — guard against

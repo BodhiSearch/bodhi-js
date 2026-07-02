@@ -6,14 +6,17 @@
 
 import {
   AccessRequestBuilder,
-  DEFAULT_POLL_INTERVAL_MS,
-  DEFAULT_POLL_TIMEOUT_MS,
+  BASE_OAUTH_SCOPE,
+  buildAuthorizeUrl,
+  buildErrorUrl,
+  buildReviewUrl,
   DirectClientBase,
   STORAGE_PREFIXES,
   createOperationError,
   createStoragePrefixWithNamespace,
   generateCodeChallenge,
   generateCodeVerifier,
+  throwAccessRequestDenialError,
   unwrapResponse,
   type AuthState,
   type DirectClientBaseConfig,
@@ -70,111 +73,86 @@ export class DirectExtClient extends DirectClientBase {
       return existingAuth;
     }
 
-    if (options?.flowType === 'redirect') {
-      this.logger.warn('Extension mode does not support redirect flow type; using popup instead');
-    }
-
     const userRole = options?.userRole ?? 'scope_user_user';
+    const redirectUri = this._getRedirectUri();
 
     options?.onProgress?.('requesting');
-    const builder = new AccessRequestBuilder(this.authClientId)
-      .requestedRole(userRole)
-      .flowType('popup');
-
-    if (options?.requested) {
-      builder.requested(options.requested);
-    }
-
-    const accessRequestBody = builder.build();
-    // sendApiRequest throws BodhiError on operational errors
-    const accessRequestResult = await this.requestAccess(accessRequestBody);
-
-    const { id: requestId, review_url: reviewUrl } = unwrapResponse(accessRequestResult);
-    options?.onProgress?.('reviewing');
-
-    // Open review URL in a new tab
-    await chrome.tabs.create({ url: reviewUrl });
-
-    // Poll for approval
-    const statusResponse = await this.pollAccessRequestStatus(requestId, {
-      intervalMs: options?.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
-      timeoutMs: options?.pollTimeoutMs ?? DEFAULT_POLL_TIMEOUT_MS,
-    });
-
-    if (statusResponse.status !== 'approved') {
-      throw createOperationError('auth_error', `Access request ${statusResponse.status}`);
-    }
-
-    const accessRequestScope = statusResponse.access_request_scope;
-    options?.onProgress?.('authenticating');
-
-    return this.performOAuthPkce(`openid profile email roles ${accessRequestScope ?? ''}`.trim());
-  }
-
-  protected async performOAuthPkce(scope: string): Promise<AuthState> {
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
     const state = generateCodeVerifier();
-
     await this._storageSet({
       [this.storageKeys.CODE_VERIFIER]: codeVerifier,
       [this.storageKeys.STATE]: state,
     });
 
-    const redirectUri = chrome.identity.getRedirectURL('callback');
-    const authUrl = new URL(this.authEndpoints.authorize);
-    authUrl.searchParams.set('client_id', this.authClientId);
-    authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('redirect_uri', redirectUri);
-    authUrl.searchParams.set('scope', scope);
-    authUrl.searchParams.set('code_challenge', codeChallenge);
-    authUrl.searchParams.set('code_challenge_method', 'S256');
-    authUrl.searchParams.set('state', state);
-
-    return new Promise((resolve, reject) => {
-      chrome.identity.launchWebAuthFlow(
-        { url: authUrl.toString(), interactive: true },
-        async (redirectUrl) => {
-          if (chrome.runtime.lastError) {
-            await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
-            reject(chrome.runtime.lastError);
-            return;
-          }
-          if (!redirectUrl) {
-            await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
-            reject(createOperationError('oauth_error', 'No redirect URL received'));
-            return;
-          }
-          try {
-            const url = new URL(redirectUrl);
-            const code = url.searchParams.get('code');
-            const returnedState = url.searchParams.get('state');
-            const storedState = await this._storageGet(this.storageKeys.STATE);
-            if (returnedState !== storedState) {
-              await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
-              reject(createOperationError('oauth_error', 'State mismatch'));
-              return;
-            }
-            if (!code) {
-              await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
-              reject(createOperationError('oauth_error', 'No authorization code'));
-              return;
-            }
-            await this.exchangeCodeForTokens(code);
-            const authState = await this.getAuthState();
-            if (authState.status !== 'authenticated') {
-              throw createOperationError('oauth_error', 'Login failed');
-            }
-            this.setAuthState(authState);
-            await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
-            resolve(authState);
-          } catch (error) {
-            await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
-            reject(error);
-          }
-        }
-      );
+    const authUrl = buildAuthorizeUrl(this.authEndpoints, {
+      clientId: this.authClientId,
+      redirectUri,
+      scope: BASE_OAUTH_SCOPE,
+      state,
+      codeChallenge,
     });
+    const errorUrl = buildErrorUrl(redirectUri);
+
+    const builder = new AccessRequestBuilder(this.authClientId).requestedRole(userRole);
+    if (options?.requested) builder.requested(options.requested);
+    const accessRequestResult = await this.requestAccess(builder.build());
+    const { review_url: reviewUrl } = unwrapResponse(accessRequestResult);
+    const target = buildReviewUrl(reviewUrl, authUrl, errorUrl);
+
+    options?.onProgress?.('reviewing');
+    const redirectUrl = await this.launchReview(target);
+    options?.onProgress?.('authenticating');
+    return this.completeOAuthRedirect(redirectUrl);
+  }
+
+  private launchReview(target: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      chrome.identity.launchWebAuthFlow({ url: target, interactive: true }, (redirectUrl) => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+          return;
+        }
+        if (!redirectUrl) {
+          reject(createOperationError('oauth_error', 'No redirect URL received'));
+          return;
+        }
+        resolve(redirectUrl);
+      });
+    });
+  }
+
+  private async completeOAuthRedirect(redirectUrl: string): Promise<AuthState> {
+    const url = new URL(redirectUrl);
+    const error = url.searchParams.get('error');
+    if (error) {
+      await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
+      if (url.searchParams.get('error_source') === 'bodhi') {
+        throwAccessRequestDenialError(error === 'access_denied' ? 'denied' : error);
+      }
+      throw createOperationError('oauth_error', url.searchParams.get('error_description') ?? error);
+    }
+
+    const code = url.searchParams.get('code');
+    const returnedState = url.searchParams.get('state');
+    const storedState = await this._storageGet(this.storageKeys.STATE);
+    if (!returnedState || returnedState !== storedState) {
+      await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
+      throw createOperationError('oauth_error', 'State mismatch');
+    }
+    if (!code) {
+      await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
+      throw createOperationError('oauth_error', 'No authorization code');
+    }
+
+    await this.exchangeCodeForTokens(code);
+    const authState = await this.getAuthState();
+    if (authState.status !== 'authenticated') {
+      await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
+      throw createOperationError('oauth_error', 'Login failed');
+    }
+    this.setAuthState(authState);
+    return authState;
   }
 
   protected _getRedirectUri(): string {

@@ -1,5 +1,4 @@
 import type {
-  AccessRequestStatusResponse,
   CreateAccessRequest,
   CreateAccessRequestResponse,
   PingResponse,
@@ -179,21 +178,6 @@ export interface IConnectionClient<IParams = unknown, SerialState = unknown> {
   requestAccess(body: CreateAccessRequest): Promise<ApiResponse<CreateAccessRequestResponse>>;
 
   /**
-   * Get status of an access request
-   * GET /bodhi/v1/apps/access-requests/{id}?app_client_id=xxx
-   * @throws BodhiError on operational errors
-   */
-  getAccessRequestStatus(requestId: string): Promise<ApiResponse<AccessRequestStatusResponse>>;
-
-  /**
-   * Poll access request until approved/denied/failed/expired
-   */
-  pollAccessRequestStatus(
-    requestId: string,
-    options?: { intervalMs?: number; timeoutMs?: number }
-  ): Promise<AccessRequestStatusResponse>;
-
-  /**
    * Set or update the state change callback
    * Allows setting callback after construction (for React dependency injection)
    * @param callback - Callback invoked on client state or auth state changes
@@ -370,12 +354,6 @@ export interface IWebUIClient extends UIClient {
    * @returns AuthLoggedIn with login state and user info
    */
   handleOAuthCallback(code: string, state: string): Promise<AuthState>;
-
-  /**
-   * Handle access request callback after redirect review (web only)
-   * Called when user returns from review_url redirect
-   */
-  handleAccessRequestCallback(requestId: string): Promise<AuthState>;
 }
 
 /**

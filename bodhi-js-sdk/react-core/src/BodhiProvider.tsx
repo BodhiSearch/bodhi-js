@@ -23,6 +23,7 @@ import {
 } from 'react';
 import { SetupModalProcessor } from './SetupModalProcessor';
 import { SetupModalV2Processor } from './SetupModalV2Processor';
+import { normalizeServerUrl } from './url';
 import {
   clientStateToContextState,
   INITIAL_CLIENT_CONTEXT_STATE,
@@ -94,6 +95,10 @@ export function BodhiProvider({
 }: BodhiProviderProps) {
   const normalizedBasePath = basePath === '/' ? '' : basePath.replace(/\/$/, '');
   const callbackPath = userCallbackPath ?? `${normalizedBasePath}/callback`;
+  const normalizedDefaultHost = useMemo(
+    () => (defaultHost ? normalizeServerUrl(defaultHost) : undefined),
+    [defaultHost]
+  );
   const logger = useMemo(() => new Logger('BodhiProvider', logLevel), [logLevel]);
   const callbackProcessedRef = useRef(false);
   const authErrorRef = useRef(false);
@@ -178,15 +183,13 @@ export function BodhiProvider({
   );
 
   /**
-   * Auto-init on mount, then handle callbacks if present
-   * Sequencing ensures connectionMode is restored before callback routing
+   * Auto-init on mount, then handle the single-step login callback if present.
+   * Sequencing ensures connectionMode is restored before callback routing.
    *
-   * Callback flow (redirect login):
-   *   1. Access request callback: ?bodhi_flow=access_request&id=<requestId>
-   *      → polls status → approved → performOAuthPkce (page navigates away)
-   *      → or denied/expired/failed → sets auth error state
-   *   2. OAuth callback: ?code=<code>&state=<state>
-   *      → exchanges code for tokens → authenticated
+   * Callback shapes at callbackPath:
+   *   - OAuth success: ?code=<code>&state=<state> → exchange for tokens → authenticated
+   *   - Bodhi deny/failure: ?bodhi_flow=access_request_error&error=...&error_source=bodhi
+   *     (or a plain Keycloak ?error=...) → sets auth error state
    */
   useEffect(() => {
     // Only auto-init once on mount
@@ -205,34 +208,21 @@ export function BodhiProvider({
       if (callbackProcessedRef.current) return;
       if (!isWebUIClient(client)) return;
 
-      // Step 2a: Handle access request callback (redirect flow)
-      // Detected by bodhi_flow=access_request marker (set by SDK in redirect URL)
-      const bodhiFlow = url.searchParams.get('bodhi_flow');
-      if (bodhiFlow === 'access_request') {
-        const accessRequestId = url.searchParams.get('id');
-        if (!accessRequestId) {
-          logger.warn('Access request callback marker present but no id parameter');
-          window.history.replaceState({}, '', basePath);
-          return;
-        }
+      // Error callback (Bodhi deny/failure or Keycloak error)
+      const error = url.searchParams.get('error');
+      if (error) {
         callbackProcessedRef.current = true;
-        setIsAuthLoading(true);
-        try {
-          await client.handleAccessRequestCallback(accessRequestId);
-          // handleAccessRequestCallback calls performOAuthPkce which navigates away
-        } catch (error: unknown) {
-          logger.error('Access request callback failed:', error);
-          const bodhiError = error instanceof BodhiError ? error : null;
-          setAuthError(
-            bodhiError?.code ?? 'access_request_callback_failed',
-            error instanceof Error ? error.message : 'Access request callback failed'
-          );
-          window.history.replaceState({}, '', basePath);
-        }
+        const isBodhiDeny =
+          url.searchParams.get('error_source') === 'bodhi' && error === 'access_denied';
+        setAuthError(
+          isBodhiDeny ? 'access_request_denied' : error,
+          url.searchParams.get('error_description') ?? error
+        );
+        window.history.replaceState({}, '', basePath);
         return;
       }
 
-      // Step 2b: Handle OAuth callback (code exchange)
+      // OAuth success callback (code exchange)
       const code = url.searchParams.get('code');
       const state = url.searchParams.get('state');
       if (!code || !state) return;
@@ -242,12 +232,12 @@ export function BodhiProvider({
       try {
         await client.handleOAuthCallback(code, state);
         window.history.replaceState({}, '', basePath);
-      } catch (error: unknown) {
-        logger.error('OAuth callback failed:', error);
-        const bodhiError = error instanceof BodhiError ? error : null;
+      } catch (err: unknown) {
+        logger.error('OAuth callback failed:', err);
+        const bodhiError = err instanceof BodhiError ? err : null;
         setAuthError(
           bodhiError?.code ?? 'oauth_callback_failed',
-          error instanceof Error ? error.message : 'OAuth callback failed'
+          err instanceof Error ? err.message : 'OAuth callback failed'
         );
         window.history.replaceState({}, '', basePath);
       }
@@ -267,11 +257,7 @@ export function BodhiProvider({
           ? {
               ...(options.userRole && { userRole: options.userRole }),
               ...(options.requested && { requested: options.requested }),
-              ...(options.flowType && { flowType: options.flowType }),
-              ...(options.redirectUrl && { redirectUrl: options.redirectUrl }),
               ...(options.onProgress && { onProgress: options.onProgress }),
-              ...(options.pollIntervalMs && { pollIntervalMs: options.pollIntervalMs }),
-              ...(options.pollTimeoutMs && { pollTimeoutMs: options.pollTimeoutMs }),
             }
           : undefined;
         const loginOptions = extracted && Object.keys(extracted).length > 0 ? extracted : undefined;
@@ -361,7 +347,7 @@ export function BodhiProvider({
           basePath={basePath}
           logLevel={logLevel}
           autoProbe={autoProbe}
-          defaultHost={defaultHost}
+          defaultHost={normalizedDefaultHost}
         />
       )}
       {children}

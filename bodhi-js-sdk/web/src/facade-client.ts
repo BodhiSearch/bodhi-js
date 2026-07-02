@@ -162,12 +162,4 @@ export class WebUIClient
     }
     return this.extClient.handleOAuthCallback(code, state);
   }
-
-  async handleAccessRequestCallback(requestId: string): Promise<AuthState> {
-    // Delegate to active client based on connection mode
-    if (this.connectionMode === 'direct') {
-      return this.directClient.handleAccessRequestCallback(requestId);
-    }
-    return this.extClient.handleAccessRequestCallback(requestId);
-  }
 }

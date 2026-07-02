@@ -89,5 +89,8 @@ export type { McpFetchLike, McpTransportConfig } from '@bodhiapp/bodhi-js-core';
 // Streaming types
 export type { StreamTextResult } from '@bodhiapp/bodhi-js-core';
 
+// URL helpers
+export { normalizeServerUrl } from './url';
+
 // Re-export build info
 export { BUILD_MODE as REACT_CORE_BUILD_MODE } from './build-info';

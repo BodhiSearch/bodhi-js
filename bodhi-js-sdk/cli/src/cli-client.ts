@@ -11,6 +11,11 @@ import http from 'node:http';
 import { URL } from 'node:url';
 import {
   AccessRequestBuilder,
+  BASE_OAUTH_SCOPE,
+  buildAuthorizeUrl,
+  buildErrorUrl,
+  buildReviewUrl,
+  createOperationError,
   DirectClientBase,
   generateCodeChallenge,
   generateCodeVerifier,
@@ -96,10 +101,24 @@ export class CliClient extends DirectClientBase {
     const requested = options?.requested;
     const onReviewUrl = options?.onReviewUrl;
 
-    // State across callback phases (assigned after handler is defined, read when callback fires)
-    let accessRequestId: string;
-    let codeVerifier: string;
-    let pkceState: string;
+    // Keycloak returns the code to this local server; the review page redirects here with
+    // ?bodhi_flow=access_request_error on deny/failure.
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    const pkceState = generateCodeVerifier();
+    await this._storageSet({
+      [this.storageKeys.CODE_VERIFIER]: codeVerifier,
+      [this.storageKeys.STATE]: pkceState,
+    });
+
+    const authUrl = buildAuthorizeUrl(this.authEndpoints, {
+      clientId: this.authClientId,
+      redirectUri: callbackUrl,
+      scope: BASE_OAUTH_SCOPE,
+      state: pkceState,
+      codeChallenge,
+    });
+    const errorUrl = buildErrorUrl(callbackUrl);
 
     let resolveAuth: (state: AuthState) => void;
     let rejectAuth: (err: Error) => void;
@@ -108,7 +127,6 @@ export class CliClient extends DirectClientBase {
       rejectAuth = reject;
     });
 
-    // --- Callback server ---
     const server = http.createServer(async (req, res) => {
       const url = new URL(req.url!, `http://localhost:${callbackPort}`);
 
@@ -118,84 +136,37 @@ export class CliClient extends DirectClientBase {
         return;
       }
 
-      const flowType = url.searchParams.get('flow_type');
+      const error = url.searchParams.get('error');
+      if (error) {
+        const description = url.searchParams.get('error_description') ?? error;
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(`<html><body><h1>Access request ${error}</h1><p>${description}</p></body></html>`);
+        const code = error === 'access_denied' ? 'access_request_denied' : 'access_request_failed';
+        rejectAuth(createOperationError(code, description));
+        return;
+      }
 
-      if (flowType === 'access_request') {
-        // Access request approved → redirect to Keycloak PKCE auth
-        try {
-          const statusResult = await this.getAccessRequestStatus(accessRequestId);
-          const { status, access_request_scope } = unwrapResponse(statusResult);
+      const code = url.searchParams.get('code');
+      const state = url.searchParams.get('state');
+      if (!code || !state || state !== pkceState) {
+        res.writeHead(400, { 'Content-Type': 'text/html' });
+        res.end('<html><body><h1>Invalid callback</h1></body></html>');
+        rejectAuth(new Error('Invalid callback parameters'));
+        return;
+      }
 
-          if (status !== 'approved') {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            res.end(`<html><body><h1>Access Request ${status}</h1></body></html>`);
-            rejectAuth(new Error(`Access request ${status}`));
-            return;
-          }
-
-          const scope = `openid profile email roles ${access_request_scope ?? ''}`.trim();
-
-          // Generate PKCE
-          codeVerifier = generateCodeVerifier();
-          const codeChallenge = await generateCodeChallenge(codeVerifier);
-          pkceState = generateCodeVerifier();
-
-          // Store PKCE state in storage (for exchangeCodeForTokens)
-          await this._storageSet({
-            [this.storageKeys.CODE_VERIFIER]: codeVerifier,
-            [this.storageKeys.STATE]: pkceState,
-          });
-
-          // Build Keycloak auth URL
-          const authUrlObj = new URL(this.authEndpoints.authorize);
-          authUrlObj.searchParams.set('client_id', this.authClientId);
-          authUrlObj.searchParams.set('response_type', 'code');
-          authUrlObj.searchParams.set('redirect_uri', callbackUrl);
-          authUrlObj.searchParams.set('scope', scope);
-          authUrlObj.searchParams.set('code_challenge', codeChallenge);
-          authUrlObj.searchParams.set('code_challenge_method', 'S256');
-          authUrlObj.searchParams.set('state', pkceState);
-
-          // Redirect browser to Keycloak (SSO auto-login after access request)
-          res.writeHead(302, { Location: authUrlObj.toString() });
-          res.end();
-        } catch (error) {
-          res.writeHead(500, { 'Content-Type': 'text/html' });
-          res.end(`<html><body><h1>Error</h1><p>${error}</p></body></html>`);
-          rejectAuth(error instanceof Error ? error : new Error(String(error)));
-        }
-      } else {
-        // Keycloak OAuth callback → exchange code for tokens
-        const code = url.searchParams.get('code');
-        const state = url.searchParams.get('state');
-
-        if (!code || !state || state !== pkceState) {
-          res.writeHead(400, { 'Content-Type': 'text/html' });
-          res.end('<html><body><h1>Invalid callback</h1></body></html>');
-          rejectAuth(new Error('Invalid callback parameters'));
-          return;
-        }
-
-        try {
-          // Use inherited exchangeCodeForTokens (reads CODE_VERIFIER from storage)
-          await this.exchangeCodeForTokens(code);
-
-          // Auto-init with server connection test
-          await this.init();
-
-          // Fire auth state callback (so host can persist tokens)
-          const authState = await this.getAuthState();
-          this.setAuthState(authState);
-
-          res.writeHead(200, { 'Content-Type': 'text/html' });
-          res.end('<html><body><h1>Login successful</h1><p>You can close this window.</p></body></html>');
-
-          resolveAuth(authState);
-        } catch (error) {
-          res.writeHead(500, { 'Content-Type': 'text/html' });
-          res.end(`<html><body><h1>Login failed</h1><p>${error}</p></body></html>`);
-          rejectAuth(error instanceof Error ? error : new Error(String(error)));
-        }
+      try {
+        await this.exchangeCodeForTokens(code);
+        await this.init();
+        const authState = await this.getAuthState();
+        this.setAuthState(authState);
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end('<html><body><h1>Login successful</h1><p>You can close this window.</p></body></html>');
+        resolveAuth(authState);
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'text/html' });
+        res.end(`<html><body><h1>Login failed</h1><p>${error}</p></body></html>`);
+        rejectAuth(error instanceof Error ? error : new Error(String(error)));
       }
     });
 
@@ -207,21 +178,14 @@ export class CliClient extends DirectClientBase {
       rejectAuth(new Error(`Login timed out after ${loginTimeoutMs}ms. User did not complete the browser flow.`));
     }, loginTimeoutMs);
 
-    // --- Create access request ---
-    const builder = new AccessRequestBuilder(this.authClientId).requestedRole(userRole).flowType('redirect').redirectUrl(`${callbackUrl}?flow_type=access_request`);
-
+    const builder = new AccessRequestBuilder(this.authClientId).requestedRole(userRole);
     if (requested) {
       builder.requested(requested);
     }
+    const accessResult = await this.requestAccess(builder.build());
+    const { review_url } = unwrapResponse(accessResult);
+    onReviewUrl?.(buildReviewUrl(review_url, authUrl, errorUrl));
 
-    const requestBody = builder.build();
-    const accessResult = await this.requestAccess(requestBody);
-    const { id, review_url } = unwrapResponse(accessResult);
-    accessRequestId = id;
-
-    onReviewUrl?.(review_url);
-
-    // Wait for auth to complete
     try {
       const authState = await authPromise;
       return authState;
@@ -229,14 +193,6 @@ export class CliClient extends DirectClientBase {
       clearTimeout(loginTimeout);
       server.close();
     }
-  }
-
-  /**
-   * Not used — CLI handles OAuth via login() callback server flow.
-   */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  protected async performOAuthPkce(_scope: string): Promise<AuthState> {
-    throw new Error('performOAuthPkce is not supported in CLI mode. Use login() instead.');
   }
 
   protected _getRedirectUri(): string {

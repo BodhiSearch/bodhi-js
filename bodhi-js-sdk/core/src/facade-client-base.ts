@@ -9,7 +9,6 @@
  */
 
 import type {
-  AccessRequestStatusResponse,
   CreateAccessRequest,
   CreateAccessRequestResponse,
   PingResponse,
@@ -407,23 +406,6 @@ export abstract class BaseFacadeClient<
       return this.directClient.requestAccess(body);
     }
     return this.extClient.requestAccess(body);
-  }
-
-  getAccessRequestStatus(requestId: string): Promise<ApiResponse<AccessRequestStatusResponse>> {
-    if (this.isNotSetOrDirect()) {
-      return this.directClient.getAccessRequestStatus(requestId);
-    }
-    return this.extClient.getAccessRequestStatus(requestId);
-  }
-
-  pollAccessRequestStatus(
-    requestId: string,
-    options?: { intervalMs?: number; timeoutMs?: number }
-  ): Promise<AccessRequestStatusResponse> {
-    if (this.isNotSetOrDirect()) {
-      return this.directClient.pollAccessRequestStatus(requestId, options);
-    }
-    return this.extClient.pollAccessRequestStatus(requestId, options);
   }
 
   // ============================================================================

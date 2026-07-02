@@ -33,6 +33,7 @@ import type * as ModalTypes from '@bodhiapp/setup-modal-types';
 import { MSG, DEFAULT_SETUP_STATE } from '@bodhiapp/setup-modal-types';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { SetupState } from './BodhiProvider';
+import { normalizeServerUrl } from './url';
 
 interface SetupModalProcessorProps {
   client: UIClient;
@@ -399,7 +400,7 @@ export function SetupModalProcessor({
       },
 
       [MSG.MODAL_LNA_CONNECT]: async (msg) => {
-        const serverUrl = msg.payload.serverUrl;
+        const serverUrl = normalizeServerUrl(msg.payload.serverUrl);
         console.log('[SetupModalProcessor] LNA connect:', serverUrl);
 
         // Test direct connectivity

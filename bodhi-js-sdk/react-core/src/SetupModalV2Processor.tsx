@@ -11,6 +11,7 @@ import type { BrowserInfoV2, SetupStateV2 } from '@bodhiapp/setup-modal-v2-types
 import { DEFAULT_LOCAL_URL, MSG_V2 } from '@bodhiapp/setup-modal-v2-types';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { SetupState } from './BodhiProvider';
+import { normalizeServerUrl } from './url';
 
 interface SetupModalV2ProcessorProps {
   client: UIClient;
@@ -94,7 +95,10 @@ export function SetupModalV2Processor({
       try {
         localStorage.setItem(
           cacheKey,
-          JSON.stringify({ serverUrl, lastProbedAt: Date.now() } satisfies CachedConnectionV2)
+          JSON.stringify({
+            serverUrl: normalizeServerUrl(serverUrl),
+            lastProbedAt: Date.now(),
+          } satisfies CachedConnectionV2)
         );
       } catch {
         // Non-fatal
@@ -105,26 +109,27 @@ export function SetupModalV2Processor({
 
   const probeServer = useCallback(
     async (serverUrl: string): Promise<SetupStateV2> => {
+      const cleanUrl = normalizeServerUrl(serverUrl);
       const browser = detectBrowserV2();
-      const directState = await client.testDirectConnectivity(serverUrl);
+      const directState = await client.testDirectConnectivity(cleanUrl);
       const status = directState.server.status;
 
       if (status === 'ready') {
-        writeCache(serverUrl);
+        writeCache(cleanUrl);
         prefs.setDirectStatus('granted');
         if (client.getConnectionMode() === null) {
           await client.setConnectionMode('direct');
         }
-        return { serverUrl, browser, probeStatus: 'connected', serverStatus: 'ready' };
+        return { serverUrl: cleanUrl, browser, probeStatus: 'connected', serverStatus: 'ready' };
       }
 
       if (status === 'setup' || status === 'resource_admin') {
-        return { serverUrl, browser, probeStatus: 'not-ready', serverStatus: status };
+        return { serverUrl: cleanUrl, browser, probeStatus: 'not-ready', serverStatus: status };
       }
 
       if (status === 'error') {
         return {
-          serverUrl,
+          serverUrl: cleanUrl,
           browser,
           probeStatus: 'error',
           serverStatus: 'error',
@@ -135,7 +140,7 @@ export function SetupModalV2Processor({
       }
 
       return {
-        serverUrl,
+        serverUrl: cleanUrl,
         browser,
         probeStatus: 'network-error',
         serverStatus: 'unreachable',

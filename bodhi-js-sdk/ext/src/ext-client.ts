@@ -1,7 +1,6 @@
 export type SerializedExt2ExtState = { extensionId?: string };
 
 import type {
-  AccessRequestStatusResponse,
   CreateAccessRequest,
   CreateAccessRequestResponse,
   PingResponse,
@@ -17,7 +16,6 @@ import {
   createExtensionStateNotInitialized,
   createOperationError,
   isAuthError,
-  pollAccessRequestUntilResolved,
   BodhiError,
   BodhiApiError,
   Chat,
@@ -818,29 +816,6 @@ export class ExtClient implements IExtensionClient {
       body,
       {},
       false
-    );
-  }
-
-  async getAccessRequestStatus(
-    requestId: string
-  ): Promise<ApiResponse<AccessRequestStatusResponse>> {
-    return this.sendApiRequest<void, AccessRequestStatusResponse>(
-      'GET',
-      `/bodhi/v1/apps/access-requests/${requestId}?app_client_id=${encodeURIComponent(this.authClientId)}`,
-      undefined,
-      {},
-      false
-    );
-  }
-
-  async pollAccessRequestStatus(
-    requestId: string,
-    options?: { intervalMs?: number; timeoutMs?: number }
-  ): Promise<AccessRequestStatusResponse> {
-    return pollAccessRequestUntilResolved(
-      (id) => this.getAccessRequestStatus(id),
-      requestId,
-      options
     );
   }
 
