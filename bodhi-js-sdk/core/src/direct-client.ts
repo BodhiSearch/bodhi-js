@@ -65,7 +65,9 @@ export class DirectClient extends DirectClientBase {
   createMcpTransportConfig(mcp_path: string): McpTransportConfig {
     const serverUrl = this.serverUrl;
     if (!serverUrl) {
-      throw new Error('DirectClient not initialized. Call init({ serverUrl }) before creating an MCP transport.');
+      throw new Error(
+        'DirectClient not initialized. Call init({ serverUrl }) before creating an MCP transport.'
+      );
     }
     return {
       url: new URL(`${serverUrl}${mcp_path}`),

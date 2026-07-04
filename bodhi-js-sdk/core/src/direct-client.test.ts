@@ -22,7 +22,11 @@ function createClient(serverUrl?: string) {
     authServerUrl: 'https://auth.example.com',
     serverUrl,
     logLevel: 'error',
-    initialTokens: { accessToken: createTestJwt(3600), refreshToken: 'refresh-123', expiresAt: Date.now() + 3600_000 },
+    initialTokens: {
+      accessToken: createTestJwt(3600),
+      refreshToken: 'refresh-123',
+      expiresAt: Date.now() + 3600_000,
+    },
   });
 }
 
@@ -31,7 +35,11 @@ describe('DirectClient (headless)', () => {
 
   it('binds server + authenticates from injected tokens without interactive login', async () => {
     const client = createClient();
-    await client.init({ serverUrl: 'http://localhost:1135', selectedConnection: true, testConnection: false });
+    await client.init({
+      serverUrl: 'http://localhost:1135',
+      selectedConnection: true,
+      testConnection: false,
+    });
 
     const auth = await client.getAuthState();
     expect(auth.status).toBe('authenticated');
@@ -47,13 +55,19 @@ describe('DirectClient (headless)', () => {
   it('builds a direct-mode MCP transport that injects a Bearer token', async () => {
     // Bind serverUrl via init() (not the constructor) so initialTokens are bootstrapped.
     const client = createClient();
-    await client.init({ serverUrl: 'http://localhost:1135', selectedConnection: true, testConnection: false });
+    await client.init({
+      serverUrl: 'http://localhost:1135',
+      selectedConnection: true,
+      testConnection: false,
+    });
     expect((await client.getAuthState()).accessToken).toBeTruthy();
 
     const cfg = client.createMcpTransportConfig('/bodhi/v1/apps/mcps/abc/mcp');
     expect(cfg.url.toString()).toBe('http://localhost:1135/bodhi/v1/apps/mcps/abc/mcp');
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 200 }));
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200 }));
     await cfg.fetch(cfg.url, { method: 'POST' });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);

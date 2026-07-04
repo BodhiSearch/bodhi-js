@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-react-core",
-  "version": "0.0.42-dev",
+  "version": "0.0.43-dev",
   "description": "Core React bindings for Bodhi Browser SDK (dependency injection)",
   "type": "module",
   "main": "dist/bodhi-react-core.cjs.js",
@@ -61,7 +61,7 @@
     "@bodhiapp/setup-modal-types": "file:../../setup-modal/src/types",
     "@bodhiapp/setup-modal-v2-types": "file:../../setup-modal-v2/src/types",
     "@bodhiapp/bodhi-js-core": "file:../core",
-    "@bodhiapp/ts-client": "0.1.36"
+    "@bodhiapp/ts-client": "0.1.37"
   },
   "peerDependencies": {
     "react": "^18.3.0 || ^19.0.0"
