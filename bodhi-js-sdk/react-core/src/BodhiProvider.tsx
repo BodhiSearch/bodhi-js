@@ -258,6 +258,7 @@ export function BodhiProvider({
               ...(options.userRole && { userRole: options.userRole }),
               ...(options.requested && { requested: options.requested }),
               ...(options.onProgress && { onProgress: options.onProgress }),
+              ...(options.reauthorize && { reauthorize: options.reauthorize }),
             }
           : undefined;
         const loginOptions = extracted && Object.keys(extracted).length > 0 ? extracted : undefined;

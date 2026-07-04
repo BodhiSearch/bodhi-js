@@ -69,7 +69,7 @@ export class DirectExtClient extends DirectClientBase {
 
   async login(options?: LoginOptions): Promise<AuthState> {
     const existingAuth = await this.getAuthState();
-    if (existingAuth.status === 'authenticated') {
+    if (existingAuth.status === 'authenticated' && !options?.reauthorize) {
       return existingAuth;
     }
 

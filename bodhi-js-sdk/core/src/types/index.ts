@@ -85,6 +85,13 @@ export interface LoginOptions {
   userRole?: UserScope;
   requested?: RequestedResourcesV1;
   onProgress?: LoginProgressCallback;
+  /**
+   * Re-authorize while already authenticated. When true, login proceeds with a fresh
+   * access request + OAuth flow even if the current status is 'authenticated'; the
+   * callback token exchange replaces the stored tokens, so newly granted resources take
+   * effect. Defaults to false (an authenticated session short-circuits login).
+   */
+  reauthorize?: boolean;
 }
 
 export type { BrowserInfo, OSInfo } from './platform';

@@ -347,9 +347,9 @@ export class WindowBodhiextClient implements IExtensionClient {
    * @returns AuthState
    */
   async login(options?: LoginOptions): Promise<AuthState> {
-    // Check if already logged in
+    // Check if already logged in (unless re-authorizing to widen grants)
     const existingAuth = await this.getAuthState();
-    if (existingAuth.status === 'authenticated') {
+    if (existingAuth.status === 'authenticated' && !options?.reauthorize) {
       return existingAuth;
     }
 

@@ -107,6 +107,7 @@ const VITE_ENV_MODE = import.meta.env.MODE || 'development';
 export class BodhiExtClient {
   private extensionId?: string;
   private isAuthenticating = false;
+  private isReauthorizing = false;
   private authClientId: string;
   private authServerUrl: string;
   private logger: Logger;
@@ -735,13 +736,14 @@ export class BodhiExtClient {
       return;
     }
 
-    // Skip if already logged in
+    // Skip if already logged in (unless re-authorizing to widen grants)
     const authState = await this.getAuthState();
-    if (authState.status === 'authenticated') {
+    if (authState.status === 'authenticated' && !options?.reauthorize) {
       return;
     }
 
     this.isAuthenticating = true;
+    this.isReauthorizing = options?.reauthorize ?? false;
 
     try {
       // Extension must be discovered before login
@@ -776,6 +778,7 @@ export class BodhiExtClient {
       await this.completeOAuthRedirect(redirectUrl);
     } finally {
       this.isAuthenticating = false;
+      this.isReauthorizing = false;
     }
   }
 
@@ -784,9 +787,10 @@ export class BodhiExtClient {
    * @param code Authorization code from OAuth callback
    */
   private async exchangeCodeForTokens(code: string): Promise<void> {
-    // Additional safety: check if already logged in
+    // Additional safety: skip if already logged in — unless a re-authorize is in flight,
+    // where the point is to replace the current tokens with newly-granted ones.
     const authState = await this.getAuthState();
-    if (authState.status === 'authenticated') {
+    if (authState.status === 'authenticated' && !this.isReauthorizing) {
       return;
     }
 

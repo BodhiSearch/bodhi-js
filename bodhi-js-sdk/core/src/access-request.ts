@@ -113,6 +113,11 @@ export class LoginOptionsBuilder {
     return this;
   }
 
+  setReauthorize(reauthorize = true): this {
+    this.options.reauthorize = reauthorize;
+    return this;
+  }
+
   build(): LoginOptions {
     const result = { ...this.options };
     if (Object.keys(this.requested).length > 0) {
