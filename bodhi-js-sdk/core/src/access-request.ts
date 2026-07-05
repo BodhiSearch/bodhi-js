@@ -25,6 +25,11 @@ export class AccessRequestBuilder {
     return this;
   }
 
+  exchange(exchange = true): this {
+    this.body.exchange = exchange;
+    return this;
+  }
+
   modelsAccess(show = true): this {
     this.ensureRequested().models_access = show;
     return this;
@@ -113,8 +118,8 @@ export class LoginOptionsBuilder {
     return this;
   }
 
-  setReauthorize(reauthorize = true): this {
-    this.options.reauthorize = reauthorize;
+  setExchange(exchange = true): this {
+    this.options.exchange = exchange;
     return this;
   }
 

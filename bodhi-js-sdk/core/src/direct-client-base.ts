@@ -665,12 +665,11 @@ export abstract class DirectClientBase implements IDirectClient {
   async requestAccess(
     body: CreateAccessRequest
   ): Promise<ApiResponse<CreateAccessRequestResponse>> {
+    // authenticated=true safely attaches the token when one exists (exchange needs it).
     return this.sendApiRequest<CreateAccessRequest, CreateAccessRequestResponse>(
       'POST',
       '/bodhi/v1/apps/request-access',
-      body,
-      {},
-      false
+      body
     );
   }
 

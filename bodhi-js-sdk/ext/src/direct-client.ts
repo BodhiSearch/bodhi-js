@@ -69,7 +69,7 @@ export class DirectExtClient extends DirectClientBase {
 
   async login(options?: LoginOptions): Promise<AuthState> {
     const existingAuth = await this.getAuthState();
-    if (existingAuth.status === 'authenticated' && !options?.reauthorize) {
+    if (existingAuth.status === 'authenticated' && !options?.exchange) {
       return existingAuth;
     }
 
@@ -96,6 +96,7 @@ export class DirectExtClient extends DirectClientBase {
 
     const builder = new AccessRequestBuilder(this.authClientId).requestedRole(userRole);
     if (options?.requested) builder.requested(options.requested);
+    if (options?.exchange) builder.exchange(true);
     const accessRequestResult = await this.requestAccess(builder.build());
     const { review_url: reviewUrl } = unwrapResponse(accessRequestResult);
     const target = buildReviewUrl(reviewUrl, authUrl, errorUrl);

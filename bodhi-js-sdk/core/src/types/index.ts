@@ -86,12 +86,13 @@ export interface LoginOptions {
   requested?: RequestedResourcesV1;
   onProgress?: LoginProgressCallback;
   /**
-   * Re-authorize while already authenticated. When true, login proceeds with a fresh
-   * access request + OAuth flow even if the current status is 'authenticated'; the
-   * callback token exchange replaces the stored tokens, so newly granted resources take
-   * effect. Defaults to false (an authenticated session short-circuits login).
+   * Exchange (upgrade) the current grant. When true, login proceeds even if already
+   * authenticated: the access request is sent with `exchange: true` and the current token,
+   * so the review page pre-populates from the source grant and approval replaces the stored
+   * tokens with the newly granted ones. When false/undefined an authenticated session
+   * short-circuits login (to force a fresh login, logout then login).
    */
-  reauthorize?: boolean;
+  exchange?: boolean;
 }
 
 export type { BrowserInfo, OSInfo } from './platform';

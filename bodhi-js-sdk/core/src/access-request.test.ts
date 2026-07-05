@@ -2,33 +2,33 @@ import { describe, it, expect } from 'vitest';
 import { LoginOptionsBuilder } from './access-request';
 
 describe('LoginOptionsBuilder', () => {
-  it('omits reauthorize by default', () => {
+  it('omits exchange by default', () => {
     const opts = new LoginOptionsBuilder().setRole('scope_user_user').build();
-    expect(opts.reauthorize).toBeUndefined();
+    expect(opts.exchange).toBeUndefined();
   });
 
-  it('setReauthorize() flags the options for re-authorize', () => {
-    const opts = new LoginOptionsBuilder().setRole('scope_user_user').setReauthorize().build();
-    expect(opts.reauthorize).toBe(true);
+  it('setExchange() flags the options for exchange', () => {
+    const opts = new LoginOptionsBuilder().setRole('scope_user_user').setExchange().build();
+    expect(opts.exchange).toBe(true);
   });
 
-  it('setReauthorize(false) keeps it disabled', () => {
-    const opts = new LoginOptionsBuilder().setReauthorize(false).build();
-    expect(opts.reauthorize).toBe(false);
+  it('setExchange(false) keeps it disabled', () => {
+    const opts = new LoginOptionsBuilder().setExchange(false).build();
+    expect(opts.exchange).toBe(false);
   });
 
-  it('composes reauthorize with role and requested resources', () => {
+  it('composes exchange with role and requested resources', () => {
     const opts = new LoginOptionsBuilder()
       .setRole('scope_user_user')
       .setModelsAccess()
       .setModelsList()
       .setMcpsAccess()
       .setMcpsList()
-      .setReauthorize()
+      .setExchange()
       .build();
     expect(opts).toMatchObject({
       userRole: 'scope_user_user',
-      reauthorize: true,
+      exchange: true,
       requested: {
         models_access: true,
         models_list: true,

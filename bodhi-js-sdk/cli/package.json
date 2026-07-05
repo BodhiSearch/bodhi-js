@@ -1,6 +1,6 @@
 {
   "name": "@bodhiapp/bodhi-js-cli",
-  "version": "0.0.44-dev",
+  "version": "0.0.45-dev",
   "description": "CLI/headless client for Bodhi Browser SDK",
   "type": "module",
   "main": "dist/bodhi-cli.cjs.js",

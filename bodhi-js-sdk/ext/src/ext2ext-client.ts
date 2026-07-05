@@ -107,7 +107,7 @@ const VITE_ENV_MODE = import.meta.env.MODE || 'development';
 export class BodhiExtClient {
   private extensionId?: string;
   private isAuthenticating = false;
-  private isReauthorizing = false;
+  private isExchanging = false;
   private authClientId: string;
   private authServerUrl: string;
   private logger: Logger;
@@ -736,14 +736,14 @@ export class BodhiExtClient {
       return;
     }
 
-    // Skip if already logged in (unless re-authorizing to widen grants)
+    // Skip if already logged in (unless exchanging to widen grants)
     const authState = await this.getAuthState();
-    if (authState.status === 'authenticated' && !options?.reauthorize) {
+    if (authState.status === 'authenticated' && !options?.exchange) {
       return;
     }
 
     this.isAuthenticating = true;
-    this.isReauthorizing = options?.reauthorize ?? false;
+    this.isExchanging = options?.exchange ?? false;
 
     try {
       // Extension must be discovered before login
@@ -770,6 +770,7 @@ export class BodhiExtClient {
 
       const builder = new AccessRequestBuilder(this.authClientId).requestedRole(userRole);
       if (options?.requested) builder.requested(options.requested);
+      if (options?.exchange) builder.exchange(true);
       const accessRequestResult = await this.requestAccess(builder.build());
       const { review_url: reviewUrl } = unwrapResponse(accessRequestResult);
       const target = buildReviewUrl(reviewUrl, authUrl, errorUrl);
@@ -778,7 +779,7 @@ export class BodhiExtClient {
       await this.completeOAuthRedirect(redirectUrl);
     } finally {
       this.isAuthenticating = false;
-      this.isReauthorizing = false;
+      this.isExchanging = false;
     }
   }
 
@@ -787,10 +788,10 @@ export class BodhiExtClient {
    * @param code Authorization code from OAuth callback
    */
   private async exchangeCodeForTokens(code: string): Promise<void> {
-    // Additional safety: skip if already logged in — unless a re-authorize is in flight,
+    // Additional safety: skip if already logged in — unless an exchange is in flight,
     // where the point is to replace the current tokens with newly-granted ones.
     const authState = await this.getAuthState();
-    if (authState.status === 'authenticated' && !this.isReauthorizing) {
+    if (authState.status === 'authenticated' && !this.isExchanging) {
       return;
     }
 
@@ -914,10 +915,13 @@ export class BodhiExtClient {
   async requestAccess(
     body: CreateAccessRequest
   ): Promise<ApiResponse<CreateAccessRequestResponse>> {
+    // authenticated=true safely attaches the token when one exists (exchange needs it).
     return this.sendApiRequest<CreateAccessRequest, CreateAccessRequestResponse>(
       'POST',
       '/bodhi/v1/apps/request-access',
-      body
+      body,
+      undefined,
+      true
     );
   }
 
@@ -1006,13 +1010,15 @@ export class BodhiExtClient {
    * @param endpoint API endpoint path
    * @param body Optional request body
    * @param headers Optional headers
+   * @param authenticated Attach the current token when one exists (safe: skipped if none)
    * @returns API response from LLM server via bodhi-browser-ext
    */
   private async sendApiRequest<TReq = unknown, TRes = unknown>(
     method: string,
     endpoint: string,
     body?: TReq,
-    headers?: Record<string, string>
+    headers?: Record<string, string>,
+    authenticated = false
   ): Promise<ApiResponse<TRes>> {
     if (!this.extensionId) {
       throw new BodhiError(
@@ -1026,6 +1032,12 @@ export class BodhiExtClient {
       body ? { body } : ''
     );
 
+    let requestHeaders = headers;
+    if (authenticated) {
+      const token = await this._getAccessTokenRaw();
+      if (token) requestHeaders = { ...headers, Authorization: `Bearer ${token}` };
+    }
+
     const requestId = crypto.randomUUID();
     const message: ApiRequestMessage<TReq> = {
       type: MESSAGE_TYPES.API_REQUEST,
@@ -1034,7 +1046,7 @@ export class BodhiExtClient {
         method,
         endpoint,
         body,
-        headers,
+        headers: requestHeaders,
       },
     };
 

@@ -258,13 +258,16 @@ export function BodhiProvider({
               ...(options.userRole && { userRole: options.userRole }),
               ...(options.requested && { requested: options.requested }),
               ...(options.onProgress && { onProgress: options.onProgress }),
-              ...(options.reauthorize && { reauthorize: options.reauthorize }),
+              ...(options.exchange && { exchange: options.exchange }),
             }
           : undefined;
         const loginOptions = extracted && Object.keys(extracted).length > 0 ? extracted : undefined;
 
         await client.login(loginOptions);
-        // Auth state updated automatically via callback
+        // Auth state updates via callback; also clear loading for the already-authenticated
+        // short-circuit, which returns without emitting a state change. (The web-redirect path
+        // never resolves this await — the page navigates away — so this is a no-op there.)
+        setIsAuthLoading(false);
       } catch (err) {
         const bodhiError = err instanceof BodhiError ? err : null;
         const errorState: AuthState = {

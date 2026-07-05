@@ -200,16 +200,15 @@ export class WindowBodhiextClient implements IExtensionClient {
       const apiPromise = (async () => {
         let requestHeaders = headers || {};
 
-        // Token injection for authenticated requests
+        // Token injection for authenticated requests (attached only when a token exists)
         if (authenticated) {
           const accessToken = await this._getAccessTokenRaw();
-          if (!accessToken) {
-            throw new BodhiError('auth_error', 'Not authenticated. Please log in first.');
+          if (accessToken) {
+            requestHeaders = {
+              ...requestHeaders,
+              Authorization: `Bearer ${accessToken}`,
+            };
           }
-          requestHeaders = {
-            ...requestHeaders,
-            Authorization: `Bearer ${accessToken}`,
-          };
         }
 
         return this.bodhiext!.sendApiRequest<unknown, TRes>(method, endpoint, body, requestHeaders);
@@ -347,9 +346,9 @@ export class WindowBodhiextClient implements IExtensionClient {
    * @returns AuthState
    */
   async login(options?: LoginOptions): Promise<AuthState> {
-    // Check if already logged in (unless re-authorizing to widen grants)
+    // Check if already logged in (unless exchanging to widen grants)
     const existingAuth = await this.getAuthState();
-    if (existingAuth.status === 'authenticated' && !options?.reauthorize) {
+    if (existingAuth.status === 'authenticated' && !options?.exchange) {
       return existingAuth;
     }
 
@@ -377,6 +376,7 @@ export class WindowBodhiextClient implements IExtensionClient {
 
     const builder = new AccessRequestBuilder(this.authClientId).requestedRole(userRole);
     if (options?.requested) builder.requested(options.requested);
+    if (options?.exchange) builder.exchange(true);
     const accessRequestResult = await this.requestAccess(builder.build());
     const { review_url: reviewUrl } = unwrapResponse(accessRequestResult);
 
@@ -882,12 +882,13 @@ export class WindowBodhiextClient implements IExtensionClient {
   async requestAccess(
     body: CreateAccessRequest
   ): Promise<ApiResponse<CreateAccessRequestResponse>> {
+    // authenticated=true safely attaches the token when one exists (exchange needs it).
     return this.sendApiRequest<CreateAccessRequest, CreateAccessRequestResponse>(
       'POST',
       '/bodhi/v1/apps/request-access',
       body,
       {},
-      false
+      true
     );
   }
 
