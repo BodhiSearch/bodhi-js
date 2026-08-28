@@ -51,6 +51,7 @@ export const SSE_CHUNK_DELIMITER = '\n\n';
 export const EXT_ACTIONS = {
   GET_EXTENSION_ID: 'get_extension_id',
   TEST_CONNECTION: 'test_connection',
+  GET_SERVER_STATE: 'get_server_state',
 } as const;
 
 //-----------------------------------------------------------------------------------

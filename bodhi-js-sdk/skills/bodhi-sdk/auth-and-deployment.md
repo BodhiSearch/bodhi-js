@@ -34,23 +34,29 @@
 
 ### OAuth Flow
 
-The SDK uses OAuth 2.0 + PKCE. BodhiProvider handles the full flow automatically:
+The SDK uses a standard OAuth 2.0 authorization-code flow with PKCE, entered through
+BodhiApp's consent page. BodhiProvider handles the full flow automatically:
 
-1. `login()` constructs auth URL with PKCE challenge and redirects browser
-2. User authenticates at auth server
-3. Browser redirects back with `code` and `state` params
+1. `login()` composes the scope string from LoginOptions, generates PKCE + state, and
+   navigates to `${serverUrl}/ui/apps/auth/` with the standard OAuth params
+2. The user reviews the request on the consent page (models, MCPs, role) and approves
+3. BodhiApp composes the Keycloak authorize URL; Keycloak SSO redirects back to your
+   registered `redirect_uri` with `code` and `state` (deny redirects with `error`,
+   `error_description`, `error_source=bodhi`, and your `state`)
 4. BodhiProvider (with `handleCallback={true}`) intercepts the callback URL
-5. SDK exchanges code for tokens using PKCE verifier
+5. SDK validates state, exchanges code for tokens at Keycloak using the PKCE verifier
 6. URL is cleaned via `history.replaceState()` (no page reload)
-7. Auth state updates to `authenticated`
+7. Auth state updates to `authenticated` (or `error` with `access_request_denied` on deny)
 
 No custom routes or callback handlers needed.
 
 ### Auth Scopes
 
-Default scope: `openid profile email roles scope_user_user`
-
-The SDK auto-appends a resource scope from the server (`scope_resource_{id}`) to scope tokens to the specific server instance.
+The SDK always sends `openid profile email roles`, plus tokens composed from LoginOptions:
+a role token (`scope_user_user` / `scope_user_power_user`), section flags
+(`scope_apps:llms[:false]`, `scope_apps:mcps[:false]`), and any `extraScopes` verbatim.
+BodhiApp consumes its own vocabulary, forwards the rest to Keycloak, and appends the
+server-composed `scope_access_request:<id>` itself — apps must never send that token.
 
 ### handleOAuthCallback (Advanced)
 
@@ -60,12 +66,10 @@ If you disable auto-callback (`handleCallback={false}`), handle it manually:
 import { isWebUIClient } from '@bodhiapp/bodhi-js-react';
 
 // In your callback route:
-const params = new URLSearchParams(window.location.search);
-const code = params.get('code');
-const state = params.get('state');
+const params = new URL(window.location.href).searchParams;
 
-if (code && state && isWebUIClient(client)) {
-  await client.handleOAuthCallback(code, state);
+if ((params.has('code') || params.has('error')) && isWebUIClient(client)) {
+  await client.handleOAuthCallback(params); // throws BodhiError on deny/error callbacks
 }
 ```
 

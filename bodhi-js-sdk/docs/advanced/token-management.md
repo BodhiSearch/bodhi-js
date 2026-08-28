@@ -64,7 +64,6 @@ const keys = createStorageKeys(fullPrefix);
 //   EXPIRES_AT:        '/:bodhi-js-sdk:web:direct::http%3A%2F%2Flocalhost%3A1135:expires_at',
 //   CODE_VERIFIER:     '/:bodhi-js-sdk:web:direct::http%3A%2F%2Flocalhost%3A1135:code_verifier',
 //   STATE:             '/:bodhi-js-sdk:web:direct::http%3A%2F%2Flocalhost%3A1135:state',
-//   ACCESS_REQUEST_ID: '/:bodhi-js-sdk:web:direct::http%3A%2F%2Flocalhost%3A1135:access_request_id',
 // }
 ```
 
@@ -109,7 +108,7 @@ When `DirectClient.init()` is called with a serverUrl that differs from the prev
 committed one, the SDK:
 
 1. Attempts to revoke the previous server's refresh token at its revoke endpoint (best-effort — failures are logged and ignored).
-2. Removes all OAuth keys (`ACCESS_TOKEN`, `REFRESH_TOKEN`, `EXPIRES_AT`, `CODE_VERIFIER`, `STATE`, `ACCESS_REQUEST_ID`) from the previous server's namespace.
+2. Removes all OAuth keys (`ACCESS_TOKEN`, `REFRESH_TOKEN`, `EXPIRES_AT`, `CODE_VERIFIER`, `STATE`) from the previous server's namespace.
 3. Emits an `unauthenticated` auth-state change so the UI reflects the logged-out state.
 4. Rebuilds `storageKeys` under the new server's namespace.
 

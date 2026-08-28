@@ -8,11 +8,7 @@
  * Subclasses must implement factory methods to create their specific internal clients.
  */
 
-import type {
-  CreateAccessRequest,
-  CreateAccessRequestResponse,
-  PingResponse,
-} from '@bodhiapp/ts-client';
+import type { PingResponse } from '@bodhiapp/ts-client';
 import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
 import type { IConnectionClient, IExtensionClient, StreamTextResult } from './interface';
 import { Logger } from './logger';
@@ -399,13 +395,6 @@ export abstract class BaseFacadeClient<
       return this.directClient.getAuthState();
     }
     return this.extClient.getAuthState();
-  }
-
-  requestAccess(body: CreateAccessRequest): Promise<ApiResponse<CreateAccessRequestResponse>> {
-    if (this.isNotSetOrDirect()) {
-      return this.directClient.requestAccess(body);
-    }
-    return this.extClient.requestAccess(body);
   }
 
   // ============================================================================

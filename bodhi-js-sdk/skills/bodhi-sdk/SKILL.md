@@ -45,7 +45,7 @@ The SDK mirrors `@bodhiapp/ts-client`'s subpath layout. Never add `@bodhiapp/ts-
 | Import path                              | Contents                                                                                                                                                                          |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@bodhiapp/bodhi-js-react`               | App-facing types/classes: `BodhiProvider`, `useBodhi`, `BodhiError`, `BodhiApiError`, `unwrapResponse`, `AuthState`, `ClientState`, `UIClient`, `LoginOptions`, state/type guards |
-| `@bodhiapp/bodhi-js-react/api`           | All ts-client management types: `ApiFormat`, `UserScope`, `RequestedResourcesV1`, `PaginatedAliasResponse`, `AliasResponse`, `Alias`, `ApiModel`, `Mcp`, …                        |
+| `@bodhiapp/bodhi-js-react/api`           | All ts-client management types: `ApiFormat`, `UserScope`, `PaginatedAliasResponse`, `AliasResponse`, `Alias`, `ApiModel`, `Mcp`, …                                                |
 | `@bodhiapp/bodhi-js-react/api/openai`    | OpenAI-compat spec types                                                                                                                                                          |
 | `@bodhiapp/bodhi-js-react/api/anthropic` | Anthropic spec types                                                                                                                                                              |
 | `@bodhiapp/bodhi-js-react/api/gemini`    | Gemini spec types                                                                                                                                                                 |
@@ -55,7 +55,7 @@ The SDK mirrors `@bodhiapp/ts-client`'s subpath layout. Never add `@bodhiapp/ts-
 ```ts
 import { BodhiProvider, useBodhi, BodhiError } from '@bodhiapp/bodhi-js-react';
 import type { ApiFormat, PaginatedAliasResponse } from '@bodhiapp/bodhi-js-react/api';
-import type { UserScope, RequestedResourcesV1 } from '@bodhiapp/bodhi-js-react/api';
+import type { UserScope } from '@bodhiapp/bodhi-js-react/api';
 import type { components as Anthropic } from '@bodhiapp/bodhi-js-react/api/anthropic';
 import type { components as Gemini } from '@bodhiapp/bodhi-js-react/api/gemini';
 ```
@@ -107,7 +107,7 @@ function MainContent() {
   if (!isOverallReady) return <button onClick={showSetup}>Setup Required</button>;
 
   if (!isAuthenticated) {
-    const loginOpts = new LoginOptionsBuilder().addMcpServer('https://mcp.exa.ai/mcp').build();
+    const loginOpts = new LoginOptionsBuilder().setMcps().build();
 
     return <button onClick={() => login(loginOpts)}>Login</button>;
   }
@@ -116,14 +116,10 @@ function MainContent() {
 }
 ```
 
-The `requested` field tells Bodhi App what resources your app needs. The user sees a consent screen listing these and can approve, modify, or deny each one. You can also construct LoginOptions directly:
+The login options tell Bodhi App which access sections your app requests (models, MCPs, role). The user sees a consent page and picks the actual grant — which models, which MCPs, what role — before approving or denying. You can also construct LoginOptions directly:
 
 ```tsx
-login({
-  requested: {
-    mcp_servers: [{ url: 'https://mcp.exa.ai/mcp' }],
-  },
-});
+login({ mcps: true });
 ```
 
 ### 5. Use Approved Resources
@@ -184,61 +180,56 @@ const {
 } = useBodhi();
 ```
 
-## Login with Resources (Standard Pattern)
+## Login with Scoped Access (Standard Pattern)
 
-Every app that uses MCPs should request them during login:
+Login is a standard OAuth authorization-code flow: the SDK navigates the user to
+BodhiApp's consent page (`${serverUrl}/ui/apps/auth/`) with your client ID, PKCE, and
+a scope string it composes from the options below. The user reviews and grants access
+(which models/MCPs, role) on the consent page; Keycloak then returns the code to your
+registered `redirect_uri` and the SDK exchanges it for tokens.
 
 ```tsx
 await login({
-  // What resources your app needs. The four booleans are UI drivers: they tell the
-  // consent screen which controls to render; the user picks the actual grant (All / Specific).
-  requested: {
-    models_access: true, // show the model All/Specific access selector
-    models_list: true, // show the "list all models" toggle
-    mcps_access: true, // show the MCP All/Specific access selector
-    mcps_list: true, // show the "list all MCPs" toggle
-    mcp_servers: [
-      { url: 'https://mcp.exa.ai/mcp' }, // Web search — slotted by-url MCP request
-      { url: 'http://localhost:3001' }, // Local MCP server
-    ],
-  },
+  // Role ceiling the app requests; absent → 'scope_user_user'. Requesting
+  // power_user renders a downgrade selector on the consent page.
+  role: 'scope_user_power_user',
 
-  // Optional overrides
-  userRole: 'scope_user_power_user', // Default: 'scope_user_user'
+  // Section flags: undefined → requested (server default), true → requested
+  // explicitly, false → suppressed. Both false = a valid role-only grant.
+  llms: true, // model access section on the consent page
+  mcps: true, // MCP access section on the consent page
+
+  // Extra scope tokens forwarded verbatim to Keycloak (passthrough escape hatch).
+  extraScopes: ['my_custom_scope'],
 
   // Progress tracking
   onProgress: stage => {
-    // 'requesting' → 'reviewing'
+    // 'reviewing' → 'authenticating'
+    // ('authenticating' only fires in the extension/chrome.identity flow; the web flow
+    //  does a full-page redirect at 'reviewing', ending the JS context.)
     setLoginStage(stage);
   },
 });
 ```
 
-### What Happens During Login (single-step)
+### What Happens During Login
 
-1. **`requesting`** — SDK generates PKCE + state up front, builds the full Keycloak authorize URL, and posts to `/bodhi/v1/apps/request-access` with your app's client ID and requested resources. This endpoint is anonymous — any app can request.
-2. **`reviewing`** — SDK sends the user to the returned `review_url` (web: full-page redirect; Chrome extension: `chrome.identity` window), passing the authorize URL and an error URL as query params. The user sees the requested controls and approves (all/some) or denies.
-3. **Approve → Keycloak → back to your app** — On approve, the review page appends the freshly minted `scope_access_request:<id>` to the authorize URL and redirects straight to Keycloak; Keycloak returns to your registered `redirect_uri` with the code, which the SDK exchanges for tokens. There is **no polling and no intermediate callback into your app** between review and Keycloak.
-4. **Deny/failure** — the review page redirects to your callback with an OAuth-style error (`error_source=bodhi`), which surfaces as an auth error.
+1. **`reviewing`** — SDK generates fresh PKCE + state, composes the scope string (`openid profile email roles` + role token + `scope_apps:llms`/`scope_apps:mcps` flags + `extraScopes`), and navigates the user to `${serverUrl}/ui/apps/auth/` (web: full-page redirect; Chrome extension: `chrome.identity` window). No pre-registration request — the navigation itself is the request.
+2. **Consent** — the user sees the requested sections (model/MCP pickers, role) and approves or denies. Which models and MCPs are granted is the user's choice on the consent page — the app only requests the sections.
+3. **Approve → Keycloak → back to your app** — BodhiApp composes the Keycloak authorize URL (appending the server-side `scope_access_request:<id>`), Keycloak SSO returns to your registered `redirect_uri` with `code` + `state`, and the SDK exchanges the code for tokens at Keycloak's token endpoint.
+4. **Deny/failure** — BodhiApp redirects to your `redirect_uri` with `error`, `error_description`, `error_source=bodhi`, and your `state`, which the SDK surfaces as an auth error (`access_request_denied` for a deny). An unknown client or unregistered `redirect_uri` renders an error on the consent page itself — no redirect reaches your app.
 5. **Done** — `isAuthenticated` becomes true. Approved resources are available via `client.mcps.list()`.
 
 ### LoginOptions Reference
 
-| Field        | Type                   | Default             | Description                                          |
-| ------------ | ---------------------- | ------------------- | ---------------------------------------------------- |
-| `requested`  | `RequestedResourcesV1` | none                | Resource envelope (see below; version auto-injected) |
-| `userRole`   | `UserScope`            | `'scope_user_user'` | `'scope_user_user'` or `'scope_user_power_user'`     |
-| `onProgress` | `(stage) => void`      | none                | Progress callback (`'requesting'` → `'reviewing'`)   |
-
-`RequestedResourcesV1` fields (pass through only — the SDK adds no defaults; the backend decides what to show/grant):
-
-| Field           | Type                | Description                                                         |
-| --------------- | ------------------- | ------------------------------------------------------------------- |
-| `models_access` | `boolean`           | Render the model All/Specific access selector on the consent screen |
-| `models_list`   | `boolean`           | Render the "list all models" toggle (list even non-granted models)  |
-| `mcps_access`   | `boolean`           | Render the MCP All/Specific access selector                         |
-| `mcps_list`     | `boolean`           | Render the "list all MCPs" toggle                                   |
-| `mcp_servers`   | `{ url: string }[]` | Slotted by-url MCP requests (unchanged)                             |
+| Field         | Type                | Default               | Description                                                                                        |
+| ------------- | ------------------- | --------------------- | -------------------------------------------------------------------------------------------------- |
+| `role`        | `UserScope`         | `'scope_user_user'`   | Role ceiling: `'scope_user_user'` or `'scope_user_power_user'`                                     |
+| `llms`        | `boolean`           | undefined (requested) | Model access section: `false` suppresses it (`scope_apps:llms:false`)                              |
+| `mcps`        | `boolean`           | undefined (requested) | MCP access section: `false` suppresses it (`scope_apps:mcps:false`)                                |
+| `reauthorize` | `boolean`           | `false`               | Re-consent with prefill while already authenticated (see below)                                    |
+| `extraScopes` | `string[]`          | none                  | Scope tokens forwarded verbatim to Keycloak (`scope_access_request:*` is reserved and rejected)    |
+| `onProgress`  | `(stage) => void`   | none                  | Progress callback (`'reviewing'` → `'authenticating'`)                                             |
 
 ### LoginOptionsBuilder (Recommended)
 
@@ -249,42 +240,28 @@ import { LoginOptionsBuilder } from '@bodhiapp/bodhi-js-react';
 
 const opts = new LoginOptionsBuilder()
   .setRole('scope_user_power_user')
-  .setModelsAccess() // show model access selector
-  .setModelsList() // show list-all-models toggle
-  .setMcpsAccess()
-  .setMcpsList()
-  .addMcpServer('https://mcp.exa.ai/mcp')
-  .addMcpServer('http://localhost:3001')
+  .setLlms() // request the model access section
+  .setMcps() // request the MCP access section
+  .addExtraScope('my_custom_scope')
   .setOnProgress(stage => console.log(stage))
+  .setReauthorize() // re-consent with prefill while already authenticated (see below)
   .build();
 
 await login(opts);
 ```
 
-### Setting App-Level Resource Defaults
+### Re-consenting While Authenticated (`reauthorize`)
 
-Since `requested` must be passed per-login call, create a wrapper for consistent behavior:
+By default, calling `login()` while already authenticated is a no-op — it returns the existing session without re-running the flow. This means an app can't ask for _more_ access (MCP access, a higher role) mid-session without logging out first.
+
+Set `reauthorize: true` to run the consent flow **even while authenticated**. The SDK reads the `access_request_id` claim from the current access token and sends it as `source_access_request_id`, so the consent page pre-populates from what the user already granted (with an explicit reauthorization banner), and on approval the newly granted tokens **replace** the stored ones. Prior grants stay live; denying on the consent page surfaces an auth error and leaves the existing tokens untouched.
 
 ```tsx
-// hooks/useBodhiApp.ts
-import { useBodhi, type LoginOptions } from '@bodhiapp/bodhi-js-react';
-
-const APP_RESOURCES = {
-  mcp_servers: [{ url: 'https://mcp.exa.ai/mcp' }],
-} as const;
-
-export function useBodhiApp() {
-  const bodhi = useBodhi();
-  return {
-    ...bodhi,
-    login: (options?: LoginOptions) =>
-      bodhi.login({
-        requested: APP_RESOURCES,
-        ...options,
-      }),
-  };
-}
+// User is already logged in; app now wants the power_user role.
+await login({ reauthorize: true, role: 'scope_user_power_user' });
 ```
+
+To force a completely fresh login instead, `logout()` then `login()`.
 
 ## Streaming Chat
 
@@ -306,8 +283,8 @@ for await (const chunk of stream) {
 For apps that use MCP tools in chat (tool calling + agent loop), see **[agentic-patterns.md](./agentic-patterns.md)** for the complete implementation guide. Quick overview:
 
 ```tsx
-// 1. Request MCP access during login
-await login({ requested: { mcp_servers: [{ url: 'https://mcp.exa.ai/mcp' }] } });
+// 1. Request MCP access during login — the user grants specific MCPs on the consent page
+await login({ mcps: true });
 
 // 2. List approved MCPs — each has a path for proxy connection
 const { mcps } = await client.mcps.list();
@@ -327,8 +304,8 @@ import { createMcpClient } from '@bodhiapp/bodhi-js-cli/mcp';
 
 const client = new CliClient({ authClientId, authServerUrl, serverUrl });
 await client.login({
-  requested: { mcp_servers: [{ url: 'https://mcp.exa.ai/mcp' }] },
-  onReviewUrl: url => console.log(url),
+  mcps: true,
+  onAuthUrl: url => console.log(url), // consent-page URL — open in browser or print
 });
 
 const mcps = await client.mcps.list();
@@ -409,7 +386,7 @@ function App() {
   const { isOverallReady, isAuthenticated, showSetup, login } = useBodhi();
 
   if (!isOverallReady) return <button onClick={showSetup}>Setup Required</button>;
-  if (!isAuthenticated) return <button onClick={() => login({ requested: APP_RESOURCES })}>Login</button>;
+  if (!isAuthenticated) return <button onClick={() => login({ mcps: true })}>Login</button>;
   return <YourAppContent />;
 }
 ```
@@ -473,9 +450,10 @@ function App() {
 - `bodhi-js-sdk/core/src/openai-client-compat.ts` — Chat, Models, Embeddings, Mcps (list only)
 - `bodhi-js-sdk/core/src/mcp.ts` — createMcpClient factory, McpTransportProvider interface
 - `bodhi-js-sdk/cli/src/cli-client.ts` — CliClient with login(), createMcpTransportConfig()
-- `bodhi-js-sdk/core/src/access-request.ts` — AccessRequestBuilder, LoginOptionsBuilder
-- `bodhi-js-sdk/core/src/oauth.ts` — PKCE, buildAuthorizeUrl/buildReviewUrl/buildErrorUrl (single-step flow)
-- `bodhi-js-sdk/web/src/direct-client.ts` — login() implementation with access request flow
+- `bodhi-js-sdk/core/src/login-options.ts` — LoginOptionsBuilder
+- `bodhi-js-sdk/core/src/oauth.ts` — PKCE, buildLoginScope/buildConsentUrl (consent flow)
+- `bodhi-js-sdk/core/src/login-flow.ts` — performConsentLogin shared orchestration
+- `bodhi-js-sdk/core/src/oauth-callback.ts` — callback parsing/classification (deny detection)
 - `bodhi-js-sdk/core/src/types/index.ts` — LoginOptions, LoginProgressStage
 - `bodhi-js-sdk/react-core/src/BodhiProvider.tsx` — React provider, callback handling, setupModal variant selection
 - `bodhi-js-sdk/react-core/src/SetupModalV2Processor.tsx` — default setup modal: auto-probe, defaultHost, connection cache

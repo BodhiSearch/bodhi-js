@@ -10,22 +10,21 @@ The `login()` function accepts an options object to request access to specific M
 
 ```typescript
 interface LoginOptions {
-  userRole?: UserScope; // 'scope_user_user' | 'scope_user_power_user'
-  requested?: RequestedResources; // MCPs to request access to
-  flowType?: FlowType; // 'redirect' | 'popup'
-  redirectUrl?: string; // Custom redirect after login
+  role?: UserScope; // 'scope_user_user' | 'scope_user_power_user'
+  llms?: boolean; // Model access section: undefined → requested, false → suppressed
+  mcps?: boolean; // MCP access section: undefined → requested, false → suppressed
+  reauthorize?: boolean; // Re-consent with prefill while already authenticated
+  extraScopes?: string[]; // Scope tokens forwarded verbatim to Keycloak
   onProgress?: LoginProgressCallback;
-  pollIntervalMs?: number; // Default: 2000
-  pollTimeoutMs?: number; // Default: 300000 (5 minutes)
 }
 
-type LoginProgressStage = 'requesting' | 'reviewing' | 'authenticating';
+type LoginProgressStage = 'reviewing' | 'authenticating';
 type LoginProgressCallback = (stage: LoginProgressStage) => void;
 ```
 
 ### Requesting MCP Access
 
-When your application needs specific MCP servers, request access during login. The admin reviews and approves the request:
+When your application needs MCP servers, request the MCP section during login. The user grants the specific MCPs on the consent page:
 
 ```typescript
 import { useBodhi } from '@bodhiapp/bodhi-js-react';
@@ -35,13 +34,9 @@ function LoginWithAccess() {
 
   const handleLogin = async () => {
     await login({
-      requested: {
-        mcp_servers: [
-          { url: 'http://localhost:3000/mcp' },
-        ],
-      },
+      mcps: true,
       onProgress: (stage) => {
-        // stage: 'requesting' -> 'reviewing' -> 'authenticating'
+        // stage: 'reviewing' -> 'authenticating'
         console.log('Login stage:', stage);
       },
     });
@@ -145,7 +140,6 @@ Pass `WebUIClientParams` to customize the auto-created client:
 | --------------------------------- | ----------- | -------------------------------------- | --------------------------- |
 | `redirectUri`                     | `string`    | `{origin}{basePath}/callback`          | OAuth redirect URI          |
 | `authServerUrl`                   | `string`    | `https://id.getbodhi.app/realms/bodhi` | Auth server URL             |
-| `userRole`                        | `UserScope` | `'scope_user_user'`                    | Default user role           |
 | `basePath`                        | `string`    | `'/'`                                  | App base path               |
 | `logLevel`                        | `LogLevel`  | `'warn'`                               | Logging level               |
 | `apiTimeoutMs`                    | `number`    | --                                     | API request timeout         |

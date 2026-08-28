@@ -1,9 +1,5 @@
 // Import types from local modules
-import type {
-  BodhiErrorResponse,
-  CreateAccessRequest,
-  CreateAccessRequestResponse,
-} from '@bodhiapp/ts-client';
+import type { BodhiErrorResponse } from '@bodhiapp/ts-client';
 import {
   DISCOVERY_ATTEMPTS,
   DISCOVERY_ATTEMPT_TIMEOUT,
@@ -52,21 +48,19 @@ import {
 
 // Import from core
 import {
-  AccessRequestBuilder,
-  BASE_OAUTH_SCOPE,
-  buildAuthorizeUrl,
-  buildErrorUrl,
-  buildReviewUrl,
-  Logger,
+  assertCallbackSuccess,
   BodhiError,
+  createOAuthEndpoints,
   createOperationError,
-  throwAccessRequestDenialError,
-  unwrapResponse,
+  exchangeAuthorizationCode,
+  Logger,
+  performConsentLogin,
   refreshAccessToken,
   type AuthState,
   type DiscoveryResult,
   type LoginOptions,
   type LogLevel,
+  type OAuthEndpoints,
   type RefreshTokenResponse,
   type Tokens,
   type UserInfo,
@@ -107,7 +101,7 @@ const VITE_ENV_MODE = import.meta.env.MODE || 'development';
 export class BodhiExtClient {
   private extensionId?: string;
   private isAuthenticating = false;
-  private isExchanging = false;
+  private isReauthorizing = false;
   private authClientId: string;
   private authServerUrl: string;
   private logger: Logger;
@@ -118,38 +112,8 @@ export class BodhiExtClient {
   private attempts: number;
   private attemptWaitMs: number;
   private attemptTimeout: number;
-  private authEndpoints: {
-    authorize: string;
-    token: string;
-    userinfo: string;
-    logout: string;
-    revoke: string;
-  };
+  private authEndpoints: OAuthEndpoints;
   private refreshPromise: Promise<string | null> | null = null;
-
-  // ============================================================================
-  // OAuth Utility Methods (Static)
-  // ============================================================================
-
-  private static base64UrlEncode(buffer: ArrayBuffer): string {
-    return btoa(String.fromCharCode(...new Uint8Array(buffer)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '');
-  }
-
-  private static generateCodeVerifier(): string {
-    const array = new Uint8Array(32);
-    crypto.getRandomValues(array);
-    return BodhiExtClient.base64UrlEncode(array.buffer);
-  }
-
-  private static async generateCodeChallenge(verifier: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(verifier);
-    const digest = await crypto.subtle.digest('SHA-256', data);
-    return BodhiExtClient.base64UrlEncode(digest);
-  }
 
   // ============================================================================
   // Constructor
@@ -166,14 +130,7 @@ export class BodhiExtClient {
     this.attemptWaitMs = config?.attemptWaitMs ?? DISCOVERY_ATTEMPT_WAIT_MS;
     this.attemptTimeout = config?.attemptTimeout ?? DISCOVERY_ATTEMPT_TIMEOUT;
 
-    // Construct OAuth endpoints from authServerUrl
-    this.authEndpoints = {
-      authorize: `${this.authServerUrl}/protocol/openid-connect/auth`,
-      token: `${this.authServerUrl}/protocol/openid-connect/token`,
-      userinfo: `${this.authServerUrl}/protocol/openid-connect/userinfo`,
-      logout: `${this.authServerUrl}/protocol/openid-connect/logout`,
-      revoke: `${this.authServerUrl}/protocol/openid-connect/revoke`,
-    };
+    this.authEndpoints = createOAuthEndpoints(this.authServerUrl);
 
     if (this.extensionId) {
       this.logger.info(`[BodhiExtClient] Created client for extension: ${this.extensionId}`);
@@ -726,7 +683,7 @@ export class BodhiExtClient {
   // ============================================================================
 
   /**
-   * Login user via access-request + OAuth2 + PKCE flow
+   * Login user via consent-page OAuth2 + PKCE flow
    * @param options - Optional login options
    * @throws Error if login fails
    */
@@ -736,14 +693,8 @@ export class BodhiExtClient {
       return;
     }
 
-    // Skip if already logged in (unless exchanging to widen grants)
-    const authState = await this.getAuthState();
-    if (authState.status === 'authenticated' && !options?.exchange) {
-      return;
-    }
-
     this.isAuthenticating = true;
-    this.isExchanging = options?.exchange ?? false;
+    this.isReauthorizing = options?.reauthorize ?? false;
 
     try {
       // Extension must be discovered before login
@@ -751,35 +702,41 @@ export class BodhiExtClient {
         throw new Error('Extension not discovered. Please detect Bodhi extension before login.');
       }
 
-      const userRole = options?.userRole ?? 'scope_user_user';
-      const redirectUri = chrome.identity.getRedirectURL('callback');
-
-      const codeVerifier = BodhiExtClient.generateCodeVerifier();
-      const codeChallenge = await BodhiExtClient.generateCodeChallenge(codeVerifier);
-      const state = BodhiExtClient.generateCodeVerifier();
-      await chrome.storage.session.set({ codeVerifier, state, authInProgress: true });
-
-      const authUrl = buildAuthorizeUrl(this.authEndpoints, {
-        clientId: this.authClientId,
-        redirectUri,
-        scope: BASE_OAUTH_SCOPE,
-        state,
-        codeChallenge,
-      });
-      const errorUrl = buildErrorUrl(redirectUri);
-
-      const builder = new AccessRequestBuilder(this.authClientId).requestedRole(userRole);
-      if (options?.requested) builder.requested(options.requested);
-      if (options?.exchange) builder.exchange(true);
-      const accessRequestResult = await this.requestAccess(builder.build());
-      const { review_url: reviewUrl } = unwrapResponse(accessRequestResult);
-      const target = buildReviewUrl(reviewUrl, authUrl, errorUrl);
-
-      const redirectUrl = await this.launchReview(target);
-      await this.completeOAuthRedirect(redirectUrl);
+      await performConsentLogin(
+        {
+          getAuthState: () => this.getAuthState(),
+          getServerUrl: async () => {
+            const serverState = await this.sendExtRequest<{ url?: string }>(
+              EXT_ACTIONS.GET_SERVER_STATE
+            );
+            if (!serverState?.url) {
+              throw createOperationError(
+                'access_request_failed',
+                'Bodhi server URL unavailable from extension — is the Bodhi server connected?'
+              );
+            }
+            return serverState.url;
+          },
+          getRedirectUri: () => chrome.identity.getRedirectURL('callback'),
+          storePkce: async (v) => {
+            await chrome.storage.session.set({
+              codeVerifier: v.codeVerifier,
+              state: v.state,
+              authInProgress: true,
+            });
+          },
+          navigate: async (consentUrl) => {
+            const redirectUrl = await this.launchReview(consentUrl);
+            await this.completeOAuthRedirect(redirectUrl);
+            return this.getAuthState();
+          },
+        },
+        this.authClientId,
+        options
+      );
     } finally {
       this.isAuthenticating = false;
-      this.isExchanging = false;
+      this.isReauthorizing = false;
     }
   }
 
@@ -788,42 +745,28 @@ export class BodhiExtClient {
    * @param code Authorization code from OAuth callback
    */
   private async exchangeCodeForTokens(code: string): Promise<void> {
-    // Additional safety: skip if already logged in — unless an exchange is in flight,
+    // Additional safety: skip if already logged in — unless a reauthorize is in flight,
     // where the point is to replace the current tokens with newly-granted ones.
     const authState = await this.getAuthState();
-    if (authState.status === 'authenticated' && !this.isExchanging) {
+    if (authState.status === 'authenticated' && !this.isReauthorizing) {
       return;
     }
 
     const { codeVerifier } = await chrome.storage.session.get('codeVerifier');
-    const redirectUri = chrome.identity.getRedirectURL('callback');
 
-    const response = await fetch(this.authEndpoints.token, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code: code,
-        redirect_uri: redirectUri,
-        client_id: this.authClientId,
-        code_verifier: codeVerifier,
-      }),
+    const tokens = await exchangeAuthorizationCode({
+      tokenEndpoint: this.authEndpoints.token,
+      clientId: this.authClientId,
+      code,
+      redirectUri: chrome.identity.getRedirectURL('callback'),
+      codeVerifier,
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Token exchange failed: ${response.status} ${errorText}`);
-    }
-
-    const tokens = await response.json();
 
     await this.storeTokens({
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       idToken: tokens.id_token,
-      expiresIn: tokens.expires_in,
+      expiresIn: tokens.expires_in ?? 3600,
     });
   }
 
@@ -908,22 +851,6 @@ export class BodhiExtClient {
   }
 
   // ============================================================================
-  // ============================================================================
-  // Access Request Methods
-  // ============================================================================
-
-  async requestAccess(
-    body: CreateAccessRequest
-  ): Promise<ApiResponse<CreateAccessRequestResponse>> {
-    // authenticated=true safely attaches the token when one exists (exchange needs it).
-    return this.sendApiRequest<CreateAccessRequest, CreateAccessRequestResponse>(
-      'POST',
-      '/bodhi/v1/apps/request-access',
-      body,
-      undefined,
-      true
-    );
-  }
 
   private launchReview(target: string): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -946,25 +873,13 @@ export class BodhiExtClient {
 
   private async completeOAuthRedirect(redirectUrl: string): Promise<void> {
     const url = new URL(redirectUrl);
-    const error = url.searchParams.get('error');
-    if (error) {
-      await chrome.storage.session.remove(['codeVerifier', 'state']);
-      if (url.searchParams.get('error_source') === 'bodhi') {
-        throwAccessRequestDenialError(error === 'access_denied' ? 'denied' : error);
-      }
-      throw createOperationError('oauth_error', url.searchParams.get('error_description') ?? error);
-    }
-
-    const code = url.searchParams.get('code');
-    const returnedState = url.searchParams.get('state');
     const { state: savedState } = await chrome.storage.session.get('state');
-    if (!returnedState || returnedState !== savedState) {
+    let code: string;
+    try {
+      ({ code } = assertCallbackSuccess(url.searchParams, savedState ?? null));
+    } catch (error) {
       await chrome.storage.session.remove(['codeVerifier', 'state']);
-      throw createOperationError('oauth_error', 'State mismatch');
-    }
-    if (!code) {
-      await chrome.storage.session.remove(['codeVerifier', 'state']);
-      throw createOperationError('oauth_error', 'No authorization code');
+      throw error;
     }
 
     await this.exchangeCodeForTokens(code);

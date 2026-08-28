@@ -76,8 +76,8 @@ if (isAuthError(auth)) {
 
 // Client interface narrowing
 if (isWebUIClient(client)) {
-  // client is IWebUIClient — has handleOAuthCallback, handleAccessRequestCallback
-  await client.handleOAuthCallback(code, state);
+  // client is IWebUIClient — has handleOAuthCallback
+  await client.handleOAuthCallback(new URL(window.location.href).searchParams);
 }
 ```
 
@@ -93,18 +93,17 @@ const [auth, setAuth] = useState<AuthState>(INITIAL_AUTH_STATE);
 // { status: 'unauthenticated', user: null, accessToken: null, error: null, ... }
 ```
 
-## AccessRequestBuilder and LoginOptionsBuilder
+## LoginOptionsBuilder
 
-Builders for constructing access request and login options objects:
+Fluent builder for constructing login options:
 
 ```typescript
-import { AccessRequestBuilder, LoginOptionsBuilder } from '@bodhiapp/bodhi-js-core';
+import { LoginOptionsBuilder } from '@bodhiapp/bodhi-js-core';
 
-// Build access request
-const accessRequest = new AccessRequestBuilder().addMcpServer('http://localhost:3000/mcp').build();
-
-// Build login options
-const loginOptions = new LoginOptionsBuilder().withUserRole('scope_user_power_user').withAccessRequest(accessRequest).withFlowType('popup').build();
+const loginOptions = new LoginOptionsBuilder()
+  .setRole('scope_user_power_user')
+  .setMcps()
+  .build();
 
 await client.login(loginOptions);
 ```

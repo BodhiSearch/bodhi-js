@@ -10,18 +10,12 @@
 import http from 'node:http';
 import { URL } from 'node:url';
 import {
-  AccessRequestBuilder,
-  BASE_OAUTH_SCOPE,
-  buildAuthorizeUrl,
-  buildErrorUrl,
-  buildReviewUrl,
-  createOperationError,
-  DirectClientBase,
-  generateCodeChallenge,
-  generateCodeVerifier,
-  InMemoryStorage,
-  unwrapResponse,
+  assertCallbackSuccess,
+  BodhiError,
   createDirectMcpFetch,
+  DirectClientBase,
+  InMemoryStorage,
+  performConsentLogin,
   type AuthState,
   type DirectClientBaseConfig,
   type DirectState,
@@ -49,10 +43,9 @@ export class CliClient extends DirectClientBase {
     };
     super(baseConfig, onStateChange);
     this._serverUrl = config.serverUrl;
-    // Set base class serverUrl immediately so sendApiRequest works before init()
-    // (login() calls requestAccess which uses sendApiRequest). Also build the
-    // serverUrl-scoped OAuth storage keys now: login() persists CODE_VERIFIER/STATE
-    // during the access-request callback, which runs before init() rebuilds them.
+    // Set base class serverUrl immediately so login() can build the consent URL
+    // before init(). Also build the serverUrl-scoped OAuth storage keys now:
+    // login() persists CODE_VERIFIER/STATE before init() rebuilds them.
     this.serverUrl = config.serverUrl;
     this.rebuildStorageKeys();
   }
@@ -85,41 +78,17 @@ export class CliClient extends DirectClientBase {
   /**
    * Full CLI OAuth login flow:
    * 1. Start localhost callback server
-   * 2. Create access request (with redirect to callback)
-   * 3. Call onReviewUrl so host can open browser
-   * 4. Wait for approval redirect → 302 to Keycloak PKCE
-   * 5. Wait for Keycloak callback → exchange code for tokens
-   * 6. Auto-init client
-   * 7. Close server and return AuthState
+   * 2. Build the consent-page URL and call onAuthUrl so host can open browser
+   * 3. User approves on the consent page → Keycloak SSO → callback with code
+   * 4. Exchange code for tokens, auto-init client
+   * 5. Close server and return AuthState
    */
   async login(options?: CliLoginOptions): Promise<AuthState> {
     const callbackPort = options?.callbackPort ?? DEFAULT_CALLBACK_PORT;
     this._callbackPort = callbackPort;
     const callbackUrl = `http://localhost:${callbackPort}/callback`;
 
-    const userRole = options?.userRole ?? 'scope_user_user';
-    const requested = options?.requested;
-    const onReviewUrl = options?.onReviewUrl;
-
-    // Keycloak returns the code to this local server; the review page redirects here with
-    // ?bodhi_flow=access_request_error on deny/failure.
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
-    const pkceState = generateCodeVerifier();
-    await this._storageSet({
-      [this.storageKeys.CODE_VERIFIER]: codeVerifier,
-      [this.storageKeys.STATE]: pkceState,
-    });
-
-    const authUrl = buildAuthorizeUrl(this.authEndpoints, {
-      clientId: this.authClientId,
-      redirectUri: callbackUrl,
-      scope: BASE_OAUTH_SCOPE,
-      state: pkceState,
-      codeChallenge,
-    });
-    const errorUrl = buildErrorUrl(callbackUrl);
-
+    let expectedState: string | null = null;
     let resolveAuth: (state: AuthState) => void;
     let rejectAuth: (err: Error) => void;
     const authPromise = new Promise<AuthState>((resolve, reject) => {
@@ -136,22 +105,14 @@ export class CliClient extends DirectClientBase {
         return;
       }
 
-      const error = url.searchParams.get('error');
-      if (error) {
-        const description = url.searchParams.get('error_description') ?? error;
+      let code: string;
+      try {
+        ({ code } = assertCallbackSuccess(url.searchParams, expectedState));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
         res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(`<html><body><h1>Access request ${error}</h1><p>${description}</p></body></html>`);
-        const code = error === 'access_denied' ? 'access_request_denied' : 'access_request_failed';
-        rejectAuth(createOperationError(code, description));
-        return;
-      }
-
-      const code = url.searchParams.get('code');
-      const state = url.searchParams.get('state');
-      if (!code || !state || state !== pkceState) {
-        res.writeHead(400, { 'Content-Type': 'text/html' });
-        res.end('<html><body><h1>Invalid callback</h1></body></html>');
-        rejectAuth(new Error('Invalid callback parameters'));
+        res.end(`<html><body><h1>Access request failed</h1><p>${message}</p></body></html>`);
+        rejectAuth(error instanceof BodhiError ? error : new Error(message));
         return;
       }
 
@@ -178,17 +139,27 @@ export class CliClient extends DirectClientBase {
       rejectAuth(new Error(`Login timed out after ${loginTimeoutMs}ms. User did not complete the browser flow.`));
     }, loginTimeoutMs);
 
-    const builder = new AccessRequestBuilder(this.authClientId).requestedRole(userRole);
-    if (requested) {
-      builder.requested(requested);
-    }
-    const accessResult = await this.requestAccess(builder.build());
-    const { review_url } = unwrapResponse(accessResult);
-    onReviewUrl?.(buildReviewUrl(review_url, authUrl, errorUrl));
-
     try {
-      const authState = await authPromise;
-      return authState;
+      return await performConsentLogin(
+        {
+          getAuthState: () => this.getAuthState(),
+          getServerUrl: async () => this._serverUrl,
+          getRedirectUri: () => callbackUrl,
+          storePkce: async v => {
+            expectedState = v.state;
+            await this._storageSet({
+              [this.storageKeys.CODE_VERIFIER]: v.codeVerifier,
+              [this.storageKeys.STATE]: v.state,
+            });
+          },
+          navigate: consentUrl => {
+            options?.onAuthUrl?.(consentUrl);
+            return authPromise;
+          },
+        },
+        this.authClientId,
+        options
+      );
     } finally {
       clearTimeout(loginTimeout);
       server.close();

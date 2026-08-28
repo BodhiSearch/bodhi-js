@@ -77,9 +77,16 @@ Core (forwarded from react-core BodhiProvider):
 ### Auth methods (core/src/interface.ts)
 
 - login(options?: LoginOptions) → Promise<AuthState>
+  > LoginOptions: { role?, llms?, mcps?, reauthorize?, extraScopes?, onProgress? }. The SDK composes a
+  > scope string (role token + scope_apps:llms/mcps flags + extraScopes passthrough) and top-level
+  > navigates to ${serverUrl}/ui/apps/auth/ with PKCE; the user grants access on the consent page.
+  > `reauthorize: true` re-runs consent while authenticated with prefill from the current grant
+  > (via the token's access_request_id claim → source_access_request_id); approval replaces stored
+  > tokens, prior grants stay live. Default/false short-circuits an authenticated session.
+  > LoginProgressStage = 'reviewing' | 'authenticating' ('authenticating' only fires in the
+  > extension/chrome.identity flow).
 - logout() → Promise<AuthState>
 - getAuthState() → Promise<AuthState>
-- requestAccess(body: CreateAccessRequest) → Promise<ApiResponse<CreateAccessRequestResponse>>
 
 ### UIClient facade methods (core/src/interface.ts)
 
@@ -163,8 +170,8 @@ import { createMcpClient } from '@bodhiapp/bodhi-js-cli/mcp';
 
 const client = new CliClient({ authClientId, authServerUrl, serverUrl });
 await client.login({
-  requested: { mcp_servers: [{ url: 'https://mcp.exa.ai/mcp' }] },
-  onReviewUrl: url => console.log(url),
+  mcps: true,
+  onAuthUrl: url => console.log(url),
 });
 
 const mcps = await client.mcps.list();
@@ -183,7 +190,9 @@ for (const mcp of mcps.mcps) {
 - bodhi-js-sdk/core/src/openai-client-compat.ts (Chat, Models, Embeddings, Mcps list only)
 - bodhi-js-sdk/core/src/mcp.ts (createMcpClient factory, McpTransportProvider interface)
 - bodhi-js-sdk/cli/src/cli-client.ts (CliClient with createMcpTransportConfig)
-- bodhi-js-sdk/core/src/access-request.ts (AccessRequestBuilder, LoginOptionsBuilder)
+- bodhi-js-sdk/core/src/direct-client.ts (DirectClient — headless, instantiable DirectClientBase for DedicatedWorker/server/test; token injection via initialTokens + InMemoryStorage, login() throws, direct-mode Bearer-injecting MCP transport)
+- bodhi-js-sdk/core/src/login-options.ts (LoginOptionsBuilder)
+- bodhi-js-sdk/core/src/login-flow.ts (performConsentLogin), core/src/oauth-callback.ts (deny/error classification)
 - bodhi-js-sdk/core/src/types/ (ClientState, AuthState, LoginOptions)
 - bodhi-js-sdk/react-core/src/BodhiProvider.tsx (React provider; mounts setupModal variant, default 'setup-modal-v2')
 - bodhi-js-sdk/react-core/src/SetupModalV2Processor.tsx (default modal: auto-probe, defaultHost, cache, direct/LNA flow)

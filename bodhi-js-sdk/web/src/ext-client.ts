@@ -1,15 +1,7 @@
-import type {
-  CreateAccessRequest,
-  CreateAccessRequestResponse,
-  PingResponse,
-} from '@bodhiapp/ts-client';
+import type { PingResponse } from '@bodhiapp/ts-client';
 import {
-  AccessRequestBuilder,
+  assertCallbackSuccess,
   BACKEND_SERVER_NOT_REACHABLE,
-  BASE_OAUTH_SCOPE,
-  buildAuthorizeUrl,
-  buildErrorUrl,
-  buildReviewUrl,
   EXTENSION_STATE_NOT_FOUND,
   EXTENSION_STATE_NOT_INITIALIZED,
   Logger,
@@ -22,9 +14,9 @@ import {
   createOperationError,
   createStorageKeys,
   createStoragePrefixWithNamespace,
+  exchangeAuthorizationCode,
   extractUserInfo,
-  generateCodeChallenge,
-  generateCodeVerifier,
+  performConsentLogin,
   refreshAccessToken,
   BodhiError,
   BodhiApiError,
@@ -341,60 +333,55 @@ export class WindowBodhiextClient implements IExtensionClient {
   // ============================================================================
 
   /**
-   * Login via access-request flow with popup or redirect
+   * Login via consent-page navigation (browser redirect)
    * @param options - Optional login options
    * @returns AuthState
    */
   async login(options?: LoginOptions): Promise<AuthState> {
-    // Check if already logged in (unless exchanging to widen grants)
-    const existingAuth = await this.getAuthState();
-    if (existingAuth.status === 'authenticated' && !options?.exchange) {
-      return existingAuth;
-    }
-
-    // Ensure extension discovered
+    // The consent URL needs the Bodhi server origin, which only the extension knows.
     this.ensureBodhiext();
 
-    const userRole = options?.userRole ?? 'scope_user_user';
-    const redirectUri = this.config.redirectUri;
-
-    options?.onProgress?.('requesting');
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
-    const state = generateCodeVerifier();
-    localStorage.setItem(this.storageKeys.CODE_VERIFIER, codeVerifier);
-    localStorage.setItem(this.storageKeys.STATE, state);
-
-    const authUrl = buildAuthorizeUrl(this.authEndpoints, {
-      clientId: this.authClientId,
-      redirectUri,
-      scope: BASE_OAUTH_SCOPE,
-      state,
-      codeChallenge,
-    });
-    const errorUrl = buildErrorUrl(redirectUri);
-
-    const builder = new AccessRequestBuilder(this.authClientId).requestedRole(userRole);
-    if (options?.requested) builder.requested(options.requested);
-    if (options?.exchange) builder.exchange(true);
-    const accessRequestResult = await this.requestAccess(builder.build());
-    const { review_url: reviewUrl } = unwrapResponse(accessRequestResult);
-
-    options?.onProgress?.('reviewing');
-    window.location.href = buildReviewUrl(reviewUrl, authUrl, errorUrl);
-    return new Promise(() => {});
+    return performConsentLogin(
+      {
+        getAuthState: () => this.getAuthState(),
+        getServerUrl: async () => {
+          const serverState = await this.bodhiext!.serverState();
+          if (!serverState?.url) {
+            throw createOperationError(
+              'access_request_failed',
+              'Bodhi server URL unavailable from extension — is the Bodhi server connected?'
+            );
+          }
+          return serverState.url;
+        },
+        getRedirectUri: () => this.config.redirectUri,
+        storePkce: async (v) => {
+          localStorage.setItem(this.storageKeys.CODE_VERIFIER, v.codeVerifier);
+          localStorage.setItem(this.storageKeys.STATE, v.state);
+        },
+        navigate: (consentUrl) => {
+          window.location.href = consentUrl;
+          return new Promise(() => {});
+        },
+      },
+      this.authClientId,
+      options
+    );
   }
 
   /**
-   * Handle OAuth callback with authorization code
-   * Should be called from callback page with extracted URL params
+   * Handle OAuth callback from the callback page
    * @returns AuthState with login state and user info
    */
-  async handleOAuthCallback(code: string, state: string): Promise<AuthState> {
-    // Validate state to prevent CSRF
+  async handleOAuthCallback(params: URLSearchParams): Promise<AuthState> {
     const storedState = localStorage.getItem(this.storageKeys.STATE);
-    if (!storedState || storedState !== state) {
-      throw new Error('Invalid state parameter - possible CSRF attack');
+    let code: string;
+    try {
+      ({ code } = assertCallbackSuccess(params, storedState));
+    } catch (error) {
+      localStorage.removeItem(this.storageKeys.CODE_VERIFIER);
+      localStorage.removeItem(this.storageKeys.STATE);
+      throw error;
     }
 
     // Exchange code for tokens
@@ -423,28 +410,13 @@ export class WindowBodhiextClient implements IExtensionClient {
       throw new Error('Code verifier not found');
     }
 
-    const params = new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: this.authClientId,
-      code: code,
-      redirect_uri: this.config.redirectUri,
-      code_verifier: codeVerifier,
+    const tokenData = await exchangeAuthorizationCode({
+      tokenEndpoint: this.authEndpoints.token,
+      clientId: this.authClientId,
+      code,
+      redirectUri: this.config.redirectUri,
+      codeVerifier,
     });
-
-    const response = await fetch(this.authEndpoints.token, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Token exchange failed: ${response.status} ${errorText}`);
-    }
-
-    const tokenData = await response.json();
 
     if (!tokenData.access_token) {
       throw new Error('No access token received');
@@ -878,19 +850,6 @@ export class WindowBodhiextClient implements IExtensionClient {
   // ============================================================================
   // Access Request Methods
   // ============================================================================
-
-  async requestAccess(
-    body: CreateAccessRequest
-  ): Promise<ApiResponse<CreateAccessRequestResponse>> {
-    // authenticated=true safely attaches the token when one exists (exchange needs it).
-    return this.sendApiRequest<CreateAccessRequest, CreateAccessRequestResponse>(
-      'POST',
-      '/bodhi/v1/apps/request-access',
-      body,
-      {},
-      true
-    );
-  }
 
   /**
    * Serialize web extension client state (all transient, nothing to persist)

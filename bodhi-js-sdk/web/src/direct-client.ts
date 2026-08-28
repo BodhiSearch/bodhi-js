@@ -5,17 +5,12 @@
  */
 
 import {
-  AccessRequestBuilder,
-  BASE_OAUTH_SCOPE,
-  buildAuthorizeUrl,
-  buildErrorUrl,
-  buildReviewUrl,
-  DirectClientBase,
-  STORAGE_PREFIXES,
-  unwrapResponse,
+  assertCallbackSuccess,
+  createOperationError,
   createStoragePrefixWithNamespace,
-  generateCodeChallenge,
-  generateCodeVerifier,
+  DirectClientBase,
+  performConsentLogin,
+  STORAGE_PREFIXES,
   type AuthState,
   type DirectClientBaseConfig,
   type InitialTokens,
@@ -70,47 +65,42 @@ export class DirectWebClient extends DirectClientBase {
   // ============================================================================
 
   async login(options?: LoginOptions): Promise<AuthState> {
-    const existingAuth = await this.getAuthState();
-    if (existingAuth.status === 'authenticated' && !options?.exchange) {
-      return existingAuth;
-    }
-
-    const userRole = options?.userRole ?? 'scope_user_user';
-    const redirectUri = this.redirectUri;
-
-    options?.onProgress?.('requesting');
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
-    const state = generateCodeVerifier();
-    await this._storageSet({
-      [this.storageKeys.CODE_VERIFIER]: codeVerifier,
-      [this.storageKeys.STATE]: state,
-    });
-
-    const authUrl = buildAuthorizeUrl(this.authEndpoints, {
-      clientId: this.authClientId,
-      redirectUri,
-      scope: BASE_OAUTH_SCOPE,
-      state,
-      codeChallenge,
-    });
-    const errorUrl = buildErrorUrl(redirectUri);
-
-    const builder = new AccessRequestBuilder(this.authClientId).requestedRole(userRole);
-    if (options?.requested) builder.requested(options.requested);
-    if (options?.exchange) builder.exchange(true);
-    const accessRequestResult = await this.requestAccess(builder.build());
-    const { review_url: reviewUrl } = unwrapResponse(accessRequestResult);
-
-    options?.onProgress?.('reviewing');
-    window.location.href = buildReviewUrl(reviewUrl, authUrl, errorUrl);
-    return new Promise(() => {});
+    return performConsentLogin(
+      {
+        getAuthState: () => this.getAuthState(),
+        getServerUrl: async () => {
+          if (!this.serverUrl) {
+            throw createOperationError(
+              'access_request_failed',
+              'Bodhi server URL not set — call init() with a server URL before login()'
+            );
+          }
+          return this.serverUrl;
+        },
+        getRedirectUri: () => this.redirectUri,
+        storePkce: (v) =>
+          this._storageSet({
+            [this.storageKeys.CODE_VERIFIER]: v.codeVerifier,
+            [this.storageKeys.STATE]: v.state,
+          }),
+        navigate: (consentUrl) => {
+          window.location.href = consentUrl;
+          return new Promise(() => {});
+        },
+      },
+      this.authClientId,
+      options
+    );
   }
 
-  async handleOAuthCallback(code: string, state: string): Promise<AuthState> {
+  async handleOAuthCallback(params: URLSearchParams): Promise<AuthState> {
     const storedState = await this._storageGet(this.storageKeys.STATE);
-    if (!storedState || storedState !== state) {
-      throw new Error('Invalid state parameter - possible CSRF attack');
+    let code: string;
+    try {
+      ({ code } = assertCallbackSuccess(params, storedState));
+    } catch (error) {
+      await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
+      throw error;
     }
 
     await this.exchangeCodeForTokens(code);

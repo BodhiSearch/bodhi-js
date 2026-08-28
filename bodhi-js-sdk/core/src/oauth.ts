@@ -5,7 +5,7 @@
  * Used by both sdk/web and sdk/ext for OAuth flows.
  */
 
-import type { UserInfo } from './types';
+import type { LoginOptions, UserInfo } from './types';
 
 // ============================================================================
 // PKCE (Proof Key for Code Exchange)
@@ -60,6 +60,20 @@ export function parseJwt(token: string): Record<string, unknown> {
 }
 
 /**
+ * Read the access_request_id claim from an access token (used for reauthorize).
+ * Returns undefined when the token cannot be parsed or the claim is absent.
+ */
+export function getAccessRequestId(accessToken: string): string | undefined {
+  try {
+    const claims = parseJwt(accessToken);
+    const id = claims['access_request_id'];
+    return typeof id === 'string' && id ? id : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Extract UserInfo from JWT token
  */
 export function extractUserInfo(token: string): UserInfo {
@@ -96,48 +110,63 @@ export function createOAuthEndpoints(authServerUrl: string): OAuthEndpoints {
 }
 
 // ============================================================================
-// Single-step access-request authorize URL
+// Consent flow: scope + URL construction
 // ============================================================================
 
-// Excludes the dynamic scope_access_request:<id>, which the Bodhi review screen appends on approval
-// — state must not depend on the requested resource scopes.
+// BodhiApp guarantees these in the scope it composes for Keycloak, but the SDK keeps
+// sending them: Keycloak requires openid, and BodhiApp dedupes passthrough tokens.
 export const BASE_OAUTH_SCOPE = 'openid profile email roles';
 
-// Marks a callback as a Bodhi deny/failure redirect (vs a Keycloak success/error) via ?bodhi_flow=.
-export const ACCESS_REQUEST_ERROR_MARKER = 'access_request_error';
-
-// Must match the server's auth_endpoint (origin+path) and carry the params the review page validates.
-export function buildAuthorizeUrl(
-  endpoints: OAuthEndpoints,
-  params: {
-    clientId: string;
-    redirectUri: string;
-    scope: string;
-    state: string;
-    codeChallenge: string;
-  }
+/**
+ * Compose the scope string for the consent-page navigation from LoginOptions.
+ *
+ * - role → scope_user_user / scope_user_power_user (absent → server defaults to user)
+ * - llms/mcps: undefined → token omitted (server default: requested),
+ *   true → scope_apps:llms / scope_apps:mcps, false → :false suffix (section suppressed)
+ * - extraScopes are appended verbatim (passthrough to Keycloak), deduped preserving
+ *   first occurrence
+ */
+export function buildLoginScope(
+  options?: Pick<LoginOptions, 'role' | 'llms' | 'mcps' | 'extraScopes'>
 ): string {
-  const url = new URL(endpoints.authorize);
+  const tokens = BASE_OAUTH_SCOPE.split(' ');
+  if (options?.role) tokens.push(options.role);
+  if (options?.llms !== undefined) {
+    tokens.push(options.llms ? 'scope_apps:llms' : 'scope_apps:llms:false');
+  }
+  if (options?.mcps !== undefined) {
+    tokens.push(options.mcps ? 'scope_apps:mcps' : 'scope_apps:mcps:false');
+  }
+  if (options?.extraScopes) tokens.push(...options.extraScopes);
+  return [...new Set(tokens.filter((t) => t.length > 0))].join(' ');
+}
+
+export interface ConsentUrlParams {
+  clientId: string;
+  redirectUri: string;
+  scope: string;
+  state: string;
+  codeChallenge: string;
+  sourceAccessRequestId?: string;
+}
+
+/**
+ * Build the BodhiApp consent-page URL the app top-level-navigates to.
+ * The trailing slash on /ui/apps/auth/ is required by the server route.
+ */
+export function buildConsentUrl(serverUrl: string, params: ConsentUrlParams): string {
+  const base = serverUrl.replace(/\/+$/, '');
+  const url = new URL(`${base}/ui/apps/auth/`);
   url.searchParams.set('client_id', params.clientId);
-  url.searchParams.set('response_type', 'code');
   url.searchParams.set('redirect_uri', params.redirectUri);
-  url.searchParams.set('scope', params.scope);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('state', params.state);
   url.searchParams.set('code_challenge', params.codeChallenge);
   url.searchParams.set('code_challenge_method', 'S256');
-  url.searchParams.set('state', params.state);
-  return url.toString();
-}
-
-export function buildReviewUrl(reviewUrl: string, authUrl: string, errorUrl: string): string {
-  const url = new URL(reviewUrl);
-  url.searchParams.set('auth_url', authUrl);
-  url.searchParams.set('error_url', errorUrl);
-  return url.toString();
-}
-
-export function buildErrorUrl(redirectUri: string): string {
-  const url = new URL(redirectUri);
-  url.searchParams.set('bodhi_flow', ACCESS_REQUEST_ERROR_MARKER);
+  url.searchParams.set('scope', params.scope);
+  if (params.sourceAccessRequestId) {
+    url.searchParams.set('source_access_request_id', params.sourceAccessRequestId);
+  }
   return url.toString();
 }
 

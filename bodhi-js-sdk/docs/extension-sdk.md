@@ -143,7 +143,6 @@ When using manual client creation, all fields are optional with sensible default
 ```typescript
 interface ExtUIClientParams {
   authServerUrl?: string; // OAuth server URL (default: 'https://id.getbodhi.app')
-  userRole?: string; // User scope (default: 'scope_user_user')
   basePath?: string; // App base path (default: '/')
   logLevel?: LogLevel; // Logging level (default: LogLevel.Info)
   initParams?: {
@@ -169,7 +168,6 @@ For custom settings:
 
 ```typescript
 const client = new ExtUIClient('ext-client-id', {
-  userRole: 'scope_user_power_user',
   logLevel: 'debug',
   initParams: {
     extension: {

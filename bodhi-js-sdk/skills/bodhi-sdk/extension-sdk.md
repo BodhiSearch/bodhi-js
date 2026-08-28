@@ -47,11 +47,7 @@ function ExtensionContent() {
   if (!isAuthenticated) {
     return (
       <button
-        onClick={() =>
-          login({
-            requested: { mcp_servers: [{ url: 'https://mcp.exa.ai/mcp' }] },
-          })
-        }
+        onClick={() => login({ mcps: true })}
       >
         Login
       </button>

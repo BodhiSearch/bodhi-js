@@ -11,8 +11,8 @@
 // Re-export types
 export * from './types';
 
-// Re-export access request utilities
-export * from './access-request';
+// Re-export login option utilities
+export * from './login-options';
 
 // Re-export constants
 export * from './constants';
@@ -34,6 +34,9 @@ export * from './onboarding';
 
 // Re-export oauth
 export * from './oauth';
+export * from './oauth-callback';
+export * from './oauth-token-exchange';
+export * from './login-flow';
 
 // Re-export direct client base
 export * from './direct-client-base';

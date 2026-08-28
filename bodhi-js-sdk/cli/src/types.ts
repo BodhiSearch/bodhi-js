@@ -1,5 +1,5 @@
 import type { IStorage, InitialTokens, LogLevel } from '@bodhiapp/bodhi-js-core';
-import type { RequestedResourcesV1, UserScope } from '@bodhiapp/bodhi-js-core/api';
+import type { UserScope } from '@bodhiapp/bodhi-js-core/api';
 
 /**
  * Configuration for CliClient
@@ -27,14 +27,20 @@ export interface CliClientConfig {
  * Options for CliClient.login()
  */
 export interface CliLoginOptions {
-  /** Port for the localhost OAuth callback server (default: 7173) */
+  /** Port for the localhost OAuth callback server (default: 5173) */
   callbackPort?: number;
-  /** Requested user role (default: 'scope_user_user') */
-  userRole?: UserScope;
-  /** Requested resources (MCP servers, etc.) */
-  requested?: RequestedResourcesV1;
-  /** Called with the access request review URL — host should open in browser or print to stdout */
-  onReviewUrl?: (url: string) => void;
+  /** Role ceiling requested from the consent page (absent → user) */
+  role?: UserScope;
+  /** LLMs section flag: undefined → server default, true → requested, false → suppressed */
+  llms?: boolean;
+  /** MCPs section flag; same semantics as llms */
+  mcps?: boolean;
+  /** Re-consent with prefill from the current grant (reads the access_request_id claim) */
+  reauthorize?: boolean;
+  /** Additional scope tokens forwarded verbatim to Keycloak (passthrough) */
+  extraScopes?: string[];
+  /** Called with the consent-page URL — host should open in browser or print to stdout */
+  onAuthUrl?: (url: string) => void;
   /** Timeout for the entire login flow in ms (default: 5 minutes) */
   loginTimeoutMs?: number;
 }

@@ -5,19 +5,12 @@
  */
 
 import {
-  AccessRequestBuilder,
-  BASE_OAUTH_SCOPE,
-  buildAuthorizeUrl,
-  buildErrorUrl,
-  buildReviewUrl,
-  DirectClientBase,
-  STORAGE_PREFIXES,
+  assertCallbackSuccess,
   createOperationError,
   createStoragePrefixWithNamespace,
-  generateCodeChallenge,
-  generateCodeVerifier,
-  throwAccessRequestDenialError,
-  unwrapResponse,
+  DirectClientBase,
+  performConsentLogin,
+  STORAGE_PREFIXES,
   type AuthState,
   type DirectClientBaseConfig,
   type IStorage,
@@ -68,43 +61,33 @@ export class DirectExtClient extends DirectClientBase {
   // ============================================================================
 
   async login(options?: LoginOptions): Promise<AuthState> {
-    const existingAuth = await this.getAuthState();
-    if (existingAuth.status === 'authenticated' && !options?.exchange) {
-      return existingAuth;
-    }
-
-    const userRole = options?.userRole ?? 'scope_user_user';
-    const redirectUri = this._getRedirectUri();
-
-    options?.onProgress?.('requesting');
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
-    const state = generateCodeVerifier();
-    await this._storageSet({
-      [this.storageKeys.CODE_VERIFIER]: codeVerifier,
-      [this.storageKeys.STATE]: state,
-    });
-
-    const authUrl = buildAuthorizeUrl(this.authEndpoints, {
-      clientId: this.authClientId,
-      redirectUri,
-      scope: BASE_OAUTH_SCOPE,
-      state,
-      codeChallenge,
-    });
-    const errorUrl = buildErrorUrl(redirectUri);
-
-    const builder = new AccessRequestBuilder(this.authClientId).requestedRole(userRole);
-    if (options?.requested) builder.requested(options.requested);
-    if (options?.exchange) builder.exchange(true);
-    const accessRequestResult = await this.requestAccess(builder.build());
-    const { review_url: reviewUrl } = unwrapResponse(accessRequestResult);
-    const target = buildReviewUrl(reviewUrl, authUrl, errorUrl);
-
-    options?.onProgress?.('reviewing');
-    const redirectUrl = await this.launchReview(target);
-    options?.onProgress?.('authenticating');
-    return this.completeOAuthRedirect(redirectUrl);
+    return performConsentLogin(
+      {
+        getAuthState: () => this.getAuthState(),
+        getServerUrl: async () => {
+          if (!this.serverUrl) {
+            throw createOperationError(
+              'access_request_failed',
+              'Bodhi server URL not set — call init() with a server URL before login()'
+            );
+          }
+          return this.serverUrl;
+        },
+        getRedirectUri: () => this._getRedirectUri(),
+        storePkce: (v) =>
+          this._storageSet({
+            [this.storageKeys.CODE_VERIFIER]: v.codeVerifier,
+            [this.storageKeys.STATE]: v.state,
+          }),
+        navigate: async (consentUrl) => {
+          const redirectUrl = await this.launchReview(consentUrl);
+          options?.onProgress?.('authenticating');
+          return this.completeOAuthRedirect(redirectUrl);
+        },
+      },
+      this.authClientId,
+      options
+    );
   }
 
   private launchReview(target: string): Promise<string> {
@@ -125,25 +108,13 @@ export class DirectExtClient extends DirectClientBase {
 
   private async completeOAuthRedirect(redirectUrl: string): Promise<AuthState> {
     const url = new URL(redirectUrl);
-    const error = url.searchParams.get('error');
-    if (error) {
-      await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
-      if (url.searchParams.get('error_source') === 'bodhi') {
-        throwAccessRequestDenialError(error === 'access_denied' ? 'denied' : error);
-      }
-      throw createOperationError('oauth_error', url.searchParams.get('error_description') ?? error);
-    }
-
-    const code = url.searchParams.get('code');
-    const returnedState = url.searchParams.get('state');
     const storedState = await this._storageGet(this.storageKeys.STATE);
-    if (!returnedState || returnedState !== storedState) {
+    let code: string;
+    try {
+      ({ code } = assertCallbackSuccess(url.searchParams, storedState));
+    } catch (error) {
       await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
-      throw createOperationError('oauth_error', 'State mismatch');
-    }
-    if (!code) {
-      await this._storageRemove([this.storageKeys.CODE_VERIFIER, this.storageKeys.STATE]);
-      throw createOperationError('oauth_error', 'No authorization code');
+      throw error;
     }
 
     await this.exchangeCodeForTokens(code);

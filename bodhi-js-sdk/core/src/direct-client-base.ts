@@ -80,13 +80,7 @@ export async function testServerConnectivity(
   }
 }
 
-import type {
-  BodhiErrorResponse,
-  CreateAccessRequest,
-  CreateAccessRequestResponse,
-  DeploymentMode,
-  PingResponse,
-} from '@bodhiapp/ts-client';
+import type { BodhiErrorResponse, DeploymentMode, PingResponse } from '@bodhiapp/ts-client';
 import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
 import { BodhiError, BodhiApiError } from '@bodhiapp/bodhi-browser-types';
 import { DEFAULT_API_TIMEOUT_MS } from './constants';
@@ -100,6 +94,7 @@ import {
   type OAuthEndpoints,
   type RefreshTokenResponse,
 } from './oauth';
+import { exchangeAuthorizationCode } from './oauth-token-exchange';
 import { createStorageKeys, createStoragePrefixWithServerUrl, type StorageKeys } from './storage';
 import {
   type AuthState,
@@ -109,6 +104,7 @@ import {
   type IStorage,
   type InitialTokens,
   type InitParams,
+  type LoginOptions,
   type LogLevel,
   type SerializedDirectState,
   type StateChangeCallback,
@@ -659,25 +655,10 @@ export abstract class DirectClientBase implements IDirectClient {
   }
 
   // ============================================================================
-  // Access Request Methods
-  // ============================================================================
-
-  async requestAccess(
-    body: CreateAccessRequest
-  ): Promise<ApiResponse<CreateAccessRequestResponse>> {
-    // authenticated=true safely attaches the token when one exists (exchange needs it).
-    return this.sendApiRequest<CreateAccessRequest, CreateAccessRequestResponse>(
-      'POST',
-      '/bodhi/v1/apps/request-access',
-      body
-    );
-  }
-
-  // ============================================================================
   // Abstract Methods (Platform-Specific)
   // ============================================================================
 
-  abstract login(): Promise<AuthState>;
+  abstract login(options?: LoginOptions): Promise<AuthState>;
 
   async getAuthState(): Promise<AuthState> {
     // storageKeys is built lazily in init() once serverUrl is known — guard against
@@ -865,27 +846,14 @@ export abstract class DirectClientBase implements IDirectClient {
       throw new Error('Code verifier not found');
     }
 
-    const redirectUri = this._getRedirectUri();
-
     try {
-      const response = await fetch(this.authEndpoints.token, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          code,
-          redirect_uri: redirectUri,
-          client_id: this.authClientId,
-          code_verifier: codeVerifier,
-        }),
+      const tokens = await exchangeAuthorizationCode({
+        tokenEndpoint: this.authEndpoints.token,
+        clientId: this.authClientId,
+        code,
+        redirectUri: this._getRedirectUri(),
+        codeVerifier,
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Token exchange failed: ${response.status} ${errorText}`);
-      }
-
-      const tokens = await response.json();
       const expiresAt = Date.now() + (tokens.expires_in || 3600) * 1000;
 
       await this._storageSet({
@@ -953,7 +921,6 @@ export abstract class DirectClientBase implements IDirectClient {
       oldKeys.EXPIRES_AT,
       oldKeys.CODE_VERIFIER,
       oldKeys.STATE,
-      oldKeys.ACCESS_REQUEST_ID,
     ]);
     this.setAuthState({
       status: 'unauthenticated',

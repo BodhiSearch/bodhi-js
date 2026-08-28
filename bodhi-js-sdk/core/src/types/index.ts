@@ -7,7 +7,7 @@ export { BodhiError, BodhiApiError, unwrapResponse } from '@bodhiapp/bodhi-brows
 export type { BodhiErrorCode } from '@bodhiapp/bodhi-browser-types';
 
 // Export error factory functions (backward compatibility wrappers)
-export { createApiError, createOperationError, throwAccessRequestDenialError } from '../errors';
+export { createApiError, createOperationError } from '../errors';
 
 export {
   BACKEND_SERVER_NOT_CONNECTED,
@@ -76,23 +76,33 @@ export type { Tokens, UserInfo } from './user-info';
 export type { ClientConfig, DiscoveryResult, LogLevel } from './config';
 
 // Login progress types
-export type LoginProgressStage = 'requesting' | 'reviewing' | 'authenticating';
+export type LoginProgressStage = 'reviewing' | 'authenticating';
 export type LoginProgressCallback = (stage: LoginProgressStage) => void;
 
 // Login options
-import type { RequestedResourcesV1, UserScope } from '@bodhiapp/ts-client';
+import type { UserScope } from '@bodhiapp/ts-client';
 export interface LoginOptions {
-  userRole?: UserScope;
-  requested?: RequestedResourcesV1;
-  onProgress?: LoginProgressCallback;
+  /** Role ceiling requested from the consent page; absent → user. */
+  role?: UserScope;
   /**
-   * Exchange (upgrade) the current grant. When true, login proceeds even if already
-   * authenticated: the access request is sent with `exchange: true` and the current token,
-   * so the review page pre-populates from the source grant and approval replaces the stored
-   * tokens with the newly granted ones. When false/undefined an authenticated session
-   * short-circuits login (to force a fresh login, logout then login).
+   * LLMs section flag: undefined → server default (requested), true → requested
+   * explicitly, false → suppressed (scope_apps:llms:false — valid role-only grant
+   * when mcps is also false).
    */
-  exchange?: boolean;
+  llms?: boolean;
+  /** MCPs section flag; same semantics as llms. */
+  mcps?: boolean;
+  /**
+   * Re-consent with prefill. When true, login proceeds even if already
+   * authenticated: the current access token's access_request_id claim is sent as
+   * source_access_request_id so the consent page prefills from that grant, and
+   * approval replaces the stored tokens with the newly granted ones. Prior grants
+   * stay live. When false/undefined an authenticated session short-circuits login.
+   */
+  reauthorize?: boolean;
+  /** Additional scope tokens forwarded verbatim to Keycloak (passthrough). */
+  extraScopes?: string[];
+  onProgress?: LoginProgressCallback;
 }
 
 export type { BrowserInfo, OSInfo } from './platform';

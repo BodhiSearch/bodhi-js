@@ -1,12 +1,12 @@
 # Authentication
 
-Bodhi SDK uses OAuth2 + PKCE with an access-request-based login flow. The flow: create an access request, poll for approval, authenticate via OAuth, and receive tokens.
+Bodhi SDK uses a standard OAuth2 authorization-code flow with PKCE, entered through BodhiApp's consent page. The flow: navigate the user to the consent page, the user grants access, Keycloak returns the authorization code, and the SDK exchanges it for tokens.
 
 ## Overview
 
 The SDK provides built-in OAuth2 authentication with:
 
-- **Access-Request Flow**: Create an access request, wait for approval, then authenticate
+- **Consent-Page Flow**: The user reviews and grants access (models, MCPs, role) on BodhiApp's consent page
 - **PKCE Security**: Enhanced security for browser-based apps (no client secret needed)
 - **Automatic Token Management**: Tokens stored securely in localStorage (web) or chrome.storage.session (extension)
 - **Token Refresh**: Automatic refresh of expired access tokens with race condition prevention
@@ -15,7 +15,7 @@ The SDK provides built-in OAuth2 authentication with:
 
 ## Login Flow
 
-The `login()` method orchestrates the entire access-request + OAuth flow automatically:
+The `login()` method orchestrates the entire consent + OAuth flow automatically:
 
 ```typescript
 import { useBodhi } from '@bodhiapp/bodhi-js-react';
@@ -37,46 +37,42 @@ const { login } = useBodhi();
 
 // Login with options
 await login({
-  userRole: 'scope_user_power_user',
-  requested: { mcp_servers: [{ url: 'http://localhost:3000/mcp' }] },
+  role: 'scope_user_power_user',
+  mcps: true,
   onProgress: stage => setLoginStage(stage),
-  flowType: 'redirect',
 });
 ```
 
 **What happens during login**:
 
-1. SDK builds an access request with the specified options
-2. POST to `/bodhi/v1/apps/request-access` creates a draft request
-3. SDK polls for approval (every 2s, up to 5 minutes)
-4. Once approved, SDK initiates OAuth2 + PKCE flow
-5. User authenticates on Keycloak
-6. SDK exchanges the authorization code for tokens
-7. Tokens are stored and user info is extracted from the JWT
+1. SDK composes the scope string from the options (base OAuth scopes + role token + `scope_apps:*` flags + `extraScopes`)
+2. SDK generates PKCE + state and navigates the user to `${serverUrl}/ui/apps/auth/` with the standard OAuth params
+3. User reviews the request on BodhiApp's consent page and grants access (which models/MCPs, what role)
+4. On approve, BodhiApp composes the Keycloak authorize URL; Keycloak SSO redirects back to the registered `redirect_uri` with `code` + `state`
+5. SDK exchanges the authorization code for tokens at Keycloak's token endpoint
+6. Tokens are stored and user info is extracted from the JWT
+
+On deny (or a redirectable request error such as an invalid scope), BodhiApp redirects back with `error`, `error_description`, `error_source=bodhi`, and the original `state`; the SDK surfaces this as an auth error (`access_request_denied` for a deny). An unknown client or unregistered `redirect_uri` renders an error on the consent page itself — no redirect reaches the app.
 
 ## LoginOptions Interface
 
 ```typescript
 interface LoginOptions {
-  userRole?: UserScope; // Requested user role (default: 'scope_user_user')
-  requested?: RequestedResources; // Resources to request access to
-  flowType?: FlowType; // 'redirect' | 'popup'
-  redirectUrl?: string; // Custom redirect URL for OAuth callback
+  role?: UserScope; // Role ceiling requested (default: 'scope_user_user')
+  llms?: boolean; // Model access section: undefined → requested, false → suppressed
+  mcps?: boolean; // MCP access section: undefined → requested, false → suppressed
+  reauthorize?: boolean; // Re-consent with prefill while already authenticated
+  extraScopes?: string[]; // Scope tokens forwarded verbatim to Keycloak (passthrough)
   onProgress?: LoginProgressCallback; // Progress stage callback
-  pollIntervalMs?: number; // default 2000ms
-  pollTimeoutMs?: number; // default 300000ms (5 min)
 }
 
-type LoginProgressStage = 'requesting' | 'reviewing' | 'authenticating';
+type LoginProgressStage = 'reviewing' | 'authenticating';
 type LoginProgressCallback = (stage: LoginProgressStage) => void;
 
-type RequestedResources = {
-  mcp_servers?: Array<{ url: string }>;
-};
-
-type UserScope = 'scope_user_user' | 'scope_user_power_user' | 'scope_user_manager' | 'scope_user_admin';
-type FlowType = 'redirect' | 'popup';
+type UserScope = 'scope_user_user' | 'scope_user_power_user';
 ```
+
+`llms: false` and `mcps: false` together form a valid role-only request — the consent page shows a summary instead of grant sections. `extraScopes` must not include `scope_access_request:*` (reserved for server-side composition; rejected with `invalid_scope`).
 
 ### Progress Stages
 
@@ -88,45 +84,19 @@ const [stage, setStage] = useState<string>('');
 await login({
   onProgress: stage => {
     setStage(stage);
-    // 'requesting'     - Creating access request
-    // 'reviewing'      - Waiting for admin approval
-    // 'authenticating' - OAuth flow in progress
+    // 'reviewing'      - Navigating to the consent page
+    // 'authenticating' - Code exchange in progress (extension/chrome.identity flow only;
+    //                    the web flow full-page-redirects at 'reviewing')
   },
 });
 ```
 
-## Access Request Lifecycle
+## Reauthorize (Re-consent While Authenticated)
 
-The login flow begins with an access request that must be approved before authentication proceeds.
-
-### Flow
-
-1. **Create Request**: `requestAccess(body)` sends POST to `/bodhi/v1/apps/request-access`, returns `{ id, status: 'draft' }`
-2. **Poll for Status**: `pollAccessRequestStatus(id)` polls GET `/bodhi/v1/apps/access-requests/{id}` every 2 seconds
-3. **Status Transitions**: `'draft'` transitions to `'approved'`, `'denied'`, `'failed'`, or `'expired'`
-4. **On Approved**: SDK proceeds to OAuth authentication automatically
-
-### Access Request Builder
-
-The SDK uses an internal `AccessRequestBuilder` to construct the request body:
+Calling `login()` while authenticated is a no-op by default. To request more access mid-session, pass `reauthorize: true`: the SDK reads the `access_request_id` claim from the current access token and sends it as `source_access_request_id`, so the consent page pre-populates from the existing grant (with a reauthorization banner). Approval replaces the stored tokens; prior grants stay live; a deny leaves the existing tokens untouched.
 
 ```typescript
-// Internal flow (handled automatically by login()):
-const builder = new AccessRequestBuilder(appClientId)
-  .flowType('redirect')
-  .requestedRole('scope_user_power_user')
-  .requested({ mcp_servers: [{ url: 'http://localhost:3000/mcp' }] });
-
-const body = builder.build();
-```
-
-### Polling Configuration
-
-```typescript
-await login({
-  pollIntervalMs: 3000, // Poll every 3 seconds (default: 2000)
-  pollTimeoutMs: 600000, // Wait up to 10 minutes (default: 300000)
-});
+await login({ reauthorize: true, role: 'scope_user_power_user' });
 ```
 
 ## PKCE Flow
@@ -134,8 +104,8 @@ await login({
 The SDK implements OAuth2 + PKCE (Proof Key for Code Exchange) for secure browser-based authentication without client secrets.
 
 1. **Generate PKCE pair**: SDK creates a random code verifier and computes its SHA-256 challenge
-2. **Authorization request**: Redirects to Keycloak `/authorize` endpoint with the challenge
-3. **User authenticates**: User logs in on the Keycloak login page
+2. **Consent + authorization**: Navigates to BodhiApp's consent page with the challenge; on approve BodhiApp redirects through Keycloak's `/authorize`
+3. **User authenticates**: Keycloak SSO (the consent page already required a BodhiApp session)
 4. **Code exchange**: SDK exchanges the authorization code + original verifier for tokens
 5. **Token storage**: Tokens stored in localStorage (web) or chrome.storage.session (extension)
 
@@ -170,11 +140,8 @@ import { useBodhi, isWebUIClient } from '@bodhiapp/bodhi-js-react';
 const { client } = useBodhi();
 
 if (isWebUIClient(client)) {
-  // Handle OAuth authorization code callback
-  await client.handleOAuthCallback(code, state);
-
-  // Handle access request callback (resume polling after redirect)
-  await client.handleAccessRequestCallback(requestId);
+  // Handle the OAuth callback (code exchange, or deny/error classification — throws BodhiError)
+  await client.handleOAuthCallback(new URL(window.location.href).searchParams);
 }
 ```
 
@@ -344,12 +311,14 @@ if (auth.status === 'error') {
 
 ### Common Error Codes
 
-| Code                    | Cause                                 | Solution                      |
-| ----------------------- | ------------------------------------- | ----------------------------- |
-| `invalid_grant`         | Code expired or already used          | Retry login                   |
-| `invalid_client`        | Client ID not recognized              | Check client configuration    |
-| `redirect_uri_mismatch` | Redirect URI doesn't match registered | Update redirect URI in config |
-| `access_denied`         | User denied authorization             | Ask user to grant permission  |
+| Code                    | Cause                                                       | Solution                              |
+| ----------------------- | ----------------------------------------------------------- | ------------------------------------- |
+| `access_request_denied` | User denied the request on the consent page                 | Ask the user to grant access          |
+| `access_request_failed` | Redirected error (e.g. `invalid_scope`) or invalid callback | Check the message for the cause       |
+| `auth_error`            | State mismatch on the code callback (CSRF protection)       | Retry login                           |
+| `invalid_grant`         | Code expired or already used                                | Retry login                           |
+
+An unknown client or unregistered `redirect_uri` never reaches the app — BodhiApp renders the error on the consent page, so the app-side symptom is a login that never completes.
 
 ### Handling Failed Authentication
 
@@ -381,7 +350,7 @@ function LoginFlow() {
 
 ## User Scopes
 
-The Bodhi App backend supports four user scopes:
+Apps can request one of two user scopes as their role ceiling:
 
 ### scope_user_user (Default)
 
@@ -407,26 +376,10 @@ Extended privileges (includes all `scope_user_user` permissions plus):
 - Can manage model lifecycle
 
 ```typescript
-await login({ userRole: 'scope_user_power_user' });
+await login({ role: 'scope_user_power_user' });
 ```
 
-### scope_user_manager
-
-Management privileges for administering users and resources.
-
-```typescript
-await login({ userRole: 'scope_user_manager' });
-```
-
-### scope_user_admin
-
-Full administrative privileges.
-
-```typescript
-await login({ userRole: 'scope_user_admin' });
-```
-
-> **Note**: The actual scope granted depends on Bodhi App server configuration. The server may grant a lower privilege level based on user permissions, even if a higher scope is requested.
+> **Note**: The requested role is a ceiling, not a guarantee. When `scope_user_power_user` is requested, the consent page shows a downgrade selector — the approving user can grant `scope_user_user` instead, and can never grant above their own role.
 
 ## Next Steps
 

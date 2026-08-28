@@ -155,11 +155,11 @@ export class WebUIClient
   // ============================================================================
   // Web-specific OAuth Callback
   // ============================================================================
-  async handleOAuthCallback(code: string, state: string): Promise<AuthState> {
+  async handleOAuthCallback(params: URLSearchParams): Promise<AuthState> {
     // Delegate to active client based on connection mode
     if (this.connectionMode === 'direct') {
-      return this.directClient.handleOAuthCallback(code, state);
+      return this.directClient.handleOAuthCallback(params);
     }
-    return this.extClient.handleOAuthCallback(code, state);
+    return this.extClient.handleOAuthCallback(params);
   }
 }

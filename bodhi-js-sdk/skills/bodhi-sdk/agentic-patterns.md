@@ -8,12 +8,7 @@ Your app must request MCP access during `login()`. Without this, SDK APIs return
 
 ```tsx
 await login({
-  requested: {
-    mcp_servers: [
-      { url: 'https://mcp.exa.ai/mcp' }, // Web search MCP
-      { url: 'http://localhost:3001' }, // Local MCP server
-    ],
-  },
+  mcps: true, // request the MCP access section; the user grants specific MCPs on the consent page
 });
 ```
 
@@ -61,8 +56,8 @@ import { createMcpClient } from '@bodhiapp/bodhi-js-cli/mcp';
 
 const client = new CliClient({ authClientId, authServerUrl, serverUrl });
 await client.login({
-  requested: { mcp_servers: [{ url: 'https://mcp.exa.ai/mcp' }] },
-  onReviewUrl: url => console.log(url),
+  mcps: true,
+  onAuthUrl: url => console.log(url),
 });
 
 const { mcps } = await client.mcps.list();

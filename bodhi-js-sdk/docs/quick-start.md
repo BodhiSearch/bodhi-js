@@ -293,7 +293,7 @@ const { client, isOverallReady, isAuthenticated, login, showSetup } = useBodhi()
 
 Access the SDK client and state from any component.
 
-**Login** accepts optional `LoginOptions` for advanced usage (e.g., `await login({ userRole: 'scope_user_power_user' })`). See [Authentication](./authentication.md) for details.
+**Login** accepts optional `LoginOptions` for advanced usage (e.g., `await login({ role: 'scope_user_power_user' })`). See [Authentication](./authentication.md) for details.
 
 ### 4. Streaming Chat (OpenAI-Style API)
 

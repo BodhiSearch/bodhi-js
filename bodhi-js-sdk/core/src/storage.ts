@@ -11,7 +11,6 @@ export interface StorageKeys {
   EXPIRES_AT: string;
   CODE_VERIFIER: string;
   STATE: string;
-  ACCESS_REQUEST_ID: string;
 }
 
 /**
@@ -27,7 +26,6 @@ export function createStorageKeys(prefix: string): StorageKeys {
     EXPIRES_AT: `${prefix}:expires_at`,
     CODE_VERIFIER: `${prefix}:code_verifier`,
     STATE: `${prefix}:state`,
-    ACCESS_REQUEST_ID: `${prefix}:access_request_id`,
   };
 }
 

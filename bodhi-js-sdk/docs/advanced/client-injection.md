@@ -92,7 +92,6 @@ function ExtensionUI() {
 interface WebUIClientParams {
   redirectUri?: string; // OAuth redirect (default: window.location.origin + '/oauth/callback')
   authServerUrl?: string; // OAuth server (default: 'https://id.getbodhi.app')
-  userRole?: string; // OAuth scope (default: 'scope_user_user')
   basePath?: string; // Backend URL (default: 'http://localhost:1135')
   logLevel?: LogLevel; // Logging (default: LogLevel.Info)
   initParams?: {
@@ -171,7 +170,6 @@ const client = new WebUIClient('my-app', {
 ```typescript
 interface ExtUIClientParams {
   authServerUrl?: string; // OAuth server (default: 'https://id.getbodhi.app')
-  userRole?: string; // OAuth scope (default: 'scope_user_user')
   basePath?: string; // Backend URL (default: 'http://localhost:1135')
   logLevel?: LogLevel; // Logging (default: LogLevel.Info)
   initParams?: {
@@ -360,8 +358,11 @@ function TenantApp({ tenantId }: { tenantId: string }) {
 import { WebUIClient } from '@bodhiapp/bodhi-js';
 
 const client = new WebUIClient('my-app', {
-  userRole: 'scope_user_power_user', // Request power user privileges
+  logLevel: 'debug',
 });
+
+// Request power user privileges at login time instead:
+await client.login({ role: 'scope_user_power_user' });
 ```
 
 ### Enterprise OAuth Server

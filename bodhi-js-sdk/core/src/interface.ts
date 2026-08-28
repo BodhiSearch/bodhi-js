@@ -1,8 +1,4 @@
-import type {
-  CreateAccessRequest,
-  CreateAccessRequestResponse,
-  PingResponse,
-} from '@bodhiapp/ts-client';
+import type { PingResponse } from '@bodhiapp/ts-client';
 import type { ApiResponse } from '@bodhiapp/bodhi-browser-types';
 import type {
   AuthState,
@@ -169,13 +165,6 @@ export interface IConnectionClient<IParams = unknown, SerialState = unknown> {
    * @returns AuthState (discriminated union: AuthLoggedIn | AuthLoggedOut)
    */
   getAuthState(): Promise<AuthState>;
-
-  /**
-   * Request access for this app (draft → review flow)
-   * POST /bodhi/v1/apps/request-access
-   * @throws BodhiError on operational errors
-   */
-  requestAccess(body: CreateAccessRequest): Promise<ApiResponse<CreateAccessRequestResponse>>;
 
   /**
    * Set or update the state change callback
@@ -348,12 +337,14 @@ export type UIClient = IConnectionClient<InitParams> & {
  */
 export interface IWebUIClient extends UIClient {
   /**
-   * Handle OAuth callback after redirect (web mode only)
-   * @param code - Authorization code from OAuth provider
-   * @param state - State parameter for CSRF protection
-   * @returns AuthLoggedIn with login state and user info
+   * Handle OAuth callback after redirect (web mode only).
+   * Classifies the callback (code / bodhi deny / error), validates state, and
+   * exchanges the code for tokens.
+   * @param params - The callback URL's query params
+   * @returns AuthState on success; throws BodhiError (access_request_denied /
+   *   access_request_failed / auth_error) otherwise
    */
-  handleOAuthCallback(code: string, state: string): Promise<AuthState>;
+  handleOAuthCallback(params: URLSearchParams): Promise<AuthState>;
 }
 
 /**

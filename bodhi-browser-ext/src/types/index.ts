@@ -47,6 +47,8 @@ export type {
   GetExtensionIdResponse,
   TestConnectionRequest,
   TestConnectionResponse,
+  GetServerStateRequest,
+  GetServerStateResponse,
 } from './protocol';
 
 export {

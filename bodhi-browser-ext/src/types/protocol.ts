@@ -355,3 +355,18 @@ export interface TestConnectionRequest extends ExtRequest {
  * Test Connection response body (reuses ServerStateInfo)
  */
 export type TestConnectionResponse = ServerStateInfo;
+
+/**
+ * Get Server State request (no params needed)
+ */
+export interface GetServerStateRequest extends ExtRequest {
+  action: 'get_server_state';
+  params?: undefined;
+}
+
+/**
+ * Get Server State response body — the extension's configured backend URL
+ */
+export interface GetServerStateResponse {
+  url: string;
+}

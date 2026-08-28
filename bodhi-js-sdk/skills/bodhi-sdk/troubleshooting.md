@@ -104,12 +104,12 @@ For reference, `clientState.server.status` can be:
 
 ## Grant / Access Issues
 
-Access is **fail-closed**: the login request only decides which controls the consent screen renders — the owner still has to grant each resource. Anything the owner doesn't explicitly grant (models/MCPs default to All=off, Specific=empty) is denied.
+Access is **fail-closed**: the login scope only decides which sections the consent page renders — the owner still has to grant each resource. Anything the owner doesn't explicitly grant (models/MCPs default to All=off, Specific=empty) is denied.
 
 ### Chat/inference returns 403 `token_grant_error-model_forbidden`
 
-- The token has no grant for that model. Requesting `models_access: true` renders the model selector, but the owner must actually pick **All models** or add the **specific** model on the review page.
-- Fix: re-run `login({ requested: { models_access: true, ... } })` and have the owner grant the model (or request a specific `mcp_servers`/model you know they'll approve).
+- The token has no grant for that model. The model section is requested by default (unless suppressed via `llms: false`), but the owner must actually pick **All models** or add the **specific** model on the consent page.
+- Fix: re-run `login({ reauthorize: true })` and have the owner grant the model.
 
 ### `/v1/models` is empty or a model is "not found" (404 `alias_not_found`)
 
@@ -118,7 +118,7 @@ Access is **fail-closed**: the login request only decides which controls the con
 
 ### MCP connect/tool call returns 403 `token_grant_error-mcp_forbidden`
 
-- The owner didn't grant that MCP. Requesting it via `mcp_servers: [{ url }]` shows it on the consent screen; the owner must bind it to one of their MCP instances and approve. `mcps_access` covers owner-extra instances beyond your requested URLs.
+- The owner didn't grant that MCP. The MCP section is requested by default (unless suppressed via `mcps: false`); the owner must pick the MCP instances to grant on the consent page and approve.
 - A direct `GET /bodhi/v1/apps/mcps/{id}` for an ungranted MCP returns **404** (existence is hidden), not 403.
 
 ### Calls suddenly start failing with 401

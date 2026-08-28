@@ -246,13 +246,6 @@ function CallbackPage() {
 }
 ```
 
-For access request callbacks (when returning from an admin review URL):
-
-```typescript
-if (isWebUIClient(client)) {
-  await client.handleAccessRequestCallback(requestId);
-}
-```
 
 ## Next Steps
 

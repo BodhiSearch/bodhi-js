@@ -183,13 +183,15 @@ export function BodhiProvider({
   );
 
   /**
-   * Auto-init on mount, then handle the single-step login callback if present.
+   * Auto-init on mount, then handle the consent-flow login callback if present.
    * Sequencing ensures connectionMode is restored before callback routing.
    *
    * Callback shapes at callbackPath:
    *   - OAuth success: ?code=<code>&state=<state> → exchange for tokens → authenticated
-   *   - Bodhi deny/failure: ?bodhi_flow=access_request_error&error=...&error_source=bodhi
+   *   - Bodhi deny/error: ?error=...&error_description=...&error_source=bodhi&state=...
    *     (or a plain Keycloak ?error=...) → sets auth error state
+   * Classification and state validation live in the client's handleOAuthCallback
+   * (core assertCallbackSuccess), which throws BodhiError with the public codes.
    */
   useEffect(() => {
     // Only auto-init once on mount
@@ -207,31 +209,12 @@ export function BodhiProvider({
       if (url.pathname !== callbackPath) return;
       if (callbackProcessedRef.current) return;
       if (!isWebUIClient(client)) return;
-
-      // Error callback (Bodhi deny/failure or Keycloak error)
-      const error = url.searchParams.get('error');
-      if (error) {
-        callbackProcessedRef.current = true;
-        const isBodhiDeny =
-          url.searchParams.get('error_source') === 'bodhi' && error === 'access_denied';
-        setAuthError(
-          isBodhiDeny ? 'access_request_denied' : error,
-          url.searchParams.get('error_description') ?? error
-        );
-        window.history.replaceState({}, '', basePath);
-        return;
-      }
-
-      // OAuth success callback (code exchange)
-      const code = url.searchParams.get('code');
-      const state = url.searchParams.get('state');
-      if (!code || !state) return;
+      if (!url.searchParams.has('code') && !url.searchParams.has('error')) return;
 
       callbackProcessedRef.current = true;
       setIsAuthLoading(true);
       try {
-        await client.handleOAuthCallback(code, state);
-        window.history.replaceState({}, '', basePath);
+        await client.handleOAuthCallback(url.searchParams);
       } catch (err: unknown) {
         logger.error('OAuth callback failed:', err);
         const bodhiError = err instanceof BodhiError ? err : null;
@@ -239,6 +222,7 @@ export function BodhiProvider({
           bodhiError?.code ?? 'oauth_callback_failed',
           err instanceof Error ? err.message : 'OAuth callback failed'
         );
+      } finally {
         window.history.replaceState({}, '', basePath);
       }
     };
@@ -252,16 +236,16 @@ export function BodhiProvider({
       setIsAuthLoading(true);
       try {
         // Defensively extract only valid LoginOptions properties
-        // Handles React SyntheticEvent when used as onClick={login}
-        const extracted = options
-          ? {
-              ...(options.userRole && { userRole: options.userRole }),
-              ...(options.requested && { requested: options.requested }),
-              ...(options.onProgress && { onProgress: options.onProgress }),
-              ...(options.exchange && { exchange: options.exchange }),
-            }
-          : undefined;
-        const loginOptions = extracted && Object.keys(extracted).length > 0 ? extracted : undefined;
+        // Handles React SyntheticEvent when used as onClick={login}.
+        // Presence checks, not truthiness: llms/mcps false are meaningful values.
+        const extracted: LoginOptions = {};
+        if (options?.role !== undefined) extracted.role = options.role;
+        if (options?.llms !== undefined) extracted.llms = options.llms;
+        if (options?.mcps !== undefined) extracted.mcps = options.mcps;
+        if (options?.reauthorize !== undefined) extracted.reauthorize = options.reauthorize;
+        if (options?.extraScopes !== undefined) extracted.extraScopes = options.extraScopes;
+        if (options?.onProgress !== undefined) extracted.onProgress = options.onProgress;
+        const loginOptions = Object.keys(extracted).length > 0 ? extracted : undefined;
 
         await client.login(loginOptions);
         // Auth state updates via callback; also clear loading for the already-authenticated

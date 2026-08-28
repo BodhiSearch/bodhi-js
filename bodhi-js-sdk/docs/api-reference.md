@@ -42,7 +42,6 @@ new WebUIClient(
 interface WebClientConfig {
   redirectUri?: string; // OAuth redirect URI (auto-computed from basePath if omitted)
   authServerUrl?: string; // OAuth server URL (default: 'https://id.getbodhi.app/realms/bodhi')
-  userRole?: UserScope; // User scope (default: 'scope_user_user')
   basePath?: string; // App base path (default: '/')
   logLevel?: LogLevel; // Logging level (default: 'warn')
   initParams?: {
@@ -331,72 +330,18 @@ For MCP tool discovery and execution, use `createMcpClient(client, mcp.path)` fr
 async login(options?: LoginOptions): Promise<AuthState>
 ```
 
-Initiate OAuth login flow with optional configuration.
+Initiate the consent-flow OAuth login: navigates the user to `${serverUrl}/ui/apps/auth/` with a scope composed from the options; the user grants access on BodhiApp's consent page, then Keycloak returns the code to the registered `redirect_uri` and the SDK exchanges it for tokens.
 
 **Parameters**:
 
-- `options?.userRole?: UserScope` - User scope for the login
-- `options?.requested?: RequestedResources` - Resources to request access to
-- `options?.flowType?: FlowType` - Login flow type
-- `options?.redirectUrl?: string` - Custom redirect URL
-- `options?.onProgress?: LoginProgressCallback` - Progress callback for login stages
-- `options?.pollIntervalMs?: number` - Poll interval in milliseconds
-- `options?.pollTimeoutMs?: number` - Poll timeout in milliseconds
+- `options?.role?: UserScope` - Role ceiling requested (default: `'scope_user_user'`)
+- `options?.llms?: boolean` - Model access section: undefined → requested, `false` → suppressed
+- `options?.mcps?: boolean` - MCP access section: undefined → requested, `false` → suppressed
+- `options?.reauthorize?: boolean` - Re-consent with prefill while already authenticated
+- `options?.extraScopes?: string[]` - Scope tokens forwarded verbatim to Keycloak (passthrough)
+- `options?.onProgress?: LoginProgressCallback` - Progress callback (`'reviewing'` → `'authenticating'`)
 
-**Returns**: `Promise<AuthState>`
-
-#### requestAccess()
-
-```typescript
-async requestAccess(body: CreateAccessRequest): Promise<ApiResponse<CreateAccessRequestResponse>>
-```
-
-Request access to resources on behalf of the app. Throws `BodhiError` on operational failures; throws `BodhiApiError` on HTTP errors.
-
-**Endpoint**: `POST /bodhi/v1/apps/request-access`
-
-**Returns**: `Promise<ApiResponse<CreateAccessRequestResponse>>`
-
-#### getAccessRequestStatus()
-
-```typescript
-async getAccessRequestStatus(requestId: string): Promise<ApiResponse<AccessRequestStatusResponse>>
-```
-
-Check the status of an access request. Throws `BodhiError` on operational failures; throws `BodhiApiError` on HTTP errors.
-
-**Endpoint**: `GET /bodhi/v1/apps/access-requests/{requestId}?app_client_id=xxx`
-
-**Returns**: `Promise<ApiResponse<AccessRequestStatusResponse>>`
-
-#### pollAccessRequestStatus()
-
-```typescript
-async pollAccessRequestStatus(
-  requestId: string,
-  options?: { intervalMs?: number; timeoutMs?: number }
-): Promise<AccessRequestStatusResponse>
-```
-
-Poll an access request until it is approved, denied, failed, or expired.
-
-**Parameters**:
-
-- `requestId: string` - The access request ID
-- `options?.intervalMs?: number` - Poll interval in milliseconds
-- `options?.timeoutMs?: number` - Poll timeout in milliseconds
-
-**Returns**: `Promise<AccessRequestStatusResponse>`
-
-#### handleAccessRequestCallback() (IWebUIClient only)
-
-```typescript
-async handleAccessRequestCallback(requestId: string): Promise<AuthState>
-```
-
-Handle the callback when a user returns from the access request review URL redirect. Only available on `IWebUIClient` (web SDK).
-
-**Returns**: `Promise<AuthState>`
+**Returns**: `Promise<AuthState>` — calling while authenticated without `reauthorize` short-circuits and returns the existing state. Deny/errors surface as `BodhiError` with codes `access_request_denied` / `access_request_failed`.
 
 #### logout()
 
@@ -421,10 +366,10 @@ Get current auth state.
 #### handleOAuthCallback()
 
 ```typescript
-async handleOAuthCallback(code: string, state: string): Promise<AuthState>
+async handleOAuthCallback(params: URLSearchParams): Promise<AuthState>
 ```
 
-Handle OAuth redirect callback (web only).
+Handle the OAuth redirect callback (web only). Classifies the callback (code / bodhi deny / error), validates state, and exchanges the code for tokens. Throws `BodhiError` (`access_request_denied` / `access_request_failed` / `auth_error`) on deny or invalid callbacks.
 
 **Returns**: `Promise<AuthState>`
 
@@ -501,7 +446,6 @@ new ExtUIClient(
 ```typescript
 interface ExtUIClientConfig {
   authServerUrl?: string; // OAuth server URL (default: 'https://id.getbodhi.app/realms/bodhi')
-  userRole?: UserScope; // User scope (default: 'scope_user_user')
   basePath?: string; // App base path (default: '/')
   logLevel?: LogLevel; // Logging level (default: 'warn')
   initParams?: {
@@ -860,51 +804,16 @@ type UserScope = 'scope_user_user' | 'scope_user_power_user';
 
 ```typescript
 interface LoginOptions {
-  userRole?: UserScope;
-  requested?: RequestedResources;
-  flowType?: FlowType;
-  redirectUrl?: string;
+  role?: UserScope; // Role ceiling; absent → 'scope_user_user'
+  llms?: boolean; // Model access section: undefined → requested, false → suppressed
+  mcps?: boolean; // MCP access section: undefined → requested, false → suppressed
+  reauthorize?: boolean; // Re-consent with prefill while already authenticated
+  extraScopes?: string[]; // Scope tokens forwarded verbatim to Keycloak
   onProgress?: LoginProgressCallback;
-  pollIntervalMs?: number;
-  pollTimeoutMs?: number;
 }
 
-type LoginProgressStage = 'requesting' | 'reviewing' | 'authenticating';
+type LoginProgressStage = 'reviewing' | 'authenticating';
 type LoginProgressCallback = (stage: LoginProgressStage) => void;
-type FlowType = string;
-```
-
-### RequestedResources
-
-```typescript
-interface RequestedResources {
-  // Resources the app is requesting access to
-  [key: string]: unknown;
-}
-```
-
-### Access Request Types
-
-```typescript
-interface CreateAccessRequest {
-  // Body for POST /bodhi/v1/apps/request-access
-  [key: string]: unknown;
-}
-
-interface CreateAccessRequestResponse {
-  // Response from creating an access request
-  id: string;
-  review_url?: string;
-  [key: string]: unknown;
-}
-
-interface AccessRequestStatusResponse {
-  id: string;
-  status: AppAccessRequestStatus;
-  [key: string]: unknown;
-}
-
-type AppAccessRequestStatus = 'draft' | 'approved' | 'denied' | 'failed' | 'expired';
 ```
 
 ### MCP Types

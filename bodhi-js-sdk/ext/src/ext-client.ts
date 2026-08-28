@@ -1,10 +1,6 @@
 export type SerializedExt2ExtState = { extensionId?: string };
 
-import type {
-  CreateAccessRequest,
-  CreateAccessRequestResponse,
-  PingResponse,
-} from '@bodhiapp/ts-client';
+import type { PingResponse } from '@bodhiapp/ts-client';
 import {
   INITIAL_AUTH_STATE,
   BACKEND_SERVER_NOT_REACHABLE,
@@ -456,8 +452,10 @@ export class ExtClient implements IExtensionClient {
       // Add listener BEFORE sending login request
       chrome.runtime.onMessage.addListener(listener);
 
-      // Send login request (opens OAuth popup)
-      this.sendExtRequest(EXT2EXT_CLIENT_ACTIONS.LOGIN, options).catch((err) => {
+      // Send login request (opens OAuth popup). onProgress is a function and cannot
+      // cross the chrome.runtime boundary — strip it explicitly.
+      const { onProgress: _onProgress, ...wireOptions } = options ?? {};
+      this.sendExtRequest(EXT2EXT_CLIENT_ACTIONS.LOGIN, wireOptions).catch((err) => {
         chrome.runtime.onMessage.removeListener(listener);
         reject(err);
       });
@@ -801,22 +799,6 @@ export class ExtClient implements IExtensionClient {
 
   get mcps(): Mcps {
     return (this._mcps ??= new Mcps(this));
-  }
-
-  // ============================================================================
-  // Access Request Methods
-  // ============================================================================
-
-  async requestAccess(
-    body: CreateAccessRequest
-  ): Promise<ApiResponse<CreateAccessRequestResponse>> {
-    return this.sendApiRequest<CreateAccessRequest, CreateAccessRequestResponse>(
-      'POST',
-      '/bodhi/v1/apps/request-access',
-      body,
-      {},
-      false
-    );
   }
 
   /**
